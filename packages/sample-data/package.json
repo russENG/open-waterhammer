@@ -1,0 +1,12 @@
+{
+  "name": "@open-waterhammer/sample-data",
+  "version": "0.0.1",
+  "description": "サンプルデータ・デモデータ・検証データ（ダウンロード可能）",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": { ".": { "import": "./dist/index.js", "types": "./dist/index.d.ts" } },
+  "scripts": { "build": "tsc --build", "typecheck": "tsc --noEmit" },
+  "dependencies": { "@open-waterhammer/core": "*" },
+  "license": "AGPL-3.0-or-later"
+}

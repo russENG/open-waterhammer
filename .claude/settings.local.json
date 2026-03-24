@@ -1,0 +1,18 @@
+{
+  "permissions": {
+    "allow": [
+      "WebSearch",
+      "WebFetch(domain:www.maff.go.jp)",
+      "WebFetch(domain:sipc.co.jp)",
+      "WebFetch(domain:www.jdpa.gr.jp)",
+      "WebFetch(domain:hydro-sys.co.jp)",
+      "Bash(python3 -c \"import pdfminer; print\\(''pdfminer available''\\)\")",
+      "Bash(python3 -c \"import PyPDF2; print\\(''PyPDF2 available''\\)\")",
+      "WebFetch(domain:yuruyuru-plantengineer.com)",
+      "Bash(PDIR=C:/Users/terua/.claude/projects/C--Users-terua-OpenCivilDesign-open-waterhammer/14c2d83a-298a-4a3c-b183-e15768ca617c/tool-results for f in $PDIR/*.pdf)",
+      "Bash(do echo:*)",
+      "WebFetch(domain:epasurge.com)",
+      "WebFetch(domain:www.jwrc-net.or.jp)"
+    ]
+  }
+}

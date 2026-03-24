@@ -1,0 +1,17 @@
+{
+  "name": "@open-waterhammer/web-free",
+  "version": "0.0.1",
+  "description": "水撃圧計算 無料Webアプリ（ブラウザ内処理）",
+  "private": true,
+  "scripts": {
+    "dev": "echo 'TODO: web framework未定'",
+    "build": "echo 'TODO'",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@open-waterhammer/core": "*",
+    "@open-waterhammer/standards": "*",
+    "@open-waterhammer/sample-data": "*"
+  },
+  "license": "AGPL-3.0-or-later"
+}

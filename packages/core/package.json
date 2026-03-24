@@ -1,0 +1,20 @@
+{
+  "name": "@open-waterhammer/core",
+  "version": "0.0.1",
+  "description": "水撃圧・過渡計算コア — 計算エンジン、ドメインモデル、基礎式",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "import": "./dist/index.js",
+      "types": "./dist/index.d.ts"
+    }
+  },
+  "scripts": {
+    "build": "tsc --build",
+    "typecheck": "tsc --noEmit",
+    "test": "node --experimental-vm-modules node_modules/.bin/jest"
+  },
+  "license": "AGPL-3.0-or-later"
+}
