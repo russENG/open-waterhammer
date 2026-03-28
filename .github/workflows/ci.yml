@@ -29,6 +29,9 @@ jobs:
       - name: Build excel-io
         run: npm run build --workspace=packages/excel-io
 
+      - name: Test excel-io
+        run: npm test --workspace=packages/excel-io
+
       - name: Build sample-data
         run: npm run build --workspace=packages/sample-data
 
