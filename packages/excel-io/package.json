@@ -12,7 +12,8 @@
   },
   "scripts": {
     "build": "tsc --build",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "test": "node --import tsx/esm --test src/__tests__/*.test.ts"
   },
   "dependencies": {
     "@open-waterhammer/core": "*",

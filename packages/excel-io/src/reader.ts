@@ -146,6 +146,36 @@ function parseNodes(rows: Record<string, unknown>[], errors: ParseError[]): Node
   return nodes;
 }
 
+/**
+ * 生 2D 配列から列ヘッダー行を検出してオブジェクト配列に変換する。
+ * 最初のセルが keyIndicators のいずれかを含む行をヘッダーとして扱う。
+ */
+function sectionToRows(
+  raw: unknown[][],
+  keyIndicators: string[],
+): Record<string, unknown>[] {
+  const headerIdx = raw.findIndex((row) =>
+    keyIndicators.some((k) => str(row[0]).toLowerCase().includes(k)),
+  );
+  if (headerIdx === -1) return [];
+
+  const headers = raw[headerIdx]!.map((h) => str(h));
+  const result: Record<string, unknown>[] = [];
+
+  for (let i = headerIdx + 1; i < raw.length; i++) {
+    const row = raw[i]!;
+    // コメント行・空行・次のセクション見出しはスキップ
+    const first = str(row[0]);
+    if (first.startsWith("#") || headers.every((_, ci) => row[ci] == null || str(row[ci]) === "")) break;
+
+    const obj: Record<string, unknown> = {};
+    headers.forEach((h, ci) => { if (h) obj[h] = row[ci] ?? null; });
+    result.push(obj);
+  }
+
+  return result;
+}
+
 function parseNetwork(wb: XLSX.WorkBook, errors: ParseError[]): { pipes: Pipe[]; nodes: Node[] } {
   const ws = wb.Sheets["管路・節点"] ?? wb.Sheets["network"];
   if (!ws) {
@@ -153,18 +183,15 @@ function parseNetwork(wb: XLSX.WorkBook, errors: ParseError[]): { pipes: Pipe[];
     return { pipes: [], nodes: [] };
   }
 
-  const allRows = sheetToRows(ws);
+  // 生の 2D 配列で取得（コメント行・セクション見出しを含む）
+  const raw = XLSX.utils.sheet_to_json<unknown[]>(ws, { header: 1, defval: null, raw: false });
 
-  // 「テーブル種別」列で pipes / nodes を分離
-  // 仕様: 各行に "table" 列があり値が "pipe" または "node"
-  const pipeRows = allRows.filter((r) => {
-    const t = str(r["table"] ?? r["テーブル"]).toLowerCase();
-    return t === "pipe" || r["pipe_id"] != null || r["管路ID"] != null;
-  });
-  const nodeRows = allRows.filter((r) => {
-    const t = str(r["table"] ?? r["テーブル"]).toLowerCase();
-    return t === "node" || r["node_id"] != null || r["節点ID"] != null;
-  });
+  // pipe_id 列を持つセクション → 管路、node_id 列を持つセクション → 節点
+  const pipeRows = sectionToRows(raw, ["テーブル", "table", "pipe_id"]);
+  const nodeRows = sectionToRows(
+    raw.slice(raw.findIndex((r) => str(r[0]).includes("節点")) + 1 || 0),
+    ["テーブル", "table", "node_id"],
+  );
 
   return {
     pipes: parsePipes(pipeRows, errors),
