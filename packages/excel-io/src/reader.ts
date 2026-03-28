@@ -75,8 +75,8 @@ function parseMeta(wb: XLSX.WorkBook, errors: ParseError[]): ProjectMeta {
 
 const VALID_PIPE_TYPES = new Set<string>([
   "steel", "ductile_iron", "rcp", "cpcp", "upvc",
-  "pe2", "pe3_pe100", "wdpe1", "wdpe2", "wdpe3", "wdpe4", "wdpe5",
-  "grp_fw", "gfpe",
+  "pe2", "pe3_pe100", "wdpe",
+  "grp_fw1", "grp_fw2", "grp_fw3", "grp_fw4", "grp_fw5", "gfpe",
 ]);
 
 const VALID_NODE_TYPES = new Set<string>([

@@ -57,40 +57,46 @@ export const PIPE_MATERIALS: Record<PipeType, PipeMaterial> = {
     youngsModulusShort: 1.3e6,
     isResin: true,
   },
-  wdpe1: {
-    type: "wdpe1",
-    name: "水道配水用ポリエチレン管（1種）",
-    youngsModulusShort: 21.6e6,
+  // 水道配水用ポリエチレン管 (JIS K 6762)
+  // Eₛ は技術書 表-8.2.1 の PDF 抽出から読み取れなかった。
+  // PE 系管材として暫定 1.0×10⁶ kN/m² を設定（pe2 と同値）。要 JIS K 6762 確認。
+  wdpe: {
+    type: "wdpe",
+    name: "水道配水用ポリエチレン管",
+    youngsModulusShort: 1e6,
     isResin: true,
   },
-  wdpe2: {
-    type: "wdpe2",
-    name: "水道配水用ポリエチレン管（2種）",
-    youngsModulusShort: 19.6e6,
-    isResin: true,
-  },
-  wdpe3: {
-    type: "wdpe3",
-    name: "水道配水用ポリエチレン管（3種）",
-    youngsModulusShort: 16.7e6,
-    isResin: true,
-  },
-  wdpe4: {
-    type: "wdpe4",
-    name: "水道配水用ポリエチレン管（4種）",
-    youngsModulusShort: 15.2e6,
-    isResin: true,
-  },
-  wdpe5: {
-    type: "wdpe5",
-    name: "水道配水用ポリエチレン管（5種）",
+  // 強化プラスチック複合管（FW成形）— 技術書 表-8.2.1 注2
+  // FW成形 5〜1種: 21.6, 19.6, 16.7, 15.2, 14.7 (×10⁶ kN/m²)
+  // 種番号が大きいほど Eₛ が大きい（高剛性）
+  grp_fw1: {
+    type: "grp_fw1",
+    name: "強化プラスチック複合管 FW（1種）",
     youngsModulusShort: 14.7e6,
     isResin: true,
   },
-  grp_fw: {
-    type: "grp_fw",
-    name: "強化プラスチック複合管（FW成形）",
-    youngsModulusShort: 51e6,
+  grp_fw2: {
+    type: "grp_fw2",
+    name: "強化プラスチック複合管 FW（2種）",
+    youngsModulusShort: 15.2e6,
+    isResin: true,
+  },
+  grp_fw3: {
+    type: "grp_fw3",
+    name: "強化プラスチック複合管 FW（3種）",
+    youngsModulusShort: 16.7e6,
+    isResin: true,
+  },
+  grp_fw4: {
+    type: "grp_fw4",
+    name: "強化プラスチック複合管 FW（4種）",
+    youngsModulusShort: 19.6e6,
+    isResin: true,
+  },
+  grp_fw5: {
+    type: "grp_fw5",
+    name: "強化プラスチック複合管 FW（5種）",
+    youngsModulusShort: 21.6e6,
     isResin: true,
   },
   gfpe: {

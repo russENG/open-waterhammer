@@ -13,12 +13,12 @@ export type PipeType =
   | "upvc"
   | "pe2"
   | "pe3_pe100"
-  | "wdpe1"
-  | "wdpe2"
-  | "wdpe3"
-  | "wdpe4"
-  | "wdpe5"
-  | "grp_fw"
+  | "wdpe"
+  | "grp_fw1"
+  | "grp_fw2"
+  | "grp_fw3"
+  | "grp_fw4"
+  | "grp_fw5"
   | "gfpe";
 
 // ─── 管路区間 ─────────────────────────────────────────────────────────────────
