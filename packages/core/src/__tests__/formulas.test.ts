@@ -17,6 +17,7 @@ import {
   calcEquivalentLength,
   headToMpa,
   mpaToHead,
+  calcEmpiricalWaterhammer,
   GRAVITY,
 } from "../formulas.js";
 import type { Pipe } from "../types.js";
@@ -202,5 +203,64 @@ describe("unit conversion", () => {
   test("100m水頭 ≈ 0.98 MPa", () => {
     const mpa = headToMpa(100);
     assert.ok(Math.abs(mpa - 0.98) < 0.001);
+  });
+});
+
+// ─── 経験則による水撃圧 ──────────────────────────────────────────────────────
+
+describe("calcEmpiricalWaterhammer", () => {
+  test("オープンタイプ: 動水勾配線水圧 × 20%", () => {
+    const r = calcEmpiricalWaterhammer("gravity_open", 0.20, undefined, 0.30);
+    assert.ok(Math.abs(r.waterhammerMpa - 0.06) < 1e-9);
+  });
+
+  test("セミ・クローズド 低圧: 静水圧 × 100%", () => {
+    const r = calcEmpiricalWaterhammer("gravity_semi_closed", 0.20);
+    assert.ok(Math.abs(r.waterhammerMpa - 0.20) < 1e-9);
+  });
+
+  test("セミ・クローズド 高圧: max(静水圧×40%, 0.35MPa) — 40%側が大きい場合", () => {
+    const r = calcEmpiricalWaterhammer("gravity_semi_closed", 1.00);
+    assert.ok(Math.abs(r.waterhammerMpa - 0.40) < 1e-9);
+  });
+
+  test("セミ・クローズド 高圧: max(静水圧×40%, 0.35MPa) — 0.35側が大きい場合", () => {
+    const r = calcEmpiricalWaterhammer("gravity_semi_closed", 0.40);
+    assert.ok(Math.abs(r.waterhammerMpa - 0.35) < 1e-9);
+  });
+
+  test("配水槽方式 低圧: 通水圧 × 100%", () => {
+    const r = calcEmpiricalWaterhammer("pump_distribution_tank", 0.30, 0.30);
+    assert.ok(Math.abs(r.waterhammerMpa - 0.30) < 1e-9);
+  });
+
+  test("配水槽方式 高圧: max(通水圧×60%, 0.45MPa)", () => {
+    const r = calcEmpiricalWaterhammer("pump_distribution_tank", 0.50, 0.50);
+    assert.ok(Math.abs(r.waterhammerMpa - 0.45) < 1e-9);
+  });
+
+  test("ポンプ直送 低圧: 静水圧 × 100%", () => {
+    const r = calcEmpiricalWaterhammer("pump_direct", 0.30);
+    assert.ok(Math.abs(r.waterhammerMpa - 0.30) < 1e-9);
+  });
+
+  test("ポンプ直送 高圧: max(静水圧×60%, 0.45MPa)", () => {
+    const r = calcEmpiricalWaterhammer("pump_direct", 0.80);
+    assert.ok(Math.abs(r.waterhammerMpa - 0.48) < 1e-9, `${r.waterhammerMpa}`);
+  });
+
+  test("圧力タンク 低圧: 静水圧 × 100%", () => {
+    const r = calcEmpiricalWaterhammer("pump_pressure_tank", 0.20);
+    assert.ok(Math.abs(r.waterhammerMpa - 0.20) < 1e-9);
+  });
+
+  test("圧力タンク 高圧: max(静水圧×40%, 0.35MPa)", () => {
+    const r = calcEmpiricalWaterhammer("pump_pressure_tank", 1.00);
+    assert.ok(Math.abs(r.waterhammerMpa - 0.40) < 1e-9);
+  });
+
+  test("動水勾配線水圧未指定時は警告が出る", () => {
+    const r = calcEmpiricalWaterhammer("gravity_open", 0.20);
+    assert.ok(r.warnings.length > 0);
   });
 });

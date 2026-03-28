@@ -6,7 +6,7 @@
  * 適用範囲外の場合はエラーまたは警告を返す。
  */
 
-import type { Pipe, WaveSpeedResult, ClosureType } from "./types.js";
+import type { Pipe, WaveSpeedResult, ClosureType, PipelineSystemType, EmpiricalWaterhammerResult } from "./types.js";
 import { PIPE_MATERIALS } from "./pipe-materials.js";
 
 /** 重力加速度 [m/s²] */
@@ -223,6 +223,98 @@ export function judgeDesignPressure(
   }
 
   return { status, designPressureMpa, allowablePressureMpa, margin, message };
+}
+
+// ─── 経験則による水撃圧 ──────────────────────────────────────────────────────
+
+/**
+ * 経験則による水撃圧算定 (技術書 8.3.5節)
+ *
+ * 適用範囲: 給水栓を有する水田用配水系パイプラインで
+ *           静水圧 0.35MPa 未満、またはオープンタイプの場合のみ推奨。
+ *           その他の場合は計算による方法（ジューコフスキー/アリエビ）を原則とする。
+ *
+ * @param systemType パイプライン系統の方式区分
+ * @param staticPressureMpa 静水圧 [MPa]（自然圧送・ポンプ直送・圧力タンク方式で使用）
+ * @param operatingPressureMpa 通水時水圧（動水圧）[MPa]（配水槽方式で使用）
+ * @param hydraulicGradePressureMpa 動水勾配線水圧 [MPa]（オープンタイプで使用）
+ */
+export function calcEmpiricalWaterhammer(
+  systemType: PipelineSystemType,
+  staticPressureMpa: number,
+  operatingPressureMpa?: number,
+  hydraulicGradePressureMpa?: number,
+): EmpiricalWaterhammerResult {
+  const warnings: string[] = [];
+  let waterhammerMpa: number;
+  let rule: string;
+
+  switch (systemType) {
+    // ── 自然圧送 オープンタイプ ─────────────────────────────────────────────
+    case "gravity_open": {
+      const hgp = hydraulicGradePressureMpa ?? staticPressureMpa;
+      if (hydraulicGradePressureMpa === undefined) {
+        warnings.push("動水勾配線水圧が未指定のため静水圧で代用しています。正確な計算には動水勾配線水圧を入力してください。");
+      }
+      waterhammerMpa = hgp * 0.20;
+      rule = `オープンタイプ: 動水勾配線水圧 ${hgp.toFixed(3)} MPa × 20% = ${waterhammerMpa.toFixed(3)} MPa`;
+      break;
+    }
+
+    // ── 自然圧送 セミ・クローズドタイプ ────────────────────────────────────
+    case "gravity_semi_closed": {
+      if (staticPressureMpa < 0.35) {
+        waterhammerMpa = staticPressureMpa * 1.0;
+        rule = `セミ・クローズド（静水圧 < 0.35MPa）: 静水圧 ${staticPressureMpa.toFixed(3)} MPa × 100% = ${waterhammerMpa.toFixed(3)} MPa`;
+      } else {
+        waterhammerMpa = Math.max(staticPressureMpa * 0.40, 0.35);
+        rule = `セミ・クローズド（静水圧 ≥ 0.35MPa）: max(${staticPressureMpa.toFixed(3)} × 40%, 0.35) = ${waterhammerMpa.toFixed(3)} MPa`;
+      }
+      break;
+    }
+
+    // ── ポンプ系 配水槽方式 ─────────────────────────────────────────────────
+    case "pump_distribution_tank": {
+      const op = operatingPressureMpa ?? staticPressureMpa;
+      if (operatingPressureMpa === undefined) {
+        warnings.push("通水時水圧（動水圧）が未指定のため静水圧で代用しています。");
+      }
+      if (op < 0.45) {
+        waterhammerMpa = op * 1.0;
+        rule = `配水槽方式（通水圧 < 0.45MPa）: 通水圧 ${op.toFixed(3)} MPa × 100% = ${waterhammerMpa.toFixed(3)} MPa`;
+      } else {
+        waterhammerMpa = Math.max(op * 0.60, 0.45);
+        rule = `配水槽方式（通水圧 ≥ 0.45MPa）: max(${op.toFixed(3)} × 60%, 0.45) = ${waterhammerMpa.toFixed(3)} MPa`;
+      }
+      break;
+    }
+
+    // ── ポンプ系 直送方式 ───────────────────────────────────────────────────
+    case "pump_direct": {
+      if (staticPressureMpa < 0.45) {
+        waterhammerMpa = staticPressureMpa * 1.0;
+        rule = `ポンプ直送（静水圧 < 0.45MPa）: 静水圧 ${staticPressureMpa.toFixed(3)} MPa × 100% = ${waterhammerMpa.toFixed(3)} MPa`;
+      } else {
+        waterhammerMpa = Math.max(staticPressureMpa * 0.60, 0.45);
+        rule = `ポンプ直送（静水圧 ≥ 0.45MPa）: max(${staticPressureMpa.toFixed(3)} × 60%, 0.45) = ${waterhammerMpa.toFixed(3)} MPa`;
+      }
+      break;
+    }
+
+    // ── ポンプ系 圧力タンク方式 ─────────────────────────────────────────────
+    case "pump_pressure_tank": {
+      if (staticPressureMpa < 0.35) {
+        waterhammerMpa = staticPressureMpa * 1.0;
+        rule = `圧力タンク（静水圧 < 0.35MPa）: 静水圧 ${staticPressureMpa.toFixed(3)} MPa × 100% = ${waterhammerMpa.toFixed(3)} MPa`;
+      } else {
+        waterhammerMpa = Math.max(staticPressureMpa * 0.40, 0.35);
+        rule = `圧力タンク（静水圧 ≥ 0.35MPa）: max(${staticPressureMpa.toFixed(3)} × 40%, 0.35) = ${waterhammerMpa.toFixed(3)} MPa`;
+      }
+      break;
+    }
+  }
+
+  return { waterhammerMpa, rule, warnings };
 }
 
 /** 水頭 [m] → 圧力 [MPa] 変換 */

@@ -151,6 +151,29 @@ export interface DesignPressureResult {
   negativePressure: boolean;
 }
 
+// ─── 経験則による水撃圧 ──────────────────────────────────────────────────────
+
+/**
+ * パイプライン系統の方式区分
+ * 出典: 土地改良設計基準パイプライン技術書 8.3.5節
+ */
+export type PipelineSystemType =
+  | "gravity_open"           // 自然圧送 オープンタイプ
+  | "gravity_semi_closed"    // 自然圧送 セミ・クローズドタイプ
+  | "pump_distribution_tank" // ポンプ系 配水槽方式
+  | "pump_direct"            // ポンプ系 直送方式（コントロールなし/あり）
+  | "pump_pressure_tank";    // ポンプ系 圧力タンク方式
+
+export interface EmpiricalWaterhammerResult {
+  /** 水撃圧 [MPa] */
+  waterhammerMpa: number;
+  /** 適用した判定式 */
+  rule: string;
+  warnings: string[];
+}
+
+// ─── 耐圧判定 ─────────────────────────────────────────────────────────────────
+
 /** 耐圧判定結果 */
 export type JudgementStatus = "ok" | "ng" | "warning";
 
