@@ -1,4 +1,5 @@
 import { WaterhammerCalculator } from './components/WaterhammerCalculator'
+import { EmpiricalCalculator } from './components/EmpiricalCalculator'
 import './App.css'
 
 export default function App() {
@@ -18,6 +19,7 @@ export default function App() {
       </header>
       <main className="main">
         <WaterhammerCalculator />
+        <EmpiricalCalculator />
       </main>
       <footer className="footer">
         <p>計算ロジックはオープンソース（AGPL-3.0）。結果には採用基準・手法・前提条件を明示。</p>

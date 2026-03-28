@@ -844,6 +844,41 @@
 }
 
 
+/* ─── 経験則パネル ───────────────────────────────────────────────────────── */
+
+.empirical-system-grid {
+  display: flex;
+  gap: 20px;
+  flex-wrap: wrap;
+}
+
+.empirical-category {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.empirical-category-label {
+  font-size: 0.72rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: #a0aec0;
+  margin: 0 0 2px;
+}
+
+.empirical-radio-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+}
+
+.empirical-radio-label {
+  font-size: 0.85rem;
+  color: #2d3748;
+}
+
 /* ─── 圧力チャート ─────────────────────────────────────────────────────────── */
 
 .pressure-chart-wrap {
