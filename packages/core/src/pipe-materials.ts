@@ -58,12 +58,11 @@ export const PIPE_MATERIALS: Record<PipeType, PipeMaterial> = {
     isResin: true,
   },
   // 水道配水用ポリエチレン管 (JIS K 6762)
-  // Eₛ は技術書 表-8.2.1 の PDF 抽出から読み取れなかった。
-  // PE 系管材として暫定 1.0×10⁶ kN/m² を設定（pe2 と同値）。要 JIS K 6762 確認。
+  // 技術書 表-8.2.1: Eₛ = 1.3×10⁶ kN/m²（pe3_pe100 と同値）
   wdpe: {
     type: "wdpe",
     name: "水道配水用ポリエチレン管",
-    youngsModulusShort: 1e6,
+    youngsModulusShort: 1.3e6,
     isResin: true,
   },
   // 強化プラスチック複合管（FW成形）— 技術書 表-8.2.1 注2
