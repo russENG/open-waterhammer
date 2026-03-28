@@ -147,9 +147,6 @@ function FormulaVerification({
     ? `${(Es / 1e6).toFixed(0)} \\times 10^6`
     : Es.toFixed(0);
 
-  // 波速の中間計算
-  const innerTerm = (WATER_UNIT_WEIGHT / GRAVITY) * (1 / BULK_MODULUS_WATER + (D * c1) / (Es * t));
-
   return (
     <section className="card formula-card">
       <button
