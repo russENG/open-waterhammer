@@ -14,7 +14,11 @@
   "scripts": {
     "build": "tsc --build",
     "typecheck": "tsc --noEmit",
-    "test": "node --experimental-vm-modules node_modules/.bin/jest"
+    "test": "node --import tsx/esm --test src/__tests__/*.test.ts"
   },
-  "license": "AGPL-3.0-or-later"
+  "license": "AGPL-3.0-or-later",
+  "devDependencies": {
+    "@types/node": "^25.5.0",
+    "tsx": "^4.21.0"
+  }
 }

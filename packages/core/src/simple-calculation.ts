@@ -70,16 +70,17 @@ export function runSimpleFormula(
     }
   }
 
-  return {
+  const result: SimpleFormulaResult = {
     caseId: cas.id,
     pipeId: pipe.id,
     waveSpeed: { waveSpeed: a, vibrationPeriod: T0, alpha },
     closureType,
-    deltaH_joukowsky,
-    hmax_allievi_close,
-    hmax_allievi_open,
-    k1,
-    allieviApplicable,
     warnings,
   };
+  if (deltaH_joukowsky !== undefined) result.deltaH_joukowsky = deltaH_joukowsky;
+  if (hmax_allievi_close !== undefined) result.hmax_allievi_close = hmax_allievi_close;
+  if (hmax_allievi_open !== undefined) result.hmax_allievi_open = hmax_allievi_open;
+  if (k1 !== undefined) result.k1 = k1;
+  if (allieviApplicable !== undefined) result.allieviApplicable = allieviApplicable;
+  return result;
 }

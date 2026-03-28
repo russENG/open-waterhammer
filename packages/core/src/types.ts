@@ -150,3 +150,19 @@ export interface DesignPressureResult {
   /** 負圧発生フラグ */
   negativePressure: boolean;
 }
+
+/** 耐圧判定結果 */
+export type JudgementStatus = "ok" | "ng" | "warning";
+
+export interface JudgementResult {
+  /** 判定区分 */
+  status: JudgementStatus;
+  /** 設計水圧 [MPa] */
+  designPressureMpa: number;
+  /** 許容圧力 [MPa] */
+  allowablePressureMpa: number;
+  /** 余裕度 = (許容 - 設計) / 許容 [0〜1] */
+  margin: number;
+  /** 判定メッセージ */
+  message: string;
+}

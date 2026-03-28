@@ -189,6 +189,42 @@ export function calcDesignPressure(
   return staticPressureMpa + waterhammerPressureMpa;
 }
 
+// ─── 耐圧判定 ─────────────────────────────────────────────────────────────────
+
+/**
+ * 設計水圧と許容圧力を比較し判定する
+ *
+ * 判定基準:
+ *   OK      : 設計水圧 ≦ 許容圧力 × 0.9（余裕度 ≧ 10%）
+ *   WARNING : 設計水圧 ≦ 許容圧力（余裕度 < 10%）
+ *   NG      : 設計水圧 > 許容圧力
+ *
+ * @param designPressureMpa 設計水圧 [MPa]
+ * @param allowablePressureMpa 許容圧力（呼び圧力） [MPa]
+ */
+export function judgeDesignPressure(
+  designPressureMpa: number,
+  allowablePressureMpa: number
+): import("./types.js").JudgementResult {
+  const margin = (allowablePressureMpa - designPressureMpa) / allowablePressureMpa;
+
+  let status: import("./types.js").JudgementStatus;
+  let message: string;
+
+  if (designPressureMpa > allowablePressureMpa) {
+    status = "ng";
+    message = `設計水圧 ${designPressureMpa.toFixed(3)} MPa が許容圧力 ${allowablePressureMpa.toFixed(3)} MPa を超過しています。管種・管厚・防護施設を見直してください。`;
+  } else if (margin < 0.1) {
+    status = "warning";
+    message = `設計水圧が許容圧力の 90% 超です（余裕度 ${(margin * 100).toFixed(1)}%）。詳細検討を推奨します。`;
+  } else {
+    status = "ok";
+    message = `設計水圧 ${designPressureMpa.toFixed(3)} MPa ≦ 許容圧力 ${allowablePressureMpa.toFixed(3)} MPa（余裕度 ${(margin * 100).toFixed(1)}%）`;
+  }
+
+  return { status, designPressureMpa, allowablePressureMpa, margin, message };
+}
+
 /** 水頭 [m] → 圧力 [MPa] 変換 */
 export function headToMpa(headM: number): number {
   return (headM * WATER_UNIT_WEIGHT) / 1000;
