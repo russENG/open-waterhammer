@@ -1,0 +1,854 @@
+/* ─── レイアウト ─────────────────────────────────────────────────────────── */
+
+.app {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  background: #f5f7fa;
+  color: #1a1a2e;
+}
+
+/* ─── ヘッダー ───────────────────────────────────────────────────────────── */
+
+.header {
+  background: #1a1a2e;
+  color: #fff;
+  padding: 0;
+}
+
+.header-inner {
+  max-width: 1100px;
+  margin: 0 auto;
+  padding: 18px 24px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+.header-title {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.header-title h1 {
+  font-size: 1.2rem;
+  font-weight: 600;
+  margin: 0;
+}
+
+.header-badge {
+  font-size: 0.65rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  background: #3a86ff;
+  color: #fff;
+  padding: 2px 7px;
+  border-radius: 4px;
+}
+
+.header-sub {
+  font-size: 0.75rem;
+  color: #8899aa;
+}
+
+.header-standard {
+  font-size: 0.75rem;
+  color: #8899aa;
+  text-align: right;
+}
+
+/* ─── メインコンテンツ ───────────────────────────────────────────────────── */
+
+.main {
+  flex: 1;
+  max-width: 1100px;
+  width: 100%;
+  margin: 0 auto;
+  padding: 24px 24px 40px;
+  box-sizing: border-box;
+}
+
+/* ─── フッター ───────────────────────────────────────────────────────────── */
+
+.footer {
+  background: #1a1a2e;
+  color: #8899aa;
+  text-align: center;
+  padding: 14px 24px;
+  font-size: 0.75rem;
+}
+
+.footer p {
+  margin: 0;
+}
+
+/* ─── カード ─────────────────────────────────────────────────────────────── */
+
+.card {
+  background: #fff;
+  border-radius: 10px;
+  border: 1px solid #e2e8f0;
+  padding: 24px;
+  margin-bottom: 16px;
+}
+
+.card-title {
+  font-size: 1rem;
+  font-weight: 600;
+  color: #1a1a2e;
+  margin: 0 0 16px;
+  padding-bottom: 10px;
+  border-bottom: 2px solid #e2e8f0;
+}
+
+/* ─── デモタブ ───────────────────────────────────────────────────────────── */
+
+.demo-tabs {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-bottom: 12px;
+}
+
+.demo-tab {
+  padding: 8px 16px;
+  border-radius: 6px;
+  border: 2px solid #e2e8f0;
+  background: #f8fafc;
+  color: #4a5568;
+  font-size: 0.85rem;
+  cursor: pointer;
+  transition: border-color 0.15s, background 0.15s, color 0.15s;
+}
+
+.demo-tab:hover {
+  border-color: #3a86ff;
+  color: #3a86ff;
+}
+
+.demo-tab--active {
+  background: #3a86ff;
+  border-color: #3a86ff;
+  color: #fff;
+}
+
+.demo-note {
+  font-size: 0.78rem;
+  color: #718096;
+  margin: 0;
+}
+
+/* ─── 計算器本体（2カラム） ─────────────────────────────────────────────── */
+
+.calculator-body {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+  align-items: start;
+}
+
+@media (max-width: 780px) {
+  .calculator-body {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* ─── 入力フォーム ───────────────────────────────────────────────────────── */
+
+.input-group {
+  margin-bottom: 18px;
+}
+
+.input-group:last-child {
+  margin-bottom: 0;
+}
+
+.input-group-title {
+  font-size: 0.78rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: #718096;
+  margin: 0 0 10px;
+}
+
+.input-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  gap: 12px;
+}
+
+.input-field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.input-label {
+  font-size: 0.78rem;
+  color: #4a5568;
+  font-weight: 500;
+}
+
+.input-control {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.input {
+  flex: 1;
+  min-width: 0;
+  padding: 6px 10px;
+  border: 1px solid #cbd5e0;
+  border-radius: 6px;
+  font-size: 0.9rem;
+  color: #1a1a2e;
+  background: #f8fafc;
+  transition: border-color 0.15s;
+}
+
+.input:focus {
+  outline: none;
+  border-color: #3a86ff;
+  background: #fff;
+}
+
+.input-unit {
+  font-size: 0.75rem;
+  color: #718096;
+  white-space: nowrap;
+}
+
+/* ─── 計算結果 ───────────────────────────────────────────────────────────── */
+
+.result-section {
+  margin-bottom: 18px;
+}
+
+.result-section:last-of-type {
+  margin-bottom: 0;
+}
+
+.result-section-title {
+  font-size: 0.78rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: #718096;
+  margin: 0 0 8px;
+}
+
+.result-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  padding: 5px 0;
+  border-bottom: 1px solid #f0f4f8;
+  gap: 8px;
+}
+
+.result-row--highlight {
+  background: #ebf4ff;
+  border-radius: 6px;
+  padding: 6px 10px;
+  border-bottom: none;
+  margin-bottom: 2px;
+}
+
+.result-label {
+  font-size: 0.82rem;
+  color: #4a5568;
+}
+
+.result-value {
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: #1a1a2e;
+  font-variant-numeric: tabular-nums;
+}
+
+.result-unit {
+  font-size: 0.75rem;
+  font-weight: 400;
+  color: #718096;
+}
+
+.result-note {
+  font-size: 0.82rem;
+  color: #718096;
+  padding: 8px 0;
+}
+
+.result-footer {
+  margin-top: 16px;
+  padding-top: 12px;
+  border-top: 1px solid #e2e8f0;
+}
+
+.result-standard {
+  font-size: 0.72rem;
+  color: #a0aec0;
+}
+
+.result-empty {
+  font-size: 0.85rem;
+  color: #a0aec0;
+  padding: 20px 0;
+  text-align: center;
+}
+
+/* ─── 閉そく区分バッジ ───────────────────────────────────────────────────── */
+
+.badge {
+  display: inline-block;
+  padding: 3px 10px;
+  border-radius: 20px;
+  font-size: 0.78rem;
+  font-weight: 600;
+}
+
+.badge--rapid {
+  background: #fff5f5;
+  color: #c53030;
+  border: 1px solid #feb2b2;
+}
+
+.badge--slow {
+  background: #f0fff4;
+  color: #276749;
+  border: 1px solid #9ae6b4;
+}
+
+.badge--numerical {
+  background: #fffff0;
+  color: #744210;
+  border: 1px solid #faf089;
+}
+
+/* ─── 警告 ───────────────────────────────────────────────────────────────── */
+
+.warnings {
+  background: #fffbeb;
+  border: 1px solid #f6e05e;
+  border-radius: 8px;
+  padding: 12px 14px;
+  margin-bottom: 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.warning-item {
+  display: flex;
+  gap: 8px;
+  font-size: 0.82rem;
+  color: #744210;
+  align-items: flex-start;
+}
+
+.warning-icon {
+  flex-shrink: 0;
+  font-size: 0.9rem;
+}
+
+/* ─── 耐圧判定 ───────────────────────────────────────────────────────────── */
+
+.judgement {
+  border-radius: 10px;
+  padding: 14px 16px;
+  display: flex;
+  gap: 14px;
+  align-items: flex-start;
+  margin-bottom: 12px;
+  border: 2px solid transparent;
+}
+
+.judgement--ok {
+  background: #f0fff4;
+  border-color: #68d391;
+}
+
+.judgement--warning {
+  background: #fffbeb;
+  border-color: #f6e05e;
+}
+
+.judgement--ng {
+  background: #fff5f5;
+  border-color: #fc8181;
+}
+
+.judgement-badge {
+  flex-shrink: 0;
+  font-size: 0.75rem;
+  font-weight: 800;
+  letter-spacing: 0.05em;
+  padding: 3px 10px;
+  border-radius: 20px;
+  white-space: nowrap;
+}
+
+.judgement--ok .judgement-badge {
+  background: #276749;
+  color: #fff;
+}
+
+.judgement--warning .judgement-badge {
+  background: #744210;
+  color: #fff;
+}
+
+.judgement--ng .judgement-badge {
+  background: #c53030;
+  color: #fff;
+}
+
+.judgement-body {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.judgement-message {
+  font-size: 0.82rem;
+  color: #2d3748;
+  line-height: 1.5;
+}
+
+.judgement-bar-wrap {
+  position: relative;
+  height: 10px;
+  background: #e2e8f0;
+  border-radius: 5px;
+  overflow: hidden;
+}
+
+.judgement-bar-fill {
+  position: absolute;
+  left: 0;
+  top: 0;
+  height: 100%;
+  border-radius: 5px;
+  transition: width 0.3s ease;
+}
+
+.judgement--ok .judgement-bar-fill    { background: #48bb78; }
+.judgement--warning .judgement-bar-fill { background: #ed8936; }
+.judgement--ng .judgement-bar-fill    { background: #e53e3e; }
+
+.judgement-bar-limit {
+  position: absolute;
+  right: 0;
+  top: -2px;
+  width: 2px;
+  height: 14px;
+  background: #718096;
+  border-radius: 1px;
+}
+
+.judgement-bar-labels {
+  display: flex;
+  justify-content: space-between;
+  font-size: 0.68rem;
+  color: #718096;
+  font-variant-numeric: tabular-nums;
+}
+
+/* ─── Excel パネル ───────────────────────────────────────────────────────── */
+
+.excel-panel {
+  margin-bottom: 16px;
+}
+
+.excel-actions {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 20px;
+}
+
+@media (max-width: 600px) {
+  .excel-actions { grid-template-columns: 1fr; }
+}
+
+.excel-action-group {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.excel-action-label {
+  font-size: 0.75rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: #718096;
+}
+
+.excel-action-note {
+  font-size: 0.75rem;
+  color: #a0aec0;
+  margin: 0;
+}
+
+.btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 16px;
+  border-radius: 6px;
+  border: none;
+  cursor: pointer;
+  font-size: 0.85rem;
+  font-weight: 500;
+  transition: background 0.15s;
+}
+
+.btn--secondary {
+  background: #edf2f7;
+  color: #2d3748;
+  border: 1px solid #cbd5e0;
+}
+
+.btn--secondary:hover {
+  background: #e2e8f0;
+}
+
+.btn-icon {
+  font-size: 1rem;
+}
+
+.excel-dropzone {
+  border: 2px dashed #cbd5e0;
+  border-radius: 8px;
+  padding: 20px;
+  text-align: center;
+  cursor: pointer;
+  transition: border-color 0.15s, background 0.15s;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+}
+
+.excel-dropzone:hover,
+.excel-dropzone:focus {
+  border-color: #3a86ff;
+  background: #ebf4ff;
+  outline: none;
+}
+
+.excel-dropzone--loading {
+  opacity: 0.6;
+  pointer-events: none;
+}
+
+.excel-dropzone-icon {
+  font-size: 1.5rem;
+}
+
+.excel-dropzone-text {
+  font-size: 0.82rem;
+  color: #718096;
+}
+
+.excel-result {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 14px;
+  border-radius: 8px;
+  font-size: 0.82rem;
+  margin-top: 12px;
+}
+
+.excel-result--ok {
+  background: #f0fff4;
+  border: 1px solid #9ae6b4;
+  color: #276749;
+}
+
+.excel-result-icon {
+  font-weight: 700;
+}
+
+.excel-errors {
+  background: #fff5f5;
+  border: 1px solid #feb2b2;
+  border-radius: 8px;
+  padding: 10px 14px;
+  margin-top: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.excel-error-item {
+  font-size: 0.78rem;
+  color: #c53030;
+}
+
+.excel-error-location {
+  font-weight: 600;
+  margin-right: 6px;
+}
+
+/* ─── ソース切替タブ ─────────────────────────────────────────────────────── */
+
+.source-tabs {
+  display: flex;
+  gap: 6px;
+  margin-bottom: 4px;
+}
+
+.source-tab {
+  padding: 5px 14px;
+  border-radius: 6px;
+  border: 1px solid #cbd5e0;
+  background: #f8fafc;
+  color: #718096;
+  font-size: 0.8rem;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.source-tab:hover:not(:disabled) {
+  border-color: #3a86ff;
+  color: #3a86ff;
+}
+
+.source-tab--active {
+  background: #1a1a2e;
+  border-color: #1a1a2e;
+  color: #fff;
+}
+
+.source-tab:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.excel-case-select {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  max-width: 360px;
+}
+
+/* ─── 数式カード ─────────────────────────────────────────────────────────── */
+
+.fcard {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.fcard-ref {
+  font-size: 0.75rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: #3a86ff;
+}
+
+.fcard-body {
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  padding: 14px 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  overflow-x: auto;
+}
+
+.fcard-formula {
+  display: flex;
+  justify-content: center;
+  padding: 4px 0 8px;
+  border-bottom: 1px solid #e2e8f0;
+}
+
+.fcard-row {
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
+}
+
+.fcard-row-label {
+  font-size: 0.7rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: #a0aec0;
+  min-width: 2.5rem;
+  flex-shrink: 0;
+}
+
+.fcard-row--sub {
+  color: #718096;
+}
+
+.fcard-row--result {
+  background: #ebf4ff;
+  border-radius: 6px;
+  padding: 6px 10px;
+  margin: 0 -4px;
+}
+
+.fcard-note {
+  font-size: 0.78rem;
+  color: #718096;
+  padding-top: 2px;
+}
+
+/* KaTeX display override */
+.fcard-formula .katex-display,
+.fcard-row .katex-display {
+  margin: 0;
+}
+
+/* 定数・パラメータ */
+.formula-params {
+  background: #fffbeb;
+  border: 1px solid #fef3c7;
+  border-radius: 8px;
+  padding: 12px 16px;
+}
+
+.formula-params-title {
+  font-size: 0.72rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: #92400e;
+  margin-bottom: 8px;
+}
+
+.formula-params-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 20px;
+}
+
+.formula-inline {
+  display: inline;
+}
+
+.formula-display {
+  display: block;
+}
+
+/* ─── 計算過程カード ─────────────────────────────────────────────────────── */
+
+.formula-card {
+  padding: 0;
+  overflow: hidden;
+}
+
+.formula-toggle {
+  width: 100%;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 16px 24px;
+  background: none;
+  border: none;
+  cursor: pointer;
+  text-align: left;
+  transition: background 0.15s;
+}
+
+.formula-toggle:hover {
+  background: #f8fafc;
+}
+
+.formula-toggle-label {
+  font-size: 1rem;
+  font-weight: 600;
+  color: #1a1a2e;
+}
+
+.formula-toggle-icon {
+  font-size: 0.7rem;
+  color: #718096;
+}
+
+.formula-content {
+  padding: 0 24px 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  border-top: 1px solid #e2e8f0;
+}
+
+.formula-step {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.formula-ref {
+  font-size: 0.75rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: #3a86ff;
+  padding-top: 4px;
+}
+
+.formula-body {
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  padding: 12px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  overflow-x: auto;
+}
+
+.formula-line {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.formula-symbolic {
+  font-family: ui-monospace, Consolas, monospace;
+  font-size: 0.82rem;
+  color: #2d3748;
+  white-space: pre;
+}
+
+.formula-substituted {
+  font-family: ui-monospace, Consolas, monospace;
+  font-size: 0.82rem;
+  color: #718096;
+  white-space: pre;
+}
+
+.formula-result {
+  font-family: ui-monospace, Consolas, monospace;
+  font-size: 0.88rem;
+  font-weight: 700;
+  color: #1a1a2e;
+  margin-top: 6px;
+  padding-top: 6px;
+  border-top: 1px solid #e2e8f0;
+}
+
+
+/* ─── 圧力チャート ─────────────────────────────────────────────────────────── */
+
+.pressure-chart-wrap {
+  margin-top: 20px;
+  padding-top: 16px;
+  border-top: 1px solid #e2e8f0;
+  overflow-x: auto;
+}

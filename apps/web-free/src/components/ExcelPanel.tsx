@@ -1,0 +1,186 @@
+/**
+ * Excel 入出力パネル
+ * - テンプレート xlsx ダウンロード
+ * - xlsx アップロード → 計算ケース読み込み
+ */
+
+import { useRef, useState } from "react";
+// xlsx は大きいため動的インポートで分離
+async function getExcelIO() {
+  return import("@open-waterhammer/excel-io");
+}
+import type { WorkbookData, ParseError } from "@open-waterhammer/excel-io";
+import {
+  DEMO_CASE_01_PIPE,
+  DEMO_CASE_01_CASE,
+  DEMO_CASE_02_PIPE,
+  DEMO_CASE_02_CASE,
+} from "@open-waterhammer/sample-data";
+
+// ─── Props ───────────────────────────────────────────────────────────────────
+
+export interface ExcelPanelProps {
+  /** アップロード成功時に呼び出す */
+  onLoad: (data: WorkbookData) => void;
+}
+
+// ─── コンポーネント ───────────────────────────────────────────────────────────
+
+export function ExcelPanel({ onLoad }: ExcelPanelProps) {
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [status, setStatus] = useState<"idle" | "loading" | "ok" | "error">("idle");
+  const [errors, setErrors] = useState<ParseError[]>([]);
+  const [warnings, setWarnings] = useState<string[]>([]);
+  const [fileName, setFileName] = useState<string>("");
+
+  // ─── テンプレートダウンロード ───────────────────────────────────────────────
+
+  async function handleDownload() {
+    const { generateTemplate } = await getExcelIO();
+    const buf = generateTemplate({
+      meta: {
+        projectName: "（案件名を入力）",
+        standardId: "nochi_pipeline_2021",
+        methodId: "joukowsky_v1",
+      },
+      pipes: [DEMO_CASE_01_PIPE, DEMO_CASE_02_PIPE],
+      nodes: [],
+      cases: [DEMO_CASE_01_CASE, DEMO_CASE_02_CASE],
+    });
+
+    const blob = new Blob([buf], {
+      type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = "waterhammer-template.xlsx";
+    a.click();
+    URL.revokeObjectURL(url);
+  }
+
+  // ─── アップロード ───────────────────────────────────────────────────────────
+
+  async function handleFile(file: File) {
+    setStatus("loading");
+    setErrors([]);
+    setWarnings([]);
+    setFileName(file.name);
+
+    try {
+      const buf = await file.arrayBuffer();
+      const { parseWorkbook } = await getExcelIO();
+      const result = parseWorkbook(buf);
+
+      setErrors(result.errors);
+      setWarnings(result.warnings);
+
+      const hasBlockingError = result.errors.length > 0 &&
+        result.data.pipes.length === 0 && result.data.cases.length === 0;
+
+      if (hasBlockingError) {
+        setStatus("error");
+      } else {
+        setStatus("ok");
+        onLoad(result.data);
+      }
+    } catch (e) {
+      setErrors([{ sheet: "(global)", message: String(e) }]);
+      setStatus("error");
+    }
+  }
+
+  function handleInputChange(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (file) handleFile(file);
+  }
+
+  function handleDrop(e: React.DragEvent<HTMLDivElement>) {
+    e.preventDefault();
+    const file = e.dataTransfer.files[0];
+    if (file) handleFile(file);
+  }
+
+  return (
+    <section className="card excel-panel">
+      <h2 className="card-title">Excel 入出力</h2>
+
+      <div className="excel-actions">
+        {/* ダウンロード */}
+        <div className="excel-action-group">
+          <div className="excel-action-label">テンプレート</div>
+          <button className="btn btn--secondary" onClick={handleDownload}>
+            <span className="btn-icon">↓</span>
+            入力テンプレートをダウンロード (.xlsx)
+          </button>
+          <p className="excel-action-note">
+            デモデータ入りの入力帳票です。管路諸元・ケース設定を記入して読み込んでください。
+          </p>
+        </div>
+
+        {/* アップロード */}
+        <div className="excel-action-group">
+          <div className="excel-action-label">読み込み</div>
+          <div
+            className={`excel-dropzone${status === "loading" ? " excel-dropzone--loading" : ""}`}
+            onDrop={handleDrop}
+            onDragOver={(e) => e.preventDefault()}
+            onClick={() => fileInputRef.current?.click()}
+            role="button"
+            tabIndex={0}
+            onKeyDown={(e) => e.key === "Enter" && fileInputRef.current?.click()}
+          >
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept=".xlsx"
+              style={{ display: "none" }}
+              onChange={handleInputChange}
+            />
+            {status === "loading" ? (
+              <span className="excel-dropzone-text">読み込み中…</span>
+            ) : (
+              <>
+                <span className="excel-dropzone-icon">📂</span>
+                <span className="excel-dropzone-text">
+                  xlsx ファイルをドロップ、またはクリックして選択
+                </span>
+              </>
+            )}
+          </div>
+        </div>
+      </div>
+
+      {/* 結果表示 */}
+      {status === "ok" && (
+        <div className="excel-result excel-result--ok">
+          <span className="excel-result-icon">✓</span>
+          <span>{fileName} を読み込みました。下の計算パラメータに反映されています。</span>
+        </div>
+      )}
+
+      {warnings.length > 0 && (
+        <div className="warnings" style={{ marginTop: 12 }}>
+          {warnings.map((w, i) => (
+            <div key={i} className="warning-item">
+              <span className="warning-icon">⚠</span>{w}
+            </div>
+          ))}
+        </div>
+      )}
+
+      {errors.length > 0 && (
+        <div className="excel-errors">
+          {errors.map((e, i) => (
+            <div key={i} className="excel-error-item">
+              <span className="excel-error-location">
+                [{e.sheet}{e.row != null ? ` 行${e.row}` : ""}{e.field ? ` / ${e.field}` : ""}]
+              </span>
+              {e.message}
+            </div>
+          ))}
+        </div>
+      )}
+    </section>
+  );
+}
