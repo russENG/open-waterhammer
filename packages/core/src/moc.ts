@@ -46,7 +46,8 @@ export interface ValveBC {
 /**
  * ポンプ（上流端専用）
  * 放物線型 H-Q 特性: H_pump = Hs - Bq·Q²
- * 急停止後の回転速度は線形減衰: α(t) = max(0, 1 - t/t_decel)
+ * 急停止 (mode="trip"): α(t) = max(0, 1 - t/shutdownTime)
+ * 起動   (mode="start"): α(t) = min(1, t/startupTime)
  * 逆止め弁 checkValve=true のとき Q < 0 を遮断
  */
 export interface PumpBC {
@@ -57,8 +58,14 @@ export interface PumpBC {
   H0: number;
   /** 締切水頭 Hs [m]（Q=0 時の揚程、デフォルト 1.2×H₀） */
   Hs?: number;
-  /** 停止完了時間 t_decel [s]（GD² を直接指定しない簡易モデル） */
+  /** 停止完了時間 t_decel [s]（mode="trip" 時に使用） */
   shutdownTime: number;
+  /** 動作モード: "trip"（急停止、デフォルト）or "start"（起動） */
+  mode?: "trip" | "start";
+  /** 起動完了時間 [s]（mode="start" 時に使用） */
+  startupTime?: number;
+  /** 起動前の静水頭 [m]（mode="start" 時の初期管内圧力、デフォルト 0） */
+  staticHead?: number;
   /** 逆止め弁（デフォルト true） */
   checkValve?: boolean;
 }
@@ -160,8 +167,13 @@ function valveOpening(t: number, closeTime: number, op: "close" | "open"): numbe
 }
 
 /** ポンプ回転速度比 α（0=停止, 1=定格） */
-function pumpSpeedRatio(t: number, shutdownTime: number): number {
-  return shutdownTime <= 0 ? 0 : Math.max(0, 1 - t / shutdownTime);
+function pumpSpeedRatio(t: number, bc: PumpBC): number {
+  const mode = bc.mode ?? "trip";
+  if (mode === "start") {
+    const st = bc.startupTime ?? 0;
+    return st <= 0 ? 1 : Math.min(1, t / st);
+  }
+  return bc.shutdownTime <= 0 ? 0 : Math.max(0, 1 - t / bc.shutdownTime);
 }
 
 /** 管路断面積 [m²] */
@@ -222,7 +234,7 @@ function solvePump(
   bc: PumpBC,
   A: number,
 ): { H: number; Q: number } {
-  const alpha = pumpSpeedRatio(t, bc.shutdownTime);
+  const alpha = pumpSpeedRatio(t, bc);
   const Hs = bc.Hs ?? bc.H0 * 1.2;
   const Bq = (Hs - bc.H0) / (bc.Q0 * bc.Q0); // 放物線係数
   const checkValve = bc.checkValve !== false;
@@ -366,7 +378,12 @@ export function runMoc(network: MocNetwork, options: MocOptions = {}): MocResult
     if (upBC?.type === "reservoir") {
       H_up = upBC.head;
     } else if (upBC?.type === "pump") {
-      H_up = upBC.H0 + physics[0]!.hfTotal; // pump 揚程 ≈ 下流水頭 + 損失
+      if ((upBC.mode ?? "trip") === "start") {
+        // 起動前: ポンプ停止中の静水頭（配管内静圧）
+        H_up = upBC.staticHead ?? 0;
+      } else {
+        H_up = upBC.H0 + physics[0]!.hfTotal; // pump 揚程 ≈ 下流水頭 + 損失
+      }
     } else {
       // 下流 valve からバックトレース
       const downBC = nodes[segs[segs.length - 1]!.downstreamNodeId];
@@ -658,6 +675,57 @@ export interface PumpTripInput {
   checkValve?: boolean;
   nReaches?: number;
   tMax?: number;
+}
+
+/** ポンプ起動シナリオの便利関数 */
+export interface PumpStartInput {
+  pipe: Pipe;
+  waveSpeed: number;
+  /** 定格流量 Q₀ [m³/s] */
+  Q_rated: number;
+  /** 定格揚程 H₀ [m] */
+  pumpHead: number;
+  /** 締切水頭 Hs [m]（デフォルト 1.2×H₀） */
+  Hs?: number;
+  /** 起動完了時間 [s] */
+  startupTime: number;
+  /** 起動前の静水頭（管内静圧）[m]（デフォルト 0） */
+  staticHead?: number;
+  nReaches?: number;
+  tMax?: number;
+}
+
+export function runMocPumpStart(input: PumpStartInput): MocResult {
+  const {
+    pipe, waveSpeed, Q_rated, pumpHead, Hs, startupTime,
+    staticHead = 0, nReaches = 10, tMax,
+  } = input;
+
+  const network: MocNetwork = {
+    pipes: [{
+      id: "pipe_0",
+      pipe,
+      waveSpeed,
+      nReaches,
+      upstreamNodeId: "pump_node",
+      downstreamNodeId: "dead_end_node",
+    }],
+    nodes: {
+      pump_node: {
+        type: "pump",
+        Q0: Q_rated,
+        H0: pumpHead,
+        ...(Hs !== undefined && { Hs }),
+        shutdownTime: 0,
+        mode: "start",
+        startupTime,
+        staticHead,
+      },
+      dead_end_node: { type: "dead_end" },
+    },
+  };
+
+  return runMoc(network, { ...(tMax !== undefined && { tMax }), initialFlow: 0 });
 }
 
 export function runMocPumpTrip(input: PumpTripInput): MocResult {
