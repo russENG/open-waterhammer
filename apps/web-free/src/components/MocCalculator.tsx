@@ -1,0 +1,356 @@
+/**
+ * 特性曲線法（MOC）計算パネル
+ * 出典: 土地改良設計基準パイプライン技術書 §8.4
+ */
+
+import { useState, useMemo } from "react";
+import {
+  runMoc,
+  calcWaveSpeed,
+  joukowsky,
+  headToMpa,
+} from "@open-waterhammer/core";
+import type { Pipe } from "@open-waterhammer/core";
+import {
+  DEMO_CASE_01_PIPE,
+  DEMO_CASE_01_CASE,
+  DEMO_CASE_01_CLOSE_TIME,
+  DEMO_CASE_02_PIPE,
+  DEMO_CASE_02_CASE,
+  DEMO_CASE_02_CLOSE_TIME,
+} from "@open-waterhammer/sample-data";
+import { MocTimeChart } from "./MocTimeChart";
+
+// ─── デモケース ───────────────────────────────────────────────────────────────
+
+const DEMO_CASES = [
+  {
+    id: "01",
+    label: "デモ01: バルブ急閉そく",
+    pipe: DEMO_CASE_01_PIPE,
+    cas: DEMO_CASE_01_CASE,
+    closeTime: DEMO_CASE_01_CLOSE_TIME,
+  },
+  {
+    id: "02",
+    label: "デモ02: バルブ緩閉そく",
+    pipe: DEMO_CASE_02_PIPE,
+    cas: DEMO_CASE_02_CASE,
+    closeTime: DEMO_CASE_02_CLOSE_TIME,
+  },
+] as const;
+
+// ─── フォーム状態 ─────────────────────────────────────────────────────────────
+
+interface FormState {
+  innerDiameter: string; // mm
+  wallThickness: string; // mm
+  length: string;        // m
+  initialVelocity: string;
+  initialHead: string;
+  closeTime: string;
+  nReaches: string;
+}
+
+function demoToForm(
+  pipe: Pipe,
+  cas: { initialVelocity: number; initialHead: number },
+  closeTime: number,
+): FormState {
+  return {
+    innerDiameter: String(pipe.innerDiameter * 1000),
+    wallThickness: String(pipe.wallThickness * 1000),
+    length: String(pipe.length),
+    initialVelocity: String(cas.initialVelocity),
+    initialHead: String(cas.initialHead),
+    closeTime: String(closeTime),
+    nReaches: "10",
+  };
+}
+
+// ─── 数値フォーマット ─────────────────────────────────────────────────────────
+
+function n(v: number, d = 2): string { return v.toFixed(d); }
+
+// ─── コンポーネント ───────────────────────────────────────────────────────────
+
+export function MocCalculator() {
+  const [demoId, setDemoId] = useState<"01" | "02">("01");
+  const [form, setForm] = useState<FormState>(
+    () => demoToForm(DEMO_CASE_01_PIPE, DEMO_CASE_01_CASE, DEMO_CASE_01_CLOSE_TIME),
+  );
+  const [showFormula, setShowFormula] = useState(false);
+
+  function selectDemo(id: "01" | "02") {
+    const d = DEMO_CASES.find((c) => c.id === id)!;
+    setDemoId(id);
+    setForm(demoToForm(d.pipe, d.cas, d.closeTime));
+  }
+
+  function updateField(key: keyof FormState, val: string) {
+    setForm((f) => ({ ...f, [key]: val }));
+  }
+
+  // ── 入力値パース ──────────────────────────────────────────────────────────
+  const parsed = useMemo(() => {
+    const D = parseFloat(form.innerDiameter) / 1000;
+    const t = parseFloat(form.wallThickness) / 1000;
+    const L = parseFloat(form.length);
+    const V0 = parseFloat(form.initialVelocity);
+    const H0 = parseFloat(form.initialHead);
+    const tv = parseFloat(form.closeTime);
+    const N = Math.max(4, Math.min(40, parseInt(form.nReaches, 10) || 10));
+
+    const demo = DEMO_CASES.find((d) => d.id === demoId)!;
+    const pipe: Pipe = {
+      ...demo.pipe,
+      innerDiameter: isNaN(D) ? demo.pipe.innerDiameter : D,
+      wallThickness: isNaN(t) ? demo.pipe.wallThickness : t,
+      length: isNaN(L) ? demo.pipe.length : L,
+    };
+
+    if (isNaN(V0) || isNaN(H0) || isNaN(tv) || V0 < 0 || H0 <= 0 || tv < 0) return null;
+
+    return { pipe, V0, H0, tv, N };
+  }, [form, demoId]);
+
+  // ── MOC 実行 ──────────────────────────────────────────────────────────────
+  const result = useMemo(() => {
+    if (!parsed) return null;
+    const { pipe, V0, H0, tv, N } = parsed;
+    const a = calcWaveSpeed(pipe);
+    return runMoc({
+      pipe,
+      waveSpeed: a,
+      initialVelocity: V0,
+      initialDownstreamHead: H0,
+      closeTime: tv,
+      nReaches: N,
+    });
+  }, [parsed]);
+
+  // ── ジューコフスキー参照値 ─────────────────────────────────────────────────
+  const joukowskyRef = useMemo(() => {
+    if (!parsed || !result) return null;
+    const a = result.summary.waveSpeed;
+    const dH = joukowsky(a, -parsed.V0);
+    return { dH, Hmax: parsed.H0 + dH, mpa: headToMpa(dH) };
+  }, [parsed, result]);
+
+  // ─────────────────────────────────────────────────────────────────────────
+
+  return (
+    <div className="card">
+      <h2 className="card-title">特性曲線法（MOC）非定常水撃圧計算（§8.4）</h2>
+
+      {/* デモ選択 */}
+      <div className="demo-tabs" style={{ marginBottom: 16 }}>
+        {DEMO_CASES.map((d) => (
+          <button
+            key={d.id}
+            className={`demo-tab${demoId === d.id ? " demo-tab--active" : ""}`}
+            onClick={() => selectDemo(d.id)}
+          >
+            {d.label}
+          </button>
+        ))}
+      </div>
+
+      <div className="calculator-body">
+        {/* ── 左: 入力 ── */}
+        <div>
+          {/* 管路諸元 */}
+          <div className="input-group">
+            <p className="input-group-title">管路諸元</p>
+            <div className="input-grid">
+              {(
+                [
+                  { key: "innerDiameter", label: "内径 D", unit: "mm" },
+                  { key: "wallThickness", label: "管厚 t", unit: "mm" },
+                  { key: "length",        label: "延長 L", unit: "m" },
+                ] as { key: keyof FormState; label: string; unit: string }[]
+              ).map(({ key, label, unit }) => (
+                <div className="input-field" key={key}>
+                  <span className="input-label">{label}</span>
+                  <div className="input-control">
+                    <input
+                      className="input"
+                      type="number"
+                      min="0"
+                      step="any"
+                      value={form[key]}
+                      onChange={(e) => updateField(key, e.target.value)}
+                    />
+                    <span className="input-unit">{unit}</span>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* 初期条件 */}
+          <div className="input-group">
+            <p className="input-group-title">初期条件・操作</p>
+            <div className="input-grid">
+              {(
+                [
+                  { key: "initialVelocity", label: "初期流速 V₀", unit: "m/s" },
+                  { key: "initialHead",     label: "初期水頭 H₀", unit: "m" },
+                  { key: "closeTime",       label: "閉そく時間 tν", unit: "s" },
+                ] as { key: keyof FormState; label: string; unit: string }[]
+              ).map(({ key, label, unit }) => (
+                <div className="input-field" key={key}>
+                  <span className="input-label">{label}</span>
+                  <div className="input-control">
+                    <input
+                      className="input"
+                      type="number"
+                      min="0"
+                      step="any"
+                      value={form[key]}
+                      onChange={(e) => updateField(key, e.target.value)}
+                    />
+                    <span className="input-unit">{unit}</span>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* 計算設定 */}
+          <div className="input-group">
+            <p className="input-group-title">計算設定</p>
+            <div className="input-grid">
+              <div className="input-field">
+                <span className="input-label">分割数 N（4〜40）</span>
+                <div className="input-control">
+                  <input
+                    className="input"
+                    type="number"
+                    min="4"
+                    max="40"
+                    step="1"
+                    value={form.nReaches}
+                    onChange={(e) => updateField("nReaches", e.target.value)}
+                  />
+                  <span className="input-unit">区間</span>
+                </div>
+              </div>
+            </div>
+            <p className="demo-note" style={{ marginTop: 6 }}>
+              Δt = Δx/a（クーラン条件）。シミュレーション時間: 3×T₀
+            </p>
+          </div>
+        </div>
+
+        {/* ── 右: 結果 ── */}
+        <div>
+          {result && parsed ? (
+            <>
+              {/* サマリーカード */}
+              <div className="result-section">
+                <p className="result-section-title">計算条件</p>
+                <div className="result-row">
+                  <span className="result-label">波速 a</span>
+                  <span className="result-value">{n(result.summary.waveSpeed, 1)}<span className="result-unit"> m/s</span></span>
+                </div>
+                <div className="result-row">
+                  <span className="result-label">圧力振動周期 T₀</span>
+                  <span className="result-value">{n(result.summary.vibrationPeriod, 3)}<span className="result-unit"> s</span></span>
+                </div>
+                <div className="result-row">
+                  <span className="result-label">上流端水頭 HR</span>
+                  <span className="result-value">{n(result.summary.upstreamHead, 2)}<span className="result-unit"> m</span></span>
+                </div>
+                <div className="result-row">
+                  <span className="result-label">Δt / Δx</span>
+                  <span className="result-value">{result.dt.toFixed(4)}<span className="result-unit"> s</span> / {result.dx.toFixed(1)}<span className="result-unit"> m</span></span>
+                </div>
+              </div>
+
+              <div className="result-section">
+                <p className="result-section-title">下流端（バルブ）水頭</p>
+                <div className="result-row result-row--highlight">
+                  <span className="result-label">最大水頭 Hmax</span>
+                  <span className="result-value">
+                    {n(result.summary.Hmax_downstream, 1)}
+                    <span className="result-unit"> m</span>
+                  </span>
+                </div>
+                <div className="result-row">
+                  <span className="result-label">最小水頭 Hmin</span>
+                  <span className="result-value">{n(result.summary.Hmin_downstream, 1)}<span className="result-unit"> m</span></span>
+                </div>
+                <div className="result-row result-row--highlight">
+                  <span className="result-label">ΔHmax（水撃圧水頭）</span>
+                  <span className="result-value">
+                    {n(result.summary.deltaHmax, 1)}
+                    <span className="result-unit"> m</span>
+                    <span className="result-unit" style={{ marginLeft: 8 }}>
+                      = {headToMpa(result.summary.deltaHmax).toFixed(4)} MPa
+                    </span>
+                  </span>
+                </div>
+              </div>
+
+              {/* ジューコフスキー参照値 */}
+              {joukowskyRef && (
+                <div className="result-section">
+                  <p className="result-section-title">参考: ジューコフスキー式（急閉そく上限）</p>
+                  <div className="result-row">
+                    <span className="result-label">ΔH (Joukowsky)</span>
+                    <span className="result-value">{n(joukowskyRef.dH, 1)}<span className="result-unit"> m = {joukowskyRef.mpa.toFixed(4)} MPa</span></span>
+                  </div>
+                  <div className="result-row">
+                    <span className="result-label">MOC / Joukowsky 比</span>
+                    <span className="result-value">
+                      {(result.summary.deltaHmax / joukowskyRef.dH * 100).toFixed(1)}
+                      <span className="result-unit"> %</span>
+                    </span>
+                  </div>
+                </div>
+              )}
+            </>
+          ) : (
+            <p className="result-empty">有効な入力値を確認してください</p>
+          )}
+        </div>
+      </div>
+
+      {/* ── 時系列チャート（全幅） ── */}
+      {result && (
+        <div style={{ marginTop: 20 }}>
+          <button
+            className={`formula-toggle card${showFormula ? "" : ""}`}
+            style={{ width: "100%", borderRadius: 8, border: "1px solid #e2e8f0", marginBottom: 8 }}
+            onClick={() => setShowFormula((v) => !v)}
+          >
+            <span className="formula-toggle-label">下流端水頭 H(t) 時系列チャート</span>
+            <span className="formula-toggle-icon">{showFormula ? "▲" : "▼"}</span>
+          </button>
+
+          {showFormula && (
+            <div className="card" style={{ marginBottom: 0 }}>
+              <MocTimeChart
+                downstreamH={result.downstreamH}
+                H0={result.summary.initialDownstreamHead}
+                HR={result.summary.upstreamHead}
+                vibrationPeriod={result.summary.vibrationPeriod}
+              />
+              <p className="result-standard" style={{ marginTop: 8 }}>
+                青線: 下流端水頭 H(t)　赤破線: Hmax　緑破線: Hmin　灰破線: 初期水頭 H₀　青破線: 上流端水頭 HR
+              </p>
+            </div>
+          )}
+        </div>
+      )}
+
+      <div className="result-footer" style={{ marginTop: 16 }}>
+        <p className="result-standard">
+          出典: 土地改良設計基準パイプライン技術書 §8.4（特性曲線法）／
+          単一管路・定水頭上流境界・線形バルブ閉操作・準定常摩擦（Darcy-Weisbach）
+        </p>
+      </div>
+    </div>
+  );
+}
