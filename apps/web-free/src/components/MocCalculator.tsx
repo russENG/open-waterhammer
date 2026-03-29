@@ -20,6 +20,7 @@ import {
   DEMO_CASE_02_CLOSE_TIME,
 } from "@open-waterhammer/sample-data";
 import { MocTimeChart } from "./MocTimeChart";
+import { MocEnvelopeChart } from "./MocEnvelopeChart";
 
 // ─── デモケース ───────────────────────────────────────────────────────────────
 
@@ -43,9 +44,9 @@ const DEMO_CASES = [
 // ─── フォーム状態 ─────────────────────────────────────────────────────────────
 
 interface FormState {
-  innerDiameter: string; // mm
-  wallThickness: string; // mm
-  length: string;        // m
+  innerDiameter: string;
+  wallThickness: string;
+  length: string;
   initialVelocity: string;
   initialHead: string;
   closeTime: string;
@@ -68,8 +69,6 @@ function demoToForm(
   };
 }
 
-// ─── 数値フォーマット ─────────────────────────────────────────────────────────
-
 function n(v: number, d = 2): string { return v.toFixed(d); }
 
 // ─── コンポーネント ───────────────────────────────────────────────────────────
@@ -79,16 +78,18 @@ export function MocCalculator() {
   const [form, setForm] = useState<FormState>(
     () => demoToForm(DEMO_CASE_01_PIPE, DEMO_CASE_01_CASE, DEMO_CASE_01_CLOSE_TIME),
   );
-  const [showFormula, setShowFormula] = useState(false);
+  const [snapIdx, setSnapIdx] = useState(0);
 
   function selectDemo(id: "01" | "02") {
     const d = DEMO_CASES.find((c) => c.id === id)!;
     setDemoId(id);
     setForm(demoToForm(d.pipe, d.cas, d.closeTime));
+    setSnapIdx(0);
   }
 
   function updateField(key: keyof FormState, val: string) {
     setForm((f) => ({ ...f, [key]: val }));
+    setSnapIdx(0);
   }
 
   // ── 入力値パース ──────────────────────────────────────────────────────────
@@ -110,7 +111,6 @@ export function MocCalculator() {
     };
 
     if (isNaN(V0) || isNaN(H0) || isNaN(tv) || V0 < 0 || H0 <= 0 || tv < 0) return null;
-
     return { pipe, V0, H0, tv, N };
   }, [form, demoId]);
 
@@ -129,13 +129,25 @@ export function MocCalculator() {
     });
   }, [parsed]);
 
+  // ── 定常状態プロファイル ──────────────────────────────────────────────────
+  const H_steady = useMemo(() => {
+    if (!result) return [];
+    const { upstreamHead: HR, initialDownstreamHead: H0 } = result.summary;
+    return Array.from({ length: result.nReaches + 1 }, (_, i) =>
+      HR - (HR - H0) * (i / result.nReaches),
+    );
+  }, [result]);
+
   // ── ジューコフスキー参照値 ─────────────────────────────────────────────────
   const joukowskyRef = useMemo(() => {
     if (!parsed || !result) return null;
     const a = result.summary.waveSpeed;
     const dH = joukowsky(a, -parsed.V0);
-    return { dH, Hmax: parsed.H0 + dH, mpa: headToMpa(dH) };
+    return { dH, mpa: headToMpa(dH) };
   }, [parsed, result]);
+
+  // ── スクロール対象スナップショット ─────────────────────────────────────────
+  const currentSnap = result?.snapshots[snapIdx] ?? null;
 
   // ─────────────────────────────────────────────────────────────────────────
 
@@ -159,7 +171,6 @@ export function MocCalculator() {
       <div className="calculator-body">
         {/* ── 左: 入力 ── */}
         <div>
-          {/* 管路諸元 */}
           <div className="input-group">
             <p className="input-group-title">管路諸元</p>
             <div className="input-grid">
@@ -173,14 +184,8 @@ export function MocCalculator() {
                 <div className="input-field" key={key}>
                   <span className="input-label">{label}</span>
                   <div className="input-control">
-                    <input
-                      className="input"
-                      type="number"
-                      min="0"
-                      step="any"
-                      value={form[key]}
-                      onChange={(e) => updateField(key, e.target.value)}
-                    />
+                    <input className="input" type="number" min="0" step="any"
+                      value={form[key]} onChange={(e) => updateField(key, e.target.value)} />
                     <span className="input-unit">{unit}</span>
                   </div>
                 </div>
@@ -188,7 +193,6 @@ export function MocCalculator() {
             </div>
           </div>
 
-          {/* 初期条件 */}
           <div className="input-group">
             <p className="input-group-title">初期条件・操作</p>
             <div className="input-grid">
@@ -202,14 +206,8 @@ export function MocCalculator() {
                 <div className="input-field" key={key}>
                   <span className="input-label">{label}</span>
                   <div className="input-control">
-                    <input
-                      className="input"
-                      type="number"
-                      min="0"
-                      step="any"
-                      value={form[key]}
-                      onChange={(e) => updateField(key, e.target.value)}
-                    />
+                    <input className="input" type="number" min="0" step="any"
+                      value={form[key]} onChange={(e) => updateField(key, e.target.value)} />
                     <span className="input-unit">{unit}</span>
                   </div>
                 </div>
@@ -217,22 +215,14 @@ export function MocCalculator() {
             </div>
           </div>
 
-          {/* 計算設定 */}
           <div className="input-group">
             <p className="input-group-title">計算設定</p>
             <div className="input-grid">
               <div className="input-field">
                 <span className="input-label">分割数 N（4〜40）</span>
                 <div className="input-control">
-                  <input
-                    className="input"
-                    type="number"
-                    min="4"
-                    max="40"
-                    step="1"
-                    value={form.nReaches}
-                    onChange={(e) => updateField("nReaches", e.target.value)}
-                  />
+                  <input className="input" type="number" min="4" max="40" step="1"
+                    value={form.nReaches} onChange={(e) => updateField("nReaches", e.target.value)} />
                   <span className="input-unit">区間</span>
                 </div>
               </div>
@@ -243,11 +233,10 @@ export function MocCalculator() {
           </div>
         </div>
 
-        {/* ── 右: 結果 ── */}
+        {/* ── 右: 結果サマリー ── */}
         <div>
           {result && parsed ? (
             <>
-              {/* サマリーカード */}
               <div className="result-section">
                 <p className="result-section-title">計算条件</p>
                 <div className="result-row">
@@ -255,16 +244,12 @@ export function MocCalculator() {
                   <span className="result-value">{n(result.summary.waveSpeed, 1)}<span className="result-unit"> m/s</span></span>
                 </div>
                 <div className="result-row">
-                  <span className="result-label">圧力振動周期 T₀</span>
+                  <span className="result-label">振動周期 T₀</span>
                   <span className="result-value">{n(result.summary.vibrationPeriod, 3)}<span className="result-unit"> s</span></span>
                 </div>
                 <div className="result-row">
                   <span className="result-label">上流端水頭 HR</span>
                   <span className="result-value">{n(result.summary.upstreamHead, 2)}<span className="result-unit"> m</span></span>
-                </div>
-                <div className="result-row">
-                  <span className="result-label">Δt / Δx</span>
-                  <span className="result-value">{result.dt.toFixed(4)}<span className="result-unit"> s</span> / {result.dx.toFixed(1)}<span className="result-unit"> m</span></span>
                 </div>
               </div>
 
@@ -273,8 +258,7 @@ export function MocCalculator() {
                 <div className="result-row result-row--highlight">
                   <span className="result-label">最大水頭 Hmax</span>
                   <span className="result-value">
-                    {n(result.summary.Hmax_downstream, 1)}
-                    <span className="result-unit"> m</span>
+                    {n(result.summary.Hmax_downstream, 1)}<span className="result-unit"> m</span>
                   </span>
                 </div>
                 <div className="result-row">
@@ -282,30 +266,29 @@ export function MocCalculator() {
                   <span className="result-value">{n(result.summary.Hmin_downstream, 1)}<span className="result-unit"> m</span></span>
                 </div>
                 <div className="result-row result-row--highlight">
-                  <span className="result-label">ΔHmax（水撃圧水頭）</span>
+                  <span className="result-label">ΔHmax（水撃圧）</span>
                   <span className="result-value">
-                    {n(result.summary.deltaHmax, 1)}
-                    <span className="result-unit"> m</span>
+                    {n(result.summary.deltaHmax, 1)}<span className="result-unit"> m</span>
                     <span className="result-unit" style={{ marginLeft: 8 }}>
-                      = {headToMpa(result.summary.deltaHmax).toFixed(4)} MPa
+                      ({headToMpa(result.summary.deltaHmax).toFixed(4)} MPa)
                     </span>
                   </span>
                 </div>
               </div>
 
-              {/* ジューコフスキー参照値 */}
               {joukowskyRef && (
                 <div className="result-section">
-                  <p className="result-section-title">参考: ジューコフスキー式（急閉そく上限）</p>
+                  <p className="result-section-title">参考: ジューコフスキー（急閉上限）</p>
                   <div className="result-row">
-                    <span className="result-label">ΔH (Joukowsky)</span>
-                    <span className="result-value">{n(joukowskyRef.dH, 1)}<span className="result-unit"> m = {joukowskyRef.mpa.toFixed(4)} MPa</span></span>
+                    <span className="result-label">ΔH</span>
+                    <span className="result-value">
+                      {n(joukowskyRef.dH, 1)}<span className="result-unit"> m ({joukowskyRef.mpa.toFixed(4)} MPa)</span>
+                    </span>
                   </div>
                   <div className="result-row">
-                    <span className="result-label">MOC / Joukowsky 比</span>
+                    <span className="result-label">MOC/Joukowsky 比</span>
                     <span className="result-value">
-                      {(result.summary.deltaHmax / joukowskyRef.dH * 100).toFixed(1)}
-                      <span className="result-unit"> %</span>
+                      {(result.summary.deltaHmax / joukowskyRef.dH * 100).toFixed(1)}<span className="result-unit"> %</span>
                     </span>
                   </div>
                 </div>
@@ -317,31 +300,68 @@ export function MocCalculator() {
         </div>
       </div>
 
-      {/* ── 時系列チャート（全幅） ── */}
-      {result && (
-        <div style={{ marginTop: 20 }}>
-          <button
-            className={`formula-toggle card${showFormula ? "" : ""}`}
-            style={{ width: "100%", borderRadius: 8, border: "1px solid #e2e8f0", marginBottom: 8 }}
-            onClick={() => setShowFormula((v) => !v)}
-          >
-            <span className="formula-toggle-label">下流端水頭 H(t) 時系列チャート</span>
-            <span className="formula-toggle-icon">{showFormula ? "▲" : "▼"}</span>
-          </button>
+      {/* ══════════════════════════════════════════════════════════════════ */}
+      {/* グラフエリア                                                       */}
+      {/* ══════════════════════════════════════════════════════════════════ */}
 
-          {showFormula && (
-            <div className="card" style={{ marginBottom: 0 }}>
-              <MocTimeChart
-                downstreamH={result.downstreamH}
-                H0={result.summary.initialDownstreamHead}
-                HR={result.summary.upstreamHead}
-                vibrationPeriod={result.summary.vibrationPeriod}
+      {result && H_steady.length > 0 && (
+        <div style={{ marginTop: 24, display: "flex", flexDirection: "column", gap: 20 }}>
+
+          {/* ── 管路縦断圧力包絡線図 ── */}
+          <div>
+            <p className="result-section-title" style={{ marginBottom: 8 }}>
+              管路縦断圧力包絡線図
+            </p>
+
+            {/* 時刻スクロールバー */}
+            <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 10 }}>
+              <span className="input-label" style={{ whiteSpace: "nowrap" }}>時刻スクロール</span>
+              <input
+                type="range"
+                min={0}
+                max={result.snapshots.length - 1}
+                step={1}
+                value={snapIdx}
+                onChange={(e) => setSnapIdx(Number(e.target.value))}
+                style={{ flex: 1 }}
               />
-              <p className="result-standard" style={{ marginTop: 8 }}>
-                青線: 下流端水頭 H(t)　赤破線: Hmax　緑破線: Hmin　灰破線: 初期水頭 H₀　青破線: 上流端水頭 HR
-              </p>
+              <span className="result-value" style={{ fontSize: "0.88rem", minWidth: 64 }}>
+                t = {currentSnap ? currentSnap.t.toFixed(3) : "0.000"} s
+              </span>
+              <button
+                className="btn btn--secondary"
+                style={{ padding: "4px 10px", fontSize: "0.78rem" }}
+                onClick={() => setSnapIdx(0)}
+              >
+                初期
+              </button>
             </div>
-          )}
+
+            <MocEnvelopeChart
+              pipeLength={parsed?.pipe.length ?? 500}
+              Hmax={result.Hmax}
+              Hmin={result.Hmin}
+              H_steady={H_steady}
+              snapshot={currentSnap?.H}
+              snapshotTime={currentSnap?.t}
+            />
+            <p className="result-standard" style={{ marginTop: 6 }}>
+              赤線: Hmax包絡　緑線: Hmin包絡　灰破線: 定常状態　青線: スクロール時刻の水頭プロファイル H(x,t)
+            </p>
+          </div>
+
+          {/* ── 下流端 H(t) 時系列チャート ── */}
+          <div>
+            <p className="result-section-title" style={{ marginBottom: 8 }}>
+              下流端（バルブ）水頭 H(t) 時系列
+            </p>
+            <MocTimeChart
+              downstreamH={result.downstreamH}
+              H0={result.summary.initialDownstreamHead}
+              HR={result.summary.upstreamHead}
+              vibrationPeriod={result.summary.vibrationPeriod}
+            />
+          </div>
         </div>
       )}
 
