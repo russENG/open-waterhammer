@@ -5,7 +5,7 @@
 
 import { useState, useMemo } from "react";
 import {
-  runMoc,
+  runMocSinglePipe,
   calcWaveSpeed,
   joukowsky,
   headToMpa,
@@ -119,7 +119,7 @@ export function MocCalculator() {
     if (!parsed) return null;
     const { pipe, V0, H0, tv, N } = parsed;
     const a = calcWaveSpeed(pipe);
-    return runMoc({
+    return runMocSinglePipe({
       pipe,
       waveSpeed: a,
       initialVelocity: V0,
@@ -129,25 +129,29 @@ export function MocCalculator() {
     });
   }, [parsed]);
 
+  // ── 単一管路結果の取り出し ────────────────────────────────────────────────
+  const pipe0 = result?.pipes["pipe_0"] ?? null;
+  const upstreamNodeH   = result?.nodes["upstream"]   ?? null;
+  const downstreamNodeH = result?.nodes["downstream"] ?? null;
+
   // ── 定常状態プロファイル ──────────────────────────────────────────────────
-  const H_steady = useMemo(() => {
-    if (!result) return [];
-    const { upstreamHead: HR, initialDownstreamHead: H0 } = result.summary;
-    return Array.from({ length: result.nReaches + 1 }, (_, i) =>
-      HR - (HR - H0) * (i / result.nReaches),
-    );
-  }, [result]);
+  const H_steady = pipe0?.H_steady ?? [];
+
+  // ── 下流端サマリー ─────────────────────────────────────────────────────────
+  const downstreamHSeries = downstreamNodeH?.H ?? [];
+  const Hmax_downstream = downstreamHSeries.length ? Math.max(...downstreamHSeries.map((p) => p.H)) : 0;
+  const Hmin_downstream = downstreamHSeries.length ? Math.min(...downstreamHSeries.map((p) => p.H)) : 0;
+  const HR = upstreamNodeH?.H[0]?.H ?? 0;
 
   // ── ジューコフスキー参照値 ─────────────────────────────────────────────────
   const joukowskyRef = useMemo(() => {
-    if (!parsed || !result) return null;
-    const a = result.summary.waveSpeed;
-    const dH = joukowsky(a, -parsed.V0);
+    if (!parsed || !pipe0) return null;
+    const dH = joukowsky(pipe0.waveSpeed, -parsed.V0);
     return { dH, mpa: headToMpa(dH) };
-  }, [parsed, result]);
+  }, [parsed, pipe0]);
 
   // ── スクロール対象スナップショット ─────────────────────────────────────────
-  const currentSnap = result?.snapshots[snapIdx] ?? null;
+  const currentSnap = pipe0?.snapshots[snapIdx] ?? null;
 
   // ─────────────────────────────────────────────────────────────────────────
 
@@ -235,21 +239,21 @@ export function MocCalculator() {
 
         {/* ── 右: 結果サマリー ── */}
         <div>
-          {result && parsed ? (
+          {result && pipe0 && parsed ? (
             <>
               <div className="result-section">
                 <p className="result-section-title">計算条件</p>
                 <div className="result-row">
                   <span className="result-label">波速 a</span>
-                  <span className="result-value">{n(result.summary.waveSpeed, 1)}<span className="result-unit"> m/s</span></span>
+                  <span className="result-value">{n(pipe0.waveSpeed, 1)}<span className="result-unit"> m/s</span></span>
                 </div>
                 <div className="result-row">
                   <span className="result-label">振動周期 T₀</span>
-                  <span className="result-value">{n(result.summary.vibrationPeriod, 3)}<span className="result-unit"> s</span></span>
+                  <span className="result-value">{n(pipe0.vibrationPeriod, 3)}<span className="result-unit"> s</span></span>
                 </div>
                 <div className="result-row">
                   <span className="result-label">上流端水頭 HR</span>
-                  <span className="result-value">{n(result.summary.upstreamHead, 2)}<span className="result-unit"> m</span></span>
+                  <span className="result-value">{n(HR, 2)}<span className="result-unit"> m</span></span>
                 </div>
               </div>
 
@@ -257,20 +261,18 @@ export function MocCalculator() {
                 <p className="result-section-title">下流端（バルブ）水頭</p>
                 <div className="result-row result-row--highlight">
                   <span className="result-label">最大水頭 Hmax</span>
-                  <span className="result-value">
-                    {n(result.summary.Hmax_downstream, 1)}<span className="result-unit"> m</span>
-                  </span>
+                  <span className="result-value">{n(Hmax_downstream, 1)}<span className="result-unit"> m</span></span>
                 </div>
                 <div className="result-row">
                   <span className="result-label">最小水頭 Hmin</span>
-                  <span className="result-value">{n(result.summary.Hmin_downstream, 1)}<span className="result-unit"> m</span></span>
+                  <span className="result-value">{n(Hmin_downstream, 1)}<span className="result-unit"> m</span></span>
                 </div>
                 <div className="result-row result-row--highlight">
                   <span className="result-label">ΔHmax（水撃圧）</span>
                   <span className="result-value">
-                    {n(result.summary.deltaHmax, 1)}<span className="result-unit"> m</span>
+                    {n(Hmax_downstream - parsed.H0, 1)}<span className="result-unit"> m</span>
                     <span className="result-unit" style={{ marginLeft: 8 }}>
-                      ({headToMpa(result.summary.deltaHmax).toFixed(4)} MPa)
+                      ({headToMpa(Hmax_downstream - parsed.H0).toFixed(4)} MPa)
                     </span>
                   </span>
                 </div>
@@ -288,7 +290,7 @@ export function MocCalculator() {
                   <div className="result-row">
                     <span className="result-label">MOC/Joukowsky 比</span>
                     <span className="result-value">
-                      {(result.summary.deltaHmax / joukowskyRef.dH * 100).toFixed(1)}<span className="result-unit"> %</span>
+                      {((Hmax_downstream - parsed.H0) / joukowskyRef.dH * 100).toFixed(1)}<span className="result-unit"> %</span>
                     </span>
                   </div>
                 </div>
@@ -304,7 +306,7 @@ export function MocCalculator() {
       {/* グラフエリア                                                       */}
       {/* ══════════════════════════════════════════════════════════════════ */}
 
-      {result && H_steady.length > 0 && (
+      {result && pipe0 && H_steady.length > 0 && (
         <div style={{ marginTop: 24, display: "flex", flexDirection: "column", gap: 20 }}>
 
           {/* ── 管路縦断圧力包絡線図 ── */}
@@ -319,7 +321,7 @@ export function MocCalculator() {
               <input
                 type="range"
                 min={0}
-                max={result.snapshots.length - 1}
+                max={pipe0.snapshots.length - 1}
                 step={1}
                 value={snapIdx}
                 onChange={(e) => setSnapIdx(Number(e.target.value))}
@@ -339,8 +341,8 @@ export function MocCalculator() {
 
             <MocEnvelopeChart
               pipeLength={parsed?.pipe.length ?? 500}
-              Hmax={result.Hmax}
-              Hmin={result.Hmin}
+              Hmax={pipe0.Hmax}
+              Hmin={pipe0.Hmin}
               H_steady={H_steady}
               snapshot={currentSnap?.H}
               snapshotTime={currentSnap?.t}
@@ -356,10 +358,10 @@ export function MocCalculator() {
               下流端（バルブ）水頭 H(t) 時系列
             </p>
             <MocTimeChart
-              downstreamH={result.downstreamH}
-              H0={result.summary.initialDownstreamHead}
-              HR={result.summary.upstreamHead}
-              vibrationPeriod={result.summary.vibrationPeriod}
+              downstreamH={downstreamHSeries}
+              H0={parsed!.H0}
+              HR={HR}
+              vibrationPeriod={pipe0.vibrationPeriod}
             />
           </div>
         </div>

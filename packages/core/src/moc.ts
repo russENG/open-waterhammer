@@ -1,268 +1,692 @@
 /**
- * 特性曲線法（Method of Characteristics）による水撃圧非定常計算
+ * 特性曲線法（Method of Characteristics）汎用水撃圧非定常計算エンジン
  *
- * 適用条件:
- *   - 単一管路
- *   - 上流端: 一定水頭貯水槽（定水頭境界）
- *   - 下流端: バルブ操作（線形閉そく / 線形開放）
- *   - 摩擦: 準定常 Darcy-Weisbach（Hazen-Williams係数から初期流速条件で換算）
- *   - 弾性管モデル（波速一定）
+ * 対応シナリオ:
+ *   - バルブ急閉・緩閉・急開・緩開
+ *   - ポンプ急停止（逆止め弁なし / あり）
+ *   - 複数管路直列
+ *   - 任意の組み合わせ（上流 BC × 下流 BC × 管路数）
  *
- * 出典: 土地改良設計基準パイプライン技術書 §8.4、
- *       Wylie & Streeter "Fluid Transients" (1993)
+ * 弾性管モデル・準定常 Darcy-Weisbach 摩擦・CFL=1 クーラン条件
+ *
+ * 出典: 土地改良設計基準パイプライン技術書 §8.4
+ *       Wylie & Streeter "Fluid Transients in Systems" (1993)
  */
 
 import type { Pipe } from "./types.js";
 import { GRAVITY } from "./formulas.js";
 
-// ─── 型定義 ────────────────────────────────────────────────────────────────
+// ═══════════════════════════════════════════════════════════════════════════════
+// 境界条件型（Discriminated Union）
+// ═══════════════════════════════════════════════════════════════════════════════
 
-export interface MocInput {
-  pipe: Pipe;
-  /** 波速 a [m/s]（calcWaveSpeed の結果を渡す） */
-  waveSpeed: number;
-  /** 初期流速 V₀ [m/s] */
-  initialVelocity: number;
-  /** バルブ（下流端）の初期水頭 H₀ [m] */
-  initialDownstreamHead: number;
-  /** 閉そく時間 tν [s]（0 = 瞬時閉） */
+/** 定水頭貯水槽（上流 / 下流どちらにも配置可） */
+export interface ReservoirBC {
+  type: "reservoir";
+  /** 水頭 H_R [m] */
+  head: number;
+}
+
+/**
+ * バルブ
+ * 線形開度変化: close → 1→0, open → 0→1
+ */
+export interface ValveBC {
+  type: "valve";
+  /** 初期流量 Q₀ [m³/s] */
+  Q0: number;
+  /** バルブ端初期水頭 H₀ [m] */
+  H0v: number;
+  /** 操作完了時間 tν [s]（0 = 瞬時） */
   closeTime: number;
-  /** 管路分割数 N（デフォルト 10、クーラン条件: Δt = Δx/a） */
-  nReaches?: number;
-  /** シミュレーション時間 [s]（デフォルト: 圧力振動周期 T₀ の 3 倍） */
-  tMax?: number;
-  /** 操作方向: "close"（デフォルト）= バルブ閉, "open" = バルブ開 */
+  /** "close"（デフォルト）or "open" */
   operation?: "close" | "open";
 }
 
-/** 1タイムステップのスナップショット */
+/**
+ * ポンプ（上流端専用）
+ * 放物線型 H-Q 特性: H_pump = Hs - Bq·Q²
+ * 急停止後の回転速度は線形減衰: α(t) = max(0, 1 - t/t_decel)
+ * 逆止め弁 checkValve=true のとき Q < 0 を遮断
+ */
+export interface PumpBC {
+  type: "pump";
+  /** 定格流量 Q₀ [m³/s] */
+  Q0: number;
+  /** 定格水頭（揚程）H₀ [m] */
+  H0: number;
+  /** 締切水頭 Hs [m]（Q=0 時の揚程、デフォルト 1.2×H₀） */
+  Hs?: number;
+  /** 停止完了時間 t_decel [s]（GD² を直接指定しない簡易モデル） */
+  shutdownTime: number;
+  /** 逆止め弁（デフォルト true） */
+  checkValve?: boolean;
+}
+
+/** 行き止まり（Q=0 の剛体端、下流端専用） */
+export interface DeadEndBC {
+  type: "dead_end";
+}
+
+export type BoundaryCondition = ReservoirBC | ValveBC | PumpBC | DeadEndBC;
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// 管網型
+// ═══════════════════════════════════════════════════════════════════════════════
+
+/** 管路区間 */
+export interface MocPipeSegment {
+  /** 管路 ID（結果の key に使用） */
+  id: string;
+  pipe: Pipe;
+  /** 波速 a [m/s]（calcWaveSpeed の結果を渡す） */
+  waveSpeed: number;
+  /** 分割数 N（Δt = Δx/a） */
+  nReaches: number;
+  /** 上流節点 ID */
+  upstreamNodeId: string;
+  /** 下流節点 ID */
+  downstreamNodeId: string;
+}
+
+/**
+ * 管網定義
+ * 現在は直列管路のみ対応（pipes は上流→下流の順に並べること）
+ */
+export interface MocNetwork {
+  pipes: MocPipeSegment[];
+  /** 境界節点の条件（内部接続節点は自動的に連続条件を適用） */
+  nodes: Record<string, BoundaryCondition>;
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// 入出力型
+// ═══════════════════════════════════════════════════════════════════════════════
+
+export interface MocOptions {
+  /** シミュレーション時間 [s]（デフォルト: 最長管路の T₀ × 3） */
+  tMax?: number;
+  /** 全管路共通の初期流量 Q₀ [m³/s]（省略時は上流 BC から推算） */
+  initialFlow?: number;
+}
+
 export interface MocSnapshot {
-  /** 時刻 [s] */
   t: number;
-  /** 各節点の水頭 H [m]（node 0 = 上流端, node N = 下流端） */
   H: number[];
-  /** 各節点の流量 Q [m³/s] */
   Q: number[];
 }
 
-export interface MocResult {
-  /** タイムステップ幅 Δt [s] */
-  dt: number;
-  /** 空間ステップ幅 Δx [m] */
+export interface MocPipeResult {
+  waveSpeed: number;
   dx: number;
-  /** 分割数 N */
   nReaches: number;
-  /** 全スナップショット */
-  snapshots: MocSnapshot[];
-  /** 各節点の最大水頭 [m] */
+  vibrationPeriod: number;
+  /** 定常初期水頭プロファイル */
+  H_steady: number[];
   Hmax: number[];
-  /** 各節点の最小水頭 [m] */
   Hmin: number[];
-  /** 下流端（バルブ）の時系列水頭 */
-  downstreamH: { t: number; H: number }[];
-  /** 上流端の時系列水頭 */
-  upstreamH: { t: number; H: number }[];
-  /** 計算条件サマリー */
-  summary: {
-    waveSpeed: number;
-    vibrationPeriod: number;
-    upstreamHead: number;
-    initialDownstreamHead: number;
-    Hmax_downstream: number;
-    Hmin_downstream: number;
-    deltaHmax: number;
-  };
+  /** 間引きスナップショット（最大 200 点） */
+  snapshots: MocSnapshot[];
 }
 
-// ─── 摩擦係数換算 ──────────────────────────────────────────────────────────
+export interface MocNodeResult {
+  /** 節点水頭時系列 */
+  H: { t: number; H: number }[];
+}
 
-/**
- * Hazen-Williams係数 → Darcy-Weisbach摩擦係数 f（初期流速条件で換算）
- *
- * H-W: V = 0.8492 × C × R_h^0.63 × S^0.54  (SI単位系)
- * → S = (V / (0.8492 × C × (D/4)^0.63))^(1/0.54)
- * → f = 2gDS / V²
- */
+export interface MocResult {
+  dt: number;
+  tMax: number;
+  pipes: Record<string, MocPipeResult>;
+  nodes: Record<string, MocNodeResult>;
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// 内部ヘルパー
+// ═══════════════════════════════════════════════════════════════════════════════
+
+/** Hazen-Williams 係数 → Darcy-Weisbach 摩擦係数（初期流速条件） */
 function hwToDarcyWeisbach(V0: number, D: number, C: number): number {
-  if (V0 < 1e-4) return 0.02; // 零流速時はデフォルト値
+  if (V0 < 1e-4) return 0.02;
   const Rh = D / 4;
   const S = Math.pow(V0 / (0.8492 * C * Math.pow(Rh, 0.63)), 1 / 0.54);
-  const f = (2 * GRAVITY * D * S) / (V0 * V0);
-  // 物理的に妥当な範囲にクリップ (0.005 〜 0.15)
-  return Math.max(0.005, Math.min(f, 0.15));
+  return Math.max(0.005, Math.min((2 * GRAVITY * D * S) / (V0 * V0), 0.15));
 }
 
-// ─── バルブ開度関数 ────────────────────────────────────────────────────────
+/** バルブ開度 τ（0=全閉, 1=全開） */
+function valveOpening(t: number, closeTime: number, op: "close" | "open"): number {
+  if (op === "close") return closeTime <= 0 ? 0 : Math.max(0, 1 - t / closeTime);
+  return closeTime <= 0 ? 1 : Math.min(1, t / closeTime);
+}
+
+/** ポンプ回転速度比 α（0=停止, 1=定格） */
+function pumpSpeedRatio(t: number, shutdownTime: number): number {
+  return shutdownTime <= 0 ? 0 : Math.max(0, 1 - t / shutdownTime);
+}
+
+/** 管路断面積 [m²] */
+function pipeArea(D: number): number {
+  return (Math.PI * D * D) / 4;
+}
+
+// ─── 境界条件ソルバー ──────────────────────────────────────────────────────────
 
 /**
- * バルブ開度 τ (0=全閉, 1=全開)
- * 線形操作: close なら 1→0、open なら 0→1
+ * 貯水槽 BC（上流端 or 下流端）
+ * 上流端: C- から Q を求める
+ * 下流端: C+ から Q を求める
  */
-function valveOpening(t: number, closeTime: number, operation: "close" | "open"): number {
-  if (operation === "close") {
-    if (closeTime <= 0) return 0; // 瞬時閉
-    return Math.max(0, 1 - t / closeTime);
-  } else {
-    if (closeTime <= 0) return 1; // 瞬時開
-    return Math.min(1, t / closeTime);
+function solveReservoir(
+  charVal: number, // CM (上流端) or CP (下流端)
+  B: number,
+  HR: number,
+  isUpstream: boolean,
+): { H: number; Q: number } {
+  const H = HR;
+  const Q = isUpstream ? (H - charVal) / B : (charVal - H) / B;
+  return { H, Q };
+}
+
+/**
+ * バルブ BC（下流端専用）
+ * H_P = CP - B·τᵥ·√H_P を 2 次方程式で求解
+ */
+function solveValve(
+  CP: number,
+  B: number,
+  tau: number,
+  Q0: number,
+  H0v: number,
+): { H: number; Q: number } {
+  if (tau < 1e-10) {
+    const H = Math.max(CP, 0);
+    return { H, Q: 0 };
   }
+  const H0safe = Math.max(H0v, 0.01);
+  const tauV = (tau * Q0) / Math.sqrt(H0safe);
+  const disc = B * B * tauV * tauV + 4 * Math.max(CP, 0);
+  const y = (-B * tauV + Math.sqrt(disc)) / 2;
+  return { H: Math.max(y * y, 0), Q: tauV * y };
 }
 
-// ─── メイン ───────────────────────────────────────────────────────────────
+/**
+ * ポンプ BC（上流端専用）
+ * H_pump(Q, α) = α²·Hs - Bq·Q²
+ * C-: H_P = CM + B·Q_P
+ * → Bq·Q² + B·Q + (CM - α²·Hs) = 0
+ */
+function solvePump(
+  CM: number,
+  B: number,
+  t: number,
+  bc: PumpBC,
+  A: number,
+): { H: number; Q: number } {
+  const alpha = pumpSpeedRatio(t, bc.shutdownTime);
+  const Hs = bc.Hs ?? bc.H0 * 1.2;
+  const Bq = (Hs - bc.H0) / (bc.Q0 * bc.Q0); // 放物線係数
+  const checkValve = bc.checkValve !== false;
+
+  if (alpha < 1e-6) {
+    // ポンプ完全停止: 逆止め弁閉（行き止まり）or 逆流
+    if (checkValve) {
+      return { H: CM, Q: 0 };
+    }
+    // 逆止め弁なし: Q は負になり得る（ここでは簡略化: Q=0）
+    return { H: CM, Q: 0 };
+  }
+
+  const alphaHs = alpha * alpha * Hs;
+  const discriminant = B * B + 4 * Bq * (alphaHs - CM);
+
+  if (discriminant < 0 || Bq < 1e-15) {
+    // Bq≈0（フラット特性）or 判別式負: 線形近似
+    const Q = (alphaHs - CM) / B;
+    const H = CM + B * Q;
+    if (checkValve && Q < 0) return { H: CM, Q: 0 };
+    return { H: Math.max(H, 0), Q: Math.max(Q, 0) };
+  }
+
+  const Q = (-B + Math.sqrt(discriminant)) / (2 * Bq);
+  const H = CM + B * Q;
+
+  if (checkValve && Q < 0) return { H: CM, Q: 0 };
+  return { H: Math.max(H, 0), Q: Math.max(Q, 0) };
+}
+
+/** 行き止まり BC（下流端専用）: Q=0, H=CP */
+function solveDeadEnd(CP: number): { H: number; Q: number } {
+  return { H: Math.max(CP, 0), Q: 0 };
+}
 
 /**
- * 特性曲線法による非定常水撃圧計算
- *
- * @param input  計算条件
- * @returns      計算結果（スナップショット列・包絡線・サマリー）
+ * 直列接続節点（ジャンクション）
+ * 上流管路 上端 → C+ (CP_up, B_up)
+ * 下流管路 下端 → C- (CM_dn, B_dn)
+ * 継続条件: Q_up = Q_dn、水頭等値
  */
-export function runMoc(input: MocInput): MocResult {
+function solveSeriesJunction(
+  CP_up: number,
+  B_up: number,
+  CM_dn: number,
+  B_dn: number,
+): { H: number; Q: number } {
+  const Q = (CP_up - CM_dn) / (B_up + B_dn);
+  const H = CP_up - B_up * Q;
+  return { H, Q };
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// 初期条件計算
+// ═══════════════════════════════════════════════════════════════════════════════
+
+interface PipePhysics {
+  A: number;   // 断面積
+  f: number;   // Darcy-Weisbach f
+  B: number;   // 特性インピーダンス
+  R: number;   // 摩擦項係数
+  dx: number;
+  dt: number;
+  T0: number;
+  hfTotal: number; // 全摩擦損失
+}
+
+function computePipePhysics(seg: MocPipeSegment, Q0: number): PipePhysics {
+  const { pipe, waveSpeed: a, nReaches: N } = seg;
+  const { innerDiameter: D, wallThickness: _t, length: L, roughnessCoeff: C } = pipe;
+  const A = pipeArea(D);
+  const V0 = Q0 / A;
+  const f = hwToDarcyWeisbach(V0, D, C);
+  const dx = L / N;
+  const dt = dx / a;
+  const B = a / (GRAVITY * A);
+  const R = (f * dx) / (2 * GRAVITY * D * A * A);
+  const hfTotal = (f * L * V0 * V0) / (2 * GRAVITY * D);
+  const T0 = (4 * L) / a;
+  return { A, f, B, R, dx, dt, T0, hfTotal };
+}
+
+/**
+ * 定常状態の水頭プロファイルを生成
+ * H[i] = H_upstream - hfTotal * (i/N)
+ */
+function steadyHeadProfile(H_upstream: number, hfTotal: number, N: number): number[] {
+  return Array.from({ length: N + 1 }, (_, i) => H_upstream - hfTotal * (i / N));
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// メイン
+// ═══════════════════════════════════════════════════════════════════════════════
+
+/**
+ * 汎用特性曲線法（MOC）ソルバー
+ *
+ * @param network  管網定義（管路区間 + 境界条件）
+ * @param options  計算オプション
+ */
+export function runMoc(network: MocNetwork, options: MocOptions = {}): MocResult {
+  const { pipes: segs, nodes } = network;
+
+  if (segs.length === 0) throw new Error("管路が 0 本です");
+
+  // ── 初期流量推算 ────────────────────────────────────────────────────────────
+  // 上流 BC（reservoir / pump）から初期流量を取得、または options.initialFlow を使用
+  let Q0 = options.initialFlow ?? 0;
+  if (Q0 === 0) {
+    const upstreamBC = nodes[segs[0]!.upstreamNodeId];
+    if (upstreamBC?.type === "pump") Q0 = upstreamBC.Q0;
+    // reservoir の場合は下流 BC から推算
+    if (!Q0) {
+      const downstreamBC = nodes[segs[segs.length - 1]!.downstreamNodeId];
+      if (downstreamBC?.type === "valve") Q0 = downstreamBC.Q0;
+      if (downstreamBC?.type === "dead_end") Q0 = 0;
+    }
+  }
+
+  // ── 各管路の物理量と初期水頭 ────────────────────────────────────────────────
+  const physics: PipePhysics[] = segs.map((seg) => computePipePhysics(seg, Q0));
+
+  // 全区間で統一した dt（最小 dt = 最短 Δx/a = 最大厳格なクーラン条件）
+  // ※ 直列のとき各管路の dt が一致するよう nReaches を調整することが理想だが
+  //   現段階では各管路ごとに独立した dt で時間積分する
+  const dt_global = Math.min(...physics.map((p) => p.dt));
+
+  // T0 の最大値からシミュレーション時間を決定
+  const T0_max = Math.max(...physics.map((p) => p.T0));
+  const tMax = options.tMax ?? 3 * T0_max;
+  const nSteps = Math.ceil(tMax / dt_global);
+
+  // ── 定常状態ヘッドの構築 ────────────────────────────────────────────────────
+  // 上流端 → 下流端に向けて head を伝播
+  const H_upstream_arr: number[] = [];
+  {
+    // 最上流の境界水頭
+    const upBC = nodes[segs[0]!.upstreamNodeId];
+    let H_up: number;
+    if (upBC?.type === "reservoir") {
+      H_up = upBC.head;
+    } else if (upBC?.type === "pump") {
+      H_up = upBC.H0 + physics[0]!.hfTotal; // pump 揚程 ≈ 下流水頭 + 損失
+    } else {
+      // 下流 valve からバックトレース
+      const downBC = nodes[segs[segs.length - 1]!.downstreamNodeId];
+      const H_valve = downBC?.type === "valve" ? downBC.H0v : 0;
+      H_up = H_valve + physics.reduce((sum, p) => sum + p.hfTotal, 0);
+    }
+    H_upstream_arr.push(H_up);
+    for (let pi = 1; pi < segs.length; pi++) {
+      H_upstream_arr.push(H_upstream_arr[pi - 1]! - physics[pi - 1]!.hfTotal);
+    }
+  }
+
+  // ── 状態配列の初期化 ────────────────────────────────────────────────────────
+  const Hs: number[][] = segs.map((seg, pi) =>
+    steadyHeadProfile(H_upstream_arr[pi]!, physics[pi]!.hfTotal, seg.nReaches),
+  );
+  const Qs: number[][] = segs.map((seg) => new Array<number>(seg.nReaches + 1).fill(Q0));
+
+  // ── 包絡線・スナップショット初期化 ──────────────────────────────────────────
+  const Hmaxes: number[][] = Hs.map((h) => [...h]);
+  const Hmines: number[][] = Hs.map((h) => [...h]);
+  const H_steadyArr: number[][] = Hs.map((h) => [...h]);
+
+  const saveEvery = Math.max(1, Math.floor(nSteps / 200));
+  const snapshotsArr: MocSnapshot[][] = segs.map(() => []);
+
+  // ── 節点水頭時系列 ──────────────────────────────────────────────────────────
+  const nodeSeriesH: Record<string, { t: number; H: number }[]> = {};
+  for (const nodeId of Object.keys(nodes)) nodeSeriesH[nodeId] = [];
+  // 内部接続節点も記録
+  for (const seg of segs) {
+    if (!nodeSeriesH[seg.upstreamNodeId]) nodeSeriesH[seg.upstreamNodeId] = [];
+    if (!nodeSeriesH[seg.downstreamNodeId]) nodeSeriesH[seg.downstreamNodeId] = [];
+  }
+
+  // t=0 記録
+  for (let pi = 0; pi < segs.length; pi++) {
+    const seg = segs[pi]!;
+    const N = seg.nReaches;
+    nodeSeriesH[seg.upstreamNodeId]!.push({ t: 0, H: Hs[pi]![0]! });
+    nodeSeriesH[seg.downstreamNodeId]!.push({ t: 0, H: Hs[pi]![N]! });
+    snapshotsArr[pi]!.push({ t: 0, H: [...Hs[pi]!], Q: [...Qs[pi]!] });
+  }
+
+  // ── 時間積分 ────────────────────────────────────────────────────────────────
+  const Hnews: number[][] = segs.map((seg) => new Array<number>(seg.nReaches + 1));
+  const Qnews: number[][] = segs.map((seg) => new Array<number>(seg.nReaches + 1));
+
+  for (let step = 1; step <= nSteps; step++) {
+    const t = step * dt_global;
+
+    // ── 各管路の内部節点 (i=1..N-1) ────────────────────────────────────────
+    for (let pi = 0; pi < segs.length; pi++) {
+      const N = segs[pi]!.nReaches;
+      const H = Hs[pi]!;
+      const Q = Qs[pi]!;
+      const { B, R } = physics[pi]!;
+      const Hnew = Hnews[pi]!;
+      const Qnew = Qnews[pi]!;
+
+      for (let i = 1; i <= N - 1; i++) {
+        const Qa = Q[i - 1]!;
+        const Qb = Q[i + 1]!;
+        const CP = H[i - 1]! + B * Qa - R * Qa * Math.abs(Qa);
+        const CM = H[i + 1]! - B * Qb + R * Qb * Math.abs(Qb);
+        Hnew[i] = (CP + CM) / 2;
+        Qnew[i] = (CP - CM) / (2 * B);
+      }
+    }
+
+    // ── 境界・接続節点の処理 ────────────────────────────────────────────────
+
+    // 各管路の上流端 C- 特性値、下流端 C+ 特性値を計算
+    const CP_downstream: number[] = [];
+    const CM_upstream: number[] = [];
+
+    for (let pi = 0; pi < segs.length; pi++) {
+      const N = segs[pi]!.nReaches;
+      const H = Hs[pi]!;
+      const Q = Qs[pi]!;
+      const { B, R } = physics[pi]!;
+
+      // 下流端 C+ （node N-1 → N）
+      const Qa_dn = Q[N - 1]!;
+      CP_downstream[pi] = H[N - 1]! + B * Qa_dn - R * Qa_dn * Math.abs(Qa_dn);
+
+      // 上流端 C- （node 1 → 0）
+      const Qb_up = Q[1]!;
+      CM_upstream[pi] = H[1]! - B * Qb_up + R * Qb_up * Math.abs(Qb_up);
+    }
+
+    // 直列管路の内部接続節点（junction）を解く
+    // 管路 pi の下流端 = 管路 pi+1 の上流端
+    const junctionH: number[] = [];
+    const junctionQ: number[] = [];
+    for (let pi = 0; pi < segs.length - 1; pi++) {
+      const dnNodeId = segs[pi]!.downstreamNodeId;
+      const upNodeId = segs[pi + 1]!.upstreamNodeId;
+      if (dnNodeId === upNodeId) {
+        // 直列接続ジャンクション
+        const { H: Hj, Q: Qj } = solveSeriesJunction(
+          CP_downstream[pi]!,
+          physics[pi]!.B,
+          CM_upstream[pi + 1]!,
+          physics[pi + 1]!.B,
+        );
+        junctionH[pi] = Hj;
+        junctionQ[pi] = Qj;
+        nodeSeriesH[dnNodeId]!.push({ t, H: Hj });
+      }
+    }
+
+    // 最上流端境界条件（管路 0 の上流端）
+    {
+      const pi = 0;
+      const N = segs[pi]!.nReaches;
+      const nodeId = segs[pi]!.upstreamNodeId;
+      const bc = nodes[nodeId];
+      const { B } = physics[pi]!;
+      const CM = CM_upstream[pi]!;
+      let H_new: number, Q_new: number;
+
+      if (bc?.type === "reservoir") {
+        ({ H: H_new, Q: Q_new } = solveReservoir(CM, B, bc.head, true));
+      } else if (bc?.type === "pump") {
+        const A = physics[pi]!.A;
+        ({ H: H_new, Q: Q_new } = solvePump(CM, B, t, bc, A));
+      } else {
+        // BC 未定義: 貯水槽として扱う（初期水頭を維持）
+        H_new = H_upstream_arr[pi]!;
+        Q_new = (H_new - CM) / B;
+      }
+      Hnews[pi]![0] = H_new;
+      Qnews[pi]![0] = Q_new;
+      nodeSeriesH[nodeId]!.push({ t, H: H_new });
+    }
+
+    // 最下流端境界条件（最後の管路の下流端）
+    {
+      const pi = segs.length - 1;
+      const N = segs[pi]!.nReaches;
+      const nodeId = segs[pi]!.downstreamNodeId;
+      const bc = nodes[nodeId];
+      const { B } = physics[pi]!;
+      const CP = CP_downstream[pi]!;
+      let H_new: number, Q_new: number;
+
+      if (bc?.type === "valve") {
+        const tau = valveOpening(t, bc.closeTime, bc.operation ?? "close");
+        ({ H: H_new, Q: Q_new } = solveValve(CP, B, tau, bc.Q0, bc.H0v));
+      } else if (bc?.type === "reservoir") {
+        ({ H: H_new, Q: Q_new } = solveReservoir(CP, B, bc.head, false));
+      } else if (bc?.type === "dead_end") {
+        ({ H: H_new, Q: Q_new } = solveDeadEnd(CP));
+      } else {
+        H_new = Math.max(CP, 0);
+        Q_new = 0;
+      }
+      Hnews[pi]![N] = H_new;
+      Qnews[pi]![N] = Q_new;
+      nodeSeriesH[nodeId]!.push({ t, H: H_new });
+    }
+
+    // 直列接続ジャンクションを各管路の端点に反映
+    for (let pi = 0; pi < segs.length - 1; pi++) {
+      if (junctionH[pi] !== undefined) {
+        const N_up = segs[pi]!.nReaches;
+        Hnews[pi]![N_up] = junctionH[pi]!;
+        Qnews[pi]![N_up] = junctionQ[pi]!;
+        Hnews[pi + 1]![0] = junctionH[pi]!;
+        Qnews[pi + 1]![0] = junctionQ[pi]!;
+      }
+    }
+
+    // ── バッファ更新・包絡線更新 ─────────────────────────────────────────────
+    for (let pi = 0; pi < segs.length; pi++) {
+      const N = segs[pi]!.nReaches;
+      for (let i = 0; i <= N; i++) {
+        const h = Hnews[pi]![i]!;
+        const q = Qnews[pi]![i]!;
+        Hs[pi]![i] = h;
+        Qs[pi]![i] = q;
+        if (h > Hmaxes[pi]![i]!) Hmaxes[pi]![i] = h;
+        if (h < Hmines[pi]![i]!) Hmines[pi]![i] = h;
+      }
+      if (step % saveEvery === 0) {
+        snapshotsArr[pi]!.push({ t, H: [...Hs[pi]!], Q: [...Qs[pi]!] });
+      }
+    }
+  }
+
+  // ── 結果整形 ─────────────────────────────────────────────────────────────────
+  const pipesResult: Record<string, MocPipeResult> = {};
+  for (let pi = 0; pi < segs.length; pi++) {
+    const seg = segs[pi]!;
+    const ph = physics[pi]!;
+    pipesResult[seg.id] = {
+      waveSpeed: seg.waveSpeed,
+      dx: ph.dx,
+      nReaches: seg.nReaches,
+      vibrationPeriod: ph.T0,
+      H_steady: H_steadyArr[pi]!,
+      Hmax: Hmaxes[pi]!,
+      Hmin: Hmines[pi]!,
+      snapshots: snapshotsArr[pi]!,
+    };
+  }
+
+  const nodesResult: Record<string, MocNodeResult> = {};
+  for (const [id, series] of Object.entries(nodeSeriesH)) {
+    nodesResult[id] = { H: series };
+  }
+
+  return { dt: dt_global, tMax, pipes: pipesResult, nodes: nodesResult };
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// 単一管路便利 API（旧 MocInput との互換ラッパー）
+// ═══════════════════════════════════════════════════════════════════════════════
+
+/** 単一管路シナリオの簡易入力型（旧 API） */
+export interface SinglePipeMocInput {
+  pipe: Pipe;
+  waveSpeed: number;
+  initialVelocity: number;
+  initialDownstreamHead: number;
+  closeTime: number;
+  nReaches?: number;
+  tMax?: number;
+  operation?: "close" | "open";
+}
+
+/**
+ * 単一管路（貯水槽→バルブ）の便利関数
+ * 旧 runMoc(MocInput) と同等の使用感を提供
+ */
+export function runMocSinglePipe(input: SinglePipeMocInput): MocResult {
   const {
     pipe,
-    waveSpeed: a,
-    initialVelocity: V0,
+    waveSpeed,
+    initialVelocity,
     initialDownstreamHead: H0v,
-    closeTime: tv,
-    nReaches: N = 10,
+    closeTime,
+    nReaches = 10,
+    tMax,
     operation = "close",
   } = input;
 
-  const { innerDiameter: D, wallThickness: _t, length: L, roughnessCoeff: C } = pipe;
-  const A = (Math.PI * D * D) / 4; // 断面積 [m²]
-  const Q0 = V0 * A;                // 初期流量 [m³/s]
+  const A = pipeArea(pipe.innerDiameter);
+  const Q0 = initialVelocity * A;
+  const f = hwToDarcyWeisbach(initialVelocity, pipe.innerDiameter, pipe.roughnessCoeff);
+  const hfTotal = (f * pipe.length * initialVelocity * initialVelocity) / (2 * GRAVITY * pipe.innerDiameter);
+  const HR = H0v + hfTotal;
 
-  // ── 時空間刻み（クーラン条件: CFL = 1） ────────────────────────────────
-  const dx = L / N;
-  const dt = dx / a; // Δt = Δx/a
-
-  // ── 圧力振動周期 ────────────────────────────────────────────────────────
-  const T0 = (4 * L) / a;
-  const tMax = input.tMax ?? 3 * T0;
-  const nSteps = Math.ceil(tMax / dt);
-
-  // ── 摩擦係数・特性インピーダンス ──────────────────────────────────────
-  const f = hwToDarcyWeisbach(V0, D, C);
-  const B = a / (GRAVITY * A);                    // 特性インピーダンス [s/m²]
-  const R = (f * dx) / (2 * GRAVITY * D * A * A); // 摩擦係数項 [s²/m⁵]
-
-  // ── 定常状態の初期水頭分布 ─────────────────────────────────────────────
-  // Darcy-Weisbach 総摩擦損失: hf = f·L·V²/(2gD)
-  const hfTotal = (f * L * V0 * V0) / (2 * GRAVITY * D);
-  const HR = H0v + hfTotal; // 上流端（貯水槽）水頭 [m]
-
-  // 初期水頭: 上流から下流へ線形に変化
-  const H = Array.from({ length: N + 1 }, (_, i) => HR - hfTotal * (i / N));
-  const Q = new Array<number>(N + 1).fill(Q0);
-
-  // ── 包絡線初期化 ────────────────────────────────────────────────────────
-  const Hmax = [...H];
-  const Hmin = [...H];
-
-  // ── 結果蓄積 ─────────────────────────────────────────────────────────────
-  const snapshots: MocSnapshot[] = [];
-  const downstreamH: { t: number; H: number }[] = [];
-  const upstreamH: { t: number; H: number }[] = [];
-
-  // スナップショット保存間隔（メモリ節約: 最大 200 スナップショット）
-  const saveEvery = Math.max(1, Math.floor(nSteps / 200));
-
-  // t=0 を保存
-  snapshots.push({ t: 0, H: [...H], Q: [...Q] });
-  downstreamH.push({ t: 0, H: H[N]! });
-  upstreamH.push({ t: 0, H: H[0]! });
-
-  // ── 時間積分 ─────────────────────────────────────────────────────────────
-  const Hnew = new Array<number>(N + 1);
-  const Qnew = new Array<number>(N + 1);
-
-  for (let step = 1; step <= nSteps; step++) {
-    const t = step * dt;
-
-    // C+特性値: CP[i] = H[i-1] + B·Q[i-1] - R·Q[i-1]·|Q[i-1]|
-    // C-特性値: CM[i] = H[i+1] - B·Q[i+1] + R·Q[i+1]·|Q[i+1]|
-
-    // ── 内部節点 (i = 1 ... N-1) ──────────────────────────────────────────
-    for (let i = 1; i <= N - 1; i++) {
-      const Qa = Q[i - 1]!;
-      const Qb = Q[i + 1]!;
-      const CP = H[i - 1]! + B * Qa - R * Qa * Math.abs(Qa);
-      const CM = H[i + 1]! - B * Qb + R * Qb * Math.abs(Qb);
-      Hnew[i] = (CP + CM) / 2;
-      Qnew[i] = (CP - CM) / (2 * B);
-    }
-
-    // ── 上流端境界条件（定水頭貯水槽: H = HR = 一定） ─────────────────────
-    {
-      const Qb = Q[1]!;
-      const CM = H[1]! - B * Qb + R * Qb * Math.abs(Qb);
-      Hnew[0] = HR;
-      Qnew[0] = (HR - CM) / B;
-    }
-
-    // ── 下流端境界条件（バルブ: 水頭依存型流量） ──────────────────────────
-    {
-      const tau = valveOpening(t, tv, operation);
-      const Qa = Q[N - 1]!;
-      const CP = H[N - 1]! + B * Qa - R * Qa * Math.abs(Qa);
-
-      if (tau < 1e-10) {
-        // 全閉: 流量ゼロ
-        Hnew[N] = CP;
-        Qnew[N] = 0;
-      } else {
-        // 水頭依存流量: QP = τ·(Q0/√H0v)·√HP
-        // C+から: HP = CP - B·QP
-        // 代入: HP = CP - B·τ_v·√HP  (τ_v = τ·Q0/√H0v)
-        // √HP について2次方程式を解く
-        const H0vSafe = Math.max(H0v, 0.01); // ゼロ除算防止
-        const tauV = tau * Q0 / Math.sqrt(H0vSafe);
-        const disc = B * B * tauV * tauV + 4 * Math.max(CP, 0);
-        const y = (-B * tauV + Math.sqrt(disc)) / 2; // √HP ≥ 0
-        Hnew[N] = y * y;
-        Qnew[N] = tauV * y;
-      }
-
-      // 負圧クリップ（気液分離の簡易近似）
-      if (Hnew[N]! < 0) Hnew[N] = 0;
-    }
-
-    // ── バッファ更新 ────────────────────────────────────────────────────────
-    for (let i = 0; i <= N; i++) {
-      H[i] = Hnew[i]!;
-      Q[i] = Qnew[i]!;
-      if (H[i]! > Hmax[i]!) Hmax[i] = H[i]!;
-      if (H[i]! < Hmin[i]!) Hmin[i] = H[i]!;
-    }
-
-    // ── 結果保存 ────────────────────────────────────────────────────────────
-    downstreamH.push({ t, H: H[N]! });
-    upstreamH.push({ t, H: H[0]! });
-
-    if (step % saveEvery === 0) {
-      snapshots.push({ t, H: [...H], Q: [...Q] });
-    }
-  }
-
-  const Hmax_ds = Math.max(...downstreamH.map((p) => p.H));
-  const Hmin_ds = Math.min(...downstreamH.map((p) => p.H));
-
-  return {
-    dt,
-    dx,
-    nReaches: N,
-    snapshots,
-    Hmax: Hmax as number[],
-    Hmin: Hmin as number[],
-    downstreamH,
-    upstreamH,
-    summary: {
-      waveSpeed: a,
-      vibrationPeriod: T0,
-      upstreamHead: HR,
-      initialDownstreamHead: H0v,
-      Hmax_downstream: Hmax_ds,
-      Hmin_downstream: Hmin_ds,
-      deltaHmax: Hmax_ds - H0v,
+  const network: MocNetwork = {
+    pipes: [{
+      id: "pipe_0",
+      pipe,
+      waveSpeed,
+      nReaches,
+      upstreamNodeId: "upstream",
+      downstreamNodeId: "downstream",
+    }],
+    nodes: {
+      upstream: { type: "reservoir", head: HR },
+      downstream: { type: "valve", Q0, H0v, closeTime, operation },
     },
   };
+
+  return runMoc(network, { ...(tMax !== undefined && { tMax }), initialFlow: Q0 });
+}
+
+/**
+ * ポンプ急停止シナリオの便利関数
+ * pump（上流端）→ 単一管路 → dead_end（下流端）
+ */
+export interface PumpTripInput {
+  pipe: Pipe;
+  waveSpeed: number;
+  /** 定格流量 Q₀ [m³/s] */
+  Q0: number;
+  /** ポンプ揚程（=定格時の上流端水頭）H₀ [m] */
+  pumpHead: number;
+  /** 締切水頭 Hs [m]（デフォルト 1.2×H₀） */
+  Hs?: number;
+  /** 停止完了時間 [s] */
+  shutdownTime: number;
+  /** 逆止め弁の有無（デフォルト true） */
+  checkValve?: boolean;
+  nReaches?: number;
+  tMax?: number;
+}
+
+export function runMocPumpTrip(input: PumpTripInput): MocResult {
+  const {
+    pipe,
+    waveSpeed,
+    Q0,
+    pumpHead,
+    Hs,
+    shutdownTime,
+    checkValve = true,
+    nReaches = 10,
+    tMax,
+  } = input;
+
+  const network: MocNetwork = {
+    pipes: [{
+      id: "pipe_0",
+      pipe,
+      waveSpeed,
+      nReaches,
+      upstreamNodeId: "pump_node",
+      downstreamNodeId: "dead_end_node",
+    }],
+    nodes: {
+      pump_node: { type: "pump", Q0, H0: pumpHead, ...(Hs !== undefined && { Hs }), shutdownTime, checkValve },
+      dead_end_node: { type: "dead_end" },
+    },
+  };
+
+  return runMoc(network, { ...(tMax !== undefined && { tMax }), initialFlow: Q0 });
 }
