@@ -8,6 +8,12 @@
  *   4. ポンプ急停止シナリオ
  *   5. 複数管路直列
  *   6. runMocSinglePipe 便利 API（旧互換）
+ *   7. GD² ポンプモデル
+ *   8. エアチャンバ BC
+ *   9. サージタンク BC
+ *  10. 吸気弁 BC
+ *  11. 減圧バルブ BC
+ *  12. T字分岐（3管路ジャンクション）
  */
 
 import { test, describe } from "node:test";
@@ -224,5 +230,212 @@ describe("V0=0（摩擦なし）でもクラッシュしない", () => {
         nReaches: 10,
       });
     });
+  });
+});
+
+// ── GD² ポンプモデル ──────────────────────────────────────────────────────────
+
+describe("GD² ポンプ急停止モデル", () => {
+  // 典型的な農業用ポンプ: N0=1450rpm, GD²=500 N·m², Q0=0.075 m³/s, H0=50 m, η=0.80
+  const r = runMocPumpTrip({
+    pipe: PIPE_DI_300,
+    waveSpeed: a,
+    Q0,
+    pumpHead: 50,
+    Hs: 60,
+    GD2: 500,
+    N0: 1450,
+    eta0: 0.80,
+    shutdownTime: 0,
+    checkValve: true,
+    nReaches: 10,
+  });
+
+  test("クラッシュしない", () => {
+    assert.ok(r.pipes["pipe_0"] !== undefined);
+  });
+
+  test("ポンプ節点の回転速度時系列が記録されている", () => {
+    assert.ok(r.nodes["pump_node"]!.N !== undefined);
+    assert.ok(r.nodes["pump_node"]!.N!.length > 0);
+  });
+
+  test("停止後に回転速度が低下している", () => {
+    const Ns = r.nodes["pump_node"]!.N!;
+    const N_last = Ns[Ns.length - 1]!.N;
+    assert.ok(N_last < 1450, `N_last=${N_last.toFixed(0)}`);
+  });
+
+  test("停止後に負圧が発生している可能性（Hmin < H0）", () => {
+    const Hmin = Math.min(...r.nodes["pump_node"]!.H.map((p) => p.H));
+    assert.ok(Hmin < 50);
+  });
+});
+
+// ── エアチャンバ BC ───────────────────────────────────────────────────────────
+
+describe("エアチャンバ BC — 負圧抑制", () => {
+  // 同じポンプ急停止シナリオにエアチャンバを追加
+  // エアチャンバを下流端に配置（dead_end の代わり）
+  const H0_pump = 50;
+  const r_no_ac = runMocPumpTrip({
+    pipe: PIPE_DI_300, waveSpeed: a, Q0, pumpHead: H0_pump,
+    shutdownTime: 0, checkValve: true, nReaches: 10,
+  });
+
+  const r_with_ac = runMoc({
+    pipes: [{ id: "pipe_0", pipe: PIPE_DI_300, waveSpeed: a, nReaches: 10,
+              upstreamNodeId: "pump", downstreamNodeId: "ac" }],
+    nodes: {
+      pump: { type: "pump", Q0, H0: H0_pump, shutdownTime: 0, checkValve: true },
+      ac: { type: "air_chamber", V_air0: 0.5, H_air0: H0_pump, polytropicIndex: 1.2 },
+    },
+  }, { initialFlow: Q0 });
+
+  test("エアチャンバあり: クラッシュしない", () => {
+    assert.ok(r_with_ac.pipes["pipe_0"] !== undefined);
+  });
+
+  test("エアチャンバあり: V_air 時系列が記録されている", () => {
+    assert.ok(r_with_ac.nodes["ac"]!.V_air !== undefined);
+    assert.ok(r_with_ac.nodes["ac"]!.V_air!.length > 0);
+  });
+
+  test("エアチャンバあり: 下流端 Hmin が dead_end より高い（負圧抑制）", () => {
+    // AC なし: dead_end での Hmin
+    const Hmin_de = Math.min(...r_no_ac.nodes["dead_end_node"]!.H.map((p) => p.H));
+    // AC あり: air_chamber 端での Hmin
+    const Hmin_ac = Math.min(...r_with_ac.nodes["ac"]!.H.map((p) => p.H));
+    assert.ok(Hmin_ac > Hmin_de,
+      `Hmin_ac=${Hmin_ac.toFixed(1)}, Hmin_de=${Hmin_de.toFixed(1)}`);
+  });
+});
+
+// ── サージタンク BC ───────────────────────────────────────────────────────────
+
+describe("サージタンク BC", () => {
+  // 貯水槽 → 管路 → サージタンク（調圧水槽）
+  const f_hw = 0.02;
+  const hf = f_hw * 500 * V0 * V0 / (2 * GRAVITY * 0.3);
+  const HR = H0 + hf;
+  const r = runMoc({
+    pipes: [{ id: "pipe_0", pipe: PIPE_DI_300, waveSpeed: a, nReaches: 10,
+              upstreamNodeId: "res", downstreamNodeId: "st" }],
+    nodes: {
+      res: { type: "reservoir", head: HR },
+      st: { type: "surge_tank", tankArea: 5.0, initialLevel: H0, datum: 0 },
+    },
+  }, { initialFlow: Q0 });
+
+  test("クラッシュしない", () => {
+    assert.ok(r.pipes["pipe_0"] !== undefined);
+  });
+
+  test("サージタンク水位時系列が記録されている", () => {
+    assert.ok(r.nodes["st"]!.z !== undefined);
+    assert.ok(r.nodes["st"]!.z!.length > 0);
+  });
+
+  test("水位が変動している（サージング）", () => {
+    const zs = r.nodes["st"]!.z!.map((p) => p.z);
+    const zMax = Math.max(...zs);
+    const zMin = Math.min(...zs);
+    assert.ok(zMax - zMin > 0.01, `zMax=${zMax.toFixed(3)}, zMin=${zMin.toFixed(3)}`);
+  });
+});
+
+// ── 吸気弁 BC ────────────────────────────────────────────────────────────────
+
+describe("吸気弁 BC — 負圧防止", () => {
+  // ポンプ急停止後、末端に吸気弁がある場合
+  const r_with_av = runMoc({
+    pipes: [{ id: "pipe_0", pipe: PIPE_DI_300, waveSpeed: a, nReaches: 10,
+              upstreamNodeId: "pump", downstreamNodeId: "av" }],
+    nodes: {
+      pump: { type: "pump", Q0, H0: 50, shutdownTime: 0, checkValve: true },
+      av: { type: "air_release_valve", atmosphericHead: 10.33 },
+    },
+  }, { initialFlow: Q0 });
+
+  test("クラッシュしない", () => {
+    assert.ok(r_with_av.pipes["pipe_0"] !== undefined);
+  });
+
+  test("吸気弁端水頭が大気圧以上に維持される（最小値 ≥ 0）", () => {
+    const Hmin = Math.min(...r_with_av.nodes["av"]!.H.map((p) => p.H));
+    assert.ok(Hmin >= 0, `Hmin=${Hmin.toFixed(2)}`);
+  });
+});
+
+// ── 減圧バルブ BC ─────────────────────────────────────────────────────────────
+
+describe("減圧バルブ（PRV）BC", () => {
+  // 貯水槽（高圧） → 管路 → PRV（下流側を H_set=20m に維持）
+  const r = runMoc({
+    pipes: [{ id: "pipe_0", pipe: PIPE_DI_300, waveSpeed: a, nReaches: 10,
+              upstreamNodeId: "res", downstreamNodeId: "prv" }],
+    nodes: {
+      res: { type: "reservoir", head: 50 },
+      prv: { type: "pressure_reducing_valve", setHead: 20, Q0 },
+    },
+  }, { initialFlow: Q0 });
+
+  test("クラッシュしない", () => {
+    assert.ok(r.pipes["pipe_0"] !== undefined);
+  });
+
+  test("PRV 端水頭が設定圧付近に収束している", () => {
+    const H_prv = r.nodes["prv"]!.H;
+    // 定常後（後半部）の平均水頭が設定圧に近い
+    const H_tail = H_prv.slice(-50).map((p) => p.H);
+    const H_avg = H_tail.reduce((s, h) => s + h, 0) / H_tail.length;
+    assert.ok(Math.abs(H_avg - 20) < 5, `H_avg=${H_avg.toFixed(1)}, expected≈20`);
+  });
+});
+
+// ── T字分岐（3管路ジャンクション）─────────────────────────────────────────────
+
+describe("T字分岐 — 3管路ジャンクション", () => {
+  // 貯水槽 → pipe1 → junction → pipe2 → valve1
+  //                          ↓
+  //                          pipe3 → valve2
+  const PIPE2: Pipe = { ...PIPE_DI_300, id: "p2" };
+  const PIPE3: Pipe = { ...PIPE_DI_300, id: "p3" };
+  const a2 = calcWaveSpeed(PIPE2);
+  const a3 = calcWaveSpeed(PIPE3);
+  const Q_branch = Q0 / 2; // 分岐後は半流量
+
+  const r = runMoc({
+    pipes: [
+      { id: "pipe_1", pipe: PIPE_DI_300, waveSpeed: a,  nReaches: 10,
+        upstreamNodeId: "res", downstreamNodeId: "junction" },
+      { id: "pipe_2", pipe: PIPE2, waveSpeed: a2, nReaches: 10,
+        upstreamNodeId: "junction", downstreamNodeId: "valve1", initialFlow: Q_branch },
+      { id: "pipe_3", pipe: PIPE3, waveSpeed: a3, nReaches: 10,
+        upstreamNodeId: "junction", downstreamNodeId: "valve2", initialFlow: Q_branch },
+    ],
+    nodes: {
+      res:     { type: "reservoir", head: 50 },
+      valve1:  { type: "valve", Q0: Q_branch, H0v: H0, closeTime: 0 },
+      valve2:  { type: "valve", Q0: Q_branch, H0v: H0, closeTime: 0 },
+    },
+  }, { initialFlow: Q0 });
+
+  test("pipe_1, pipe_2, pipe_3 の結果が存在", () => {
+    assert.ok(r.pipes["pipe_1"] !== undefined);
+    assert.ok(r.pipes["pipe_2"] !== undefined);
+    assert.ok(r.pipes["pipe_3"] !== undefined);
+  });
+
+  test("分岐点ノードの水頭時系列が記録されている", () => {
+    assert.ok(r.nodes["junction"] !== undefined);
+    assert.ok(r.nodes["junction"]!.H.length > 0);
+  });
+
+  test("両バルブ端で水頭が上昇している", () => {
+    const Hmax1 = Math.max(...r.nodes["valve1"]!.H.map((p) => p.H));
+    const Hmax2 = Math.max(...r.nodes["valve2"]!.H.map((p) => p.H));
+    assert.ok(Hmax1 > H0, `Hmax1=${Hmax1.toFixed(1)}`);
+    assert.ok(Hmax2 > H0, `Hmax2=${Hmax2.toFixed(1)}`);
   });
 });
