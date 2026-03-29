@@ -1,6 +1,6 @@
 /**
  * 経験則による水撃圧計算パネル
- * 出典: 土地改良設計基準パイプライン技術書 §8.3.5
+ * 出典: 土地改良設計基準　設計「パイプライン」技術書（令和3年6月改訂）§8.3.5
  */
 
 import { useState, useMemo } from "react";
@@ -199,7 +199,7 @@ export function EmpiricalCalculator() {
 
               <div className="result-footer">
                 <p className="result-standard">
-                  出典: 土地改良設計基準パイプライン技術書 §8.3.5（令和3年6月改訂）
+                  出典: 土地改良設計基準　設計「パイプライン」技術書（令和3年6月改訂）§8.3.5
                 </p>
               </div>
             </>

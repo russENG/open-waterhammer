@@ -1,7 +1,7 @@
 /**
  * 水撃圧防護設備計算パネル（比較表示）
  * エアチャンバ / サージタンク / 吸気弁 / 減圧バルブ
- * 出典: 土地改良設計基準パイプライン技術書 §8.3 / §8.5
+ * 出典: 土地改良設計基準　設計「パイプライン」技術書（令和3年6月改訂）§8.3 / §8.5
  */
 
 import React, { useState, useMemo, useEffect } from "react";
@@ -467,7 +467,7 @@ export function ProtectionCalculator() {
 
       <div className="result-footer" style={{ marginTop: 16 }}>
         <p className="result-standard">
-          出典: 土地改良設計基準パイプライン技術書 §8.3（水撃圧防護設備）/ §8.5（剛体理論）／
+          出典: 土地改良設計基準　設計「パイプライン」技術書（令和3年6月改訂）§8.3（水撃圧防護設備）/ §8.5（剛体理論）／
           特性曲線法（MOC）・弾性管モデル・準定常 H-W 摩擦
         </p>
       </div>

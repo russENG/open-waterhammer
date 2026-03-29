@@ -1,6 +1,6 @@
 /**
  * ポンプシナリオ（急停止 / 起動）計算パネル
- * 出典: 土地改良設計基準パイプライン技術書 §8.4
+ * 出典: 土地改良設計基準　設計「パイプライン」技術書（令和3年6月改訂）§8.4
  */
 
 import { useState, useMemo, useEffect, useRef } from "react";
@@ -425,7 +425,7 @@ export function PumpCalculator() {
 
       <div className="result-footer" style={{ marginTop: 16 }}>
         <p className="result-standard">
-          出典: 土地改良設計基準パイプライン技術書 §8.4（特性曲線法）／
+          出典: 土地改良設計基準　設計「パイプライン」技術書（令和3年6月改訂）§8.4（特性曲線法）／
           {tab === "trip"
             ? `ポンプ急停止・放物線型 H-Q 特性・${tripForm.useGD2 ? "GD²慣性方程式（式8.4.10-11）" : "線形回転数減衰（簡易モデル）"}`
             : "ポンプ起動・放物線型 H-Q 特性・線形回転数上昇"}

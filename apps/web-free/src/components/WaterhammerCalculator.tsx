@@ -599,7 +599,7 @@ export function WaterhammerCalculator() {
 
               <div className="result-footer">
                 <span className="result-standard">
-                  準拠: 土地改良設計基準パイプライン（令和3年6月改訂）
+                  準拠: 土地改良設計基準　設計「パイプライン」技術書（令和3年6月改訂）
                 </span>
               </div>
             </>

@@ -1,6 +1,6 @@
 /**
  * 特性曲線法（MOC）計算パネル
- * 出典: 土地改良設計基準パイプライン技術書 §8.4
+ * 出典: 土地改良設計基準　設計「パイプライン」技術書（令和3年6月改訂）§8.4
  */
 
 import { useState, useMemo } from "react";
@@ -369,7 +369,7 @@ export function MocCalculator() {
 
       <div className="result-footer" style={{ marginTop: 16 }}>
         <p className="result-standard">
-          出典: 土地改良設計基準パイプライン技術書 §8.4（特性曲線法）／
+          出典: 土地改良設計基準　設計「パイプライン」技術書（令和3年6月改訂）§8.4（特性曲線法）／
           単一管路・定水頭上流境界・線形バルブ閉操作・準定常摩擦（Darcy-Weisbach）
         </p>
       </div>
