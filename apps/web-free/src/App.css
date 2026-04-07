@@ -2765,3 +2765,171 @@ select.input--narrow {
     height: 60vh;
   }
 }
+
+/* ─── デモバナー ────────────────────────────────────────────── */
+.demo-banner {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 16px;
+  margin: 0 0 12px 0;
+  background: linear-gradient(90deg, #fff8e1 0%, #fffde7 100%);
+  border: 1px solid #f0c674;
+  border-left: 4px solid #d97706;
+  border-radius: 6px;
+  font-size: 0.85rem;
+  color: #4a2c0a;
+}
+.demo-banner--user {
+  background: #e6f0ff;
+  border-color: #5a8def;
+  border-left-color: #2563eb;
+  color: #1e3a8a;
+}
+.demo-banner-tag {
+  display: inline-block;
+  padding: 2px 8px;
+  background: #d97706;
+  color: #fff;
+  font-weight: 700;
+  font-size: 0.7rem;
+  letter-spacing: 0.05em;
+  border-radius: 4px;
+  flex-shrink: 0;
+}
+.demo-banner-text {
+  flex: 1;
+  line-height: 1.5;
+}
+.demo-banner-btn {
+  flex-shrink: 0;
+}
+
+/* ─── 任意ステップ ───────────────────────────────────────────── */
+.wh-step--optional .wh-step-header {
+  background: #fafafa;
+}
+.wh-step-optional-tag {
+  display: inline-block;
+  margin-left: 8px;
+  padding: 1px 6px;
+  font-size: 0.65rem;
+  font-weight: 700;
+  color: #718096;
+  background: #edf2f7;
+  border: 1px solid #cbd5e0;
+  border-radius: 3px;
+  vertical-align: middle;
+}
+
+/* ─── ChartFrame: チャート画像エクスポート ─────────────────────── */
+.chart-frame {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin: 8px 0;
+}
+.chart-frame-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 0 4px;
+  min-height: 22px;
+}
+.chart-frame-title {
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: #4a5568;
+}
+.chart-frame-actions {
+  display: flex;
+  gap: 4px;
+  margin-left: auto;
+}
+.chart-frame-btn {
+  font-size: 0.7rem;
+  font-weight: 600;
+  padding: 2px 8px;
+  border: 1px solid #cbd5e0;
+  border-radius: 4px;
+  background: #fff;
+  color: #4a5568;
+  cursor: pointer;
+  line-height: 1.4;
+}
+.chart-frame-btn:hover:not(:disabled) {
+  background: #edf2f7;
+  border-color: #a0aec0;
+}
+.chart-frame-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+.chart-frame-body {
+  /* SVG の自動レイアウトに任せる */
+}
+.chart-frame-error {
+  font-size: 0.72rem;
+  color: #c53030;
+  padding: 0 4px;
+}
+
+/* ─── 印刷時 (PDF出力用) ───────────────────────────────────────── */
+@media print {
+  body {
+    background: #fff;
+  }
+  .chart-frame-actions,
+  .chart-frame-header .chart-frame-actions {
+    display: none !important;
+  }
+  .no-print,
+  .app-header,
+  .global-nav,
+  nav,
+  button {
+    display: none !important;
+  }
+  .print-only {
+    display: block !important;
+  }
+  .report-print-area,
+  .report-print-area * {
+    color: #000 !important;
+  }
+  .report-print-area {
+    padding: 12mm;
+    font-size: 10pt;
+  }
+  .report-print-area h1 {
+    font-size: 16pt;
+    margin: 0 0 8mm 0;
+  }
+  .report-print-area h2 {
+    font-size: 12pt;
+    margin: 6mm 0 3mm 0;
+    border-bottom: 1px solid #000;
+    padding-bottom: 1mm;
+  }
+  .report-print-area table {
+    border-collapse: collapse;
+    width: 100%;
+    font-size: 9pt;
+  }
+  .report-print-area th,
+  .report-print-area td {
+    border: 1px solid #444;
+    padding: 2px 4px;
+    text-align: right;
+  }
+  .report-print-area th {
+    background: #eee !important;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+    text-align: center;
+  }
+}
+.print-only {
+  display: none;
+}

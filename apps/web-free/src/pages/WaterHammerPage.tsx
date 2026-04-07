@@ -6,6 +6,13 @@ import { useState } from 'react'
 import type { Pipe, CalculationCase } from '@open-waterhammer/core'
 import { PIPE_MATERIALS, calcWaveSpeed, calcVibrationPeriod, GRAVITY, BULK_MODULUS_WATER, WATER_UNIT_WEIGHT } from '@open-waterhammer/core'
 import type { WorkbookData } from '@open-waterhammer/excel-io'
+import {
+  DEMO_CASE_01_PIPE,
+  DEMO_CASE_01_CASE,
+  DEMO_CASE_02_PIPE,
+  DEMO_CASE_02_CASE,
+  DEMO_MEASUREMENT_POINTS,
+} from '@open-waterhammer/sample-data'
 import { ExcelPanel } from '../components/ExcelPanel'
 import { MethodSelectionFlow } from '../components/MethodSelectionFlow'
 import { SteadyFlowCalculator } from '../components/SteadyFlowCalculator'
@@ -27,6 +34,21 @@ interface StepDef {
   desc: string
   /** 前提ステップ（計算機能なし・情報表示のみ） */
   prerequisite?: boolean
+  /** 任意ステップ（補助的・単点確認用） */
+  optional?: boolean
+}
+
+/** ダミーデモデータ（成果品様式記入例ベース） — 起動時に自動で適用される */
+const DEMO_WORKBOOK: WorkbookData = {
+  meta: {
+    projectName: '○○幹線水路（デモ）',
+    standardId: 'nochi_pipeline_2021',
+    methodId: 'joukowsky_v1',
+  },
+  pipes: [DEMO_CASE_01_PIPE, DEMO_CASE_02_PIPE],
+  nodes: [],
+  cases: [DEMO_CASE_01_CASE, DEMO_CASE_02_CASE],
+  measurementPoints: DEMO_MEASUREMENT_POINTS,
 }
 
 const STEPS: StepDef[] = [
@@ -72,9 +94,10 @@ const STEPS: StepDef[] = [
   {
     id: 'wave-speed',
     num: '5.2',
-    title: '水撃圧の検討',
+    title: '水撃圧の検討（単点・任意）',
     ref: '§5.2',
-    desc: '検討必要区間と推定方法の選定、計算法（ジューコフスキー式・アリエビ式）と経験則による水撃圧の推定・対比',
+    desc: '単点でのジューコフスキー式・アリエビ式・経験則による確認用パネル。実務の検討は下のMOC計算を主とし、本ステップは式の挙動確認に使用',
+    optional: true,
   },
   {
     id: 'moc',
@@ -401,9 +424,14 @@ function PipeTable({ pipes, cases }: { pipes: Pipe[]; cases: CalculationCase[] }
 // ─── メインページ ──────────────────────────────────────────────────────────────
 
 export function WaterHammerPage() {
-  const [openSteps, setOpenSteps] = useState<Set<string>>(new Set())
+  // 起動時にデモステップ（定常／MOC／成果出力）をデフォルトで開いておく
+  const [openSteps, setOpenSteps] = useState<Set<string>>(
+    () => new Set(['steady-flow', 'moc', 'report']),
+  )
   const [guideOpen, setGuideOpen] = useState(false)
-  const [excelData, setExcelData] = useState<WorkbookData | null>(null)
+  // 起動時にデモ用ダミーデータを適用 — ユーザーは即座に MOC グラフ等を確認できる
+  const [excelData, setExcelData] = useState<WorkbookData | null>(DEMO_WORKBOOK)
+  const [usingDemo, setUsingDemo] = useState(true)
 
   function toggleStep(id: string) {
     setOpenSteps(prev => {
@@ -416,6 +444,12 @@ export function WaterHammerPage() {
 
   function handleExcelLoad(data: WorkbookData) {
     setExcelData(data)
+    setUsingDemo(false)
+  }
+
+  function resetToDemo() {
+    setExcelData(DEMO_WORKBOOK)
+    setUsingDemo(true)
   }
 
   return (
@@ -426,6 +460,31 @@ export function WaterHammerPage() {
           土地改良設計基準　設計「パイプライン」技術書（令和3年6月改訂）§8 準拠
         </p>
       </div>
+
+      {/* デモデータ稼働中バナー */}
+      {usingDemo && (
+        <div className="demo-banner">
+          <span className="demo-banner-tag">DEMO</span>
+          <span className="demo-banner-text">
+            <strong>サンプル管路（成果品様式記入例ベースのダミーデータ）</strong>を読み込み済みです。
+            下の「定常時の水理計算」「水撃圧計算（特性曲線法）」「水理計算資料の作成」を開くと、
+            アップロード不要でグラフ・帳票・PDFまで一通り試せます。
+          </span>
+          <button className="btn btn--small btn--secondary demo-banner-btn" onClick={resetToDemo}>
+            デモを再読み込み
+          </button>
+        </div>
+      )}
+      {!usingDemo && (
+        <div className="demo-banner demo-banner--user">
+          <span className="demo-banner-text">
+            ユーザー Excel 読み込み中
+          </span>
+          <button className="btn btn--small btn--secondary demo-banner-btn" onClick={resetToDemo}>
+            ↺ デモデータに戻す
+          </button>
+        </div>
+      )}
 
       {/* Excel入出力（ページ上部に配置） */}
       <ExcelPanel onLoad={handleExcelLoad} loadedData={excelData} />
@@ -481,7 +540,7 @@ export function WaterHammerPage() {
         {STEPS.filter(s => !s.prerequisite).map((step) => {
           const isOpen = openSteps.has(step.id)
           return (
-            <div key={step.id} className={`wh-step${isOpen ? ' wh-step--open' : ''}`}>
+            <div key={step.id} className={`wh-step${isOpen ? ' wh-step--open' : ''}${step.optional ? ' wh-step--optional' : ''}`}>
               <button
                 className="wh-step-header"
                 onClick={() => toggleStep(step.id)}
@@ -490,7 +549,10 @@ export function WaterHammerPage() {
                 <div className="wh-step-left">
                   <span className="wh-step-num">{step.num}</span>
                   <div className="wh-step-title-block">
-                    <span className="wh-step-title">{step.title}</span>
+                    <span className="wh-step-title">
+                      {step.title}
+                      {step.optional && <span className="wh-step-optional-tag">任意</span>}
+                    </span>
                     <span className="wh-step-ref">{step.ref}</span>
                   </div>
                 </div>

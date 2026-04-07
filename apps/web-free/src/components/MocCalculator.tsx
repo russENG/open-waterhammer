@@ -22,6 +22,7 @@ import {
 } from "@open-waterhammer/sample-data";
 import { MocTimeChart } from "./MocTimeChart";
 import { MocEnvelopeChart } from "./MocEnvelopeChart";
+import { ChartFrame } from "./ChartFrame";
 
 // ─── デモケース ───────────────────────────────────────────────────────────────
 
@@ -412,14 +413,16 @@ export function MocCalculator({ excelData }: { excelData?: WorkbookData | null }
               </button>
             </div>
 
-            <MocEnvelopeChart
-              pipeLength={parsed?.pipe.length ?? 500}
-              Hmax={pipe0.Hmax}
-              Hmin={pipe0.Hmin}
-              H_steady={H_steady}
-              snapshot={currentSnap?.H}
-              snapshotTime={currentSnap?.t}
-            />
+            <ChartFrame filename="moc_envelope">
+              <MocEnvelopeChart
+                pipeLength={parsed?.pipe.length ?? 500}
+                Hmax={pipe0.Hmax}
+                Hmin={pipe0.Hmin}
+                H_steady={H_steady}
+                snapshot={currentSnap?.H}
+                snapshotTime={currentSnap?.t}
+              />
+            </ChartFrame>
             <p className="result-standard" style={{ marginTop: 6 }}>
               赤線: Hmax包絡　緑線: Hmin包絡　灰破線: 定常状態　青線: スクロール時刻の水頭プロファイル H(x,t)
             </p>
@@ -430,12 +433,14 @@ export function MocCalculator({ excelData }: { excelData?: WorkbookData | null }
             <p className="result-section-title" style={{ marginBottom: 8 }}>
               下流端（バルブ）水頭 H(t) 時系列
             </p>
-            <MocTimeChart
-              downstreamH={downstreamHSeries}
-              H0={parsed!.H0}
-              HR={HR}
-              vibrationPeriod={pipe0.vibrationPeriod}
-            />
+            <ChartFrame filename="moc_time_history">
+              <MocTimeChart
+                downstreamH={downstreamHSeries}
+                H0={parsed!.H0}
+                HR={HR}
+                vibrationPeriod={pipe0.vibrationPeriod}
+              />
+            </ChartFrame>
           </div>
         </div>
       )}

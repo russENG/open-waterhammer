@@ -24,6 +24,7 @@ import {
 } from "@open-waterhammer/sample-data";
 import { Formula } from "./Formula";
 import { PressureChart } from "./PressureChart";
+import { ChartFrame } from "./ChartFrame";
 import type { WorkbookData } from "@open-waterhammer/excel-io";
 
 // ─── デモケース定義 ──────────────────────────────────────────────────────────
@@ -586,11 +587,13 @@ export function WaterhammerCalculator({ excelData }: { excelData?: WorkbookData 
               )}
 
               {designPressureMpa !== null && result.closureType !== "numerical_required" && (
-                <PressureChart
-                  staticMpa={staticMpa}
-                  hammerMpa={hammerMpa}
-                  judgement={judgement}
-                />
+                <ChartFrame filename="pressure_breakdown">
+                  <PressureChart
+                    staticMpa={staticMpa}
+                    hammerMpa={hammerMpa}
+                    judgement={judgement}
+                  />
+                </ChartFrame>
               )}
 
               <div className="result-footer">

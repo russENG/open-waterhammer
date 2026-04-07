@@ -26,6 +26,7 @@ import type {
 } from "@open-waterhammer/core";
 import { MocTimeChart } from "./MocTimeChart";
 import { MocEnvelopeChart } from "./MocEnvelopeChart";
+import { ChartFrame } from "./ChartFrame";
 
 // ─── フォーム型 ──────────────────────────────────────────────────────────────
 
@@ -542,12 +543,14 @@ export function NetworkMocCalculator() {
           {pipeResult && (
             <div style={{ marginTop: 16 }}>
               <h3 className="input-group-title">包絡線: {selectedPipe}</h3>
-              <MocEnvelopeChart
-                pipeLength={pipeResult.dx * pipeResult.nReaches}
-                Hmax={pipeResult.Hmax}
-                Hmin={pipeResult.Hmin}
-                H_steady={pipeResult.H_steady}
-              />
+              <ChartFrame filename={`network_envelope_${selectedPipe}`}>
+                <MocEnvelopeChart
+                  pipeLength={pipeResult.dx * pipeResult.nReaches}
+                  Hmax={pipeResult.Hmax}
+                  Hmin={pipeResult.Hmin}
+                  H_steady={pipeResult.H_steady}
+                />
+              </ChartFrame>
             </div>
           )}
 
@@ -577,12 +580,14 @@ export function NetworkMocCalculator() {
                   最大水頭: {Math.max(...heads).toFixed(2)} m
                   {" / "}最小水頭: {Math.min(...heads).toFixed(2)} m
                 </p>
-                <MocTimeChart
-                  downstreamH={nodeResult.H}
-                  H0={H0}
-                  HR={HR}
-                  vibrationPeriod={vibPeriod}
-                />
+                <ChartFrame filename={`network_node_${selectedNode}`}>
+                  <MocTimeChart
+                    downstreamH={nodeResult.H}
+                    H0={H0}
+                    HR={HR}
+                    vibrationPeriod={vibPeriod}
+                  />
+                </ChartFrame>
               </div>
             );
           })()}

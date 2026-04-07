@@ -157,7 +157,12 @@ export function ExcelPanel({ onLoad, loadedData }: ExcelPanelProps) {
             入力テンプレートをダウンロード (.xlsx)
           </button>
           <p className="excel-action-note">
-            デモデータ入りの入力帳票です。管路諸元・ケース設定を記入して読み込んでください。
+            管路諸元・ケース設定を記入して読み込んでください。
+          </p>
+          <p className="excel-action-note" style={{ color: "#c05621", fontWeight: 600 }}>
+            ⚠ 同梱のサンプル値（管路・節点・ケース・測点データ）は、土地改良事業計画設計基準
+            「パイプライン」成果品様式の記入例から作成した<strong>ダミーデータ</strong>です。
+            実案件には使用せず、必ずご自身の設計値に書き換えてください。
           </p>
         </div>
 

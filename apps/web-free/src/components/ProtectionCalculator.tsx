@@ -16,6 +16,7 @@ import type { WorkbookData } from "@open-waterhammer/excel-io";
 import { DEMO_CASE_01_PIPE } from "@open-waterhammer/sample-data";
 import { MocEnvelopeChart } from "./MocEnvelopeChart";
 import { MocTimeChart } from "./MocTimeChart";
+import { ChartFrame } from "./ChartFrame";
 
 const DEMO_PIPE: Pipe = DEMO_CASE_01_PIPE;
 
@@ -453,9 +454,11 @@ export function ProtectionCalculator({ excelData }: { excelData?: WorkbookData |
                       t={p.snapshots[si]?.t.toFixed(2) ?? "0.00"}s
                     </span>
                   </div>
-                  <MocEnvelopeChart pipeLength={L}
-                    Hmax={p.Hmax} Hmin={p.Hmin} H_steady={p.H_steady}
-                    snapshot={p.snapshots[si]?.H} snapshotTime={p.snapshots[si]?.t} />
+                  <ChartFrame filename={`protection_envelope_${label.includes("なし") ? "baseline" : "with"}`}>
+                    <MocEnvelopeChart pipeLength={L}
+                      Hmax={p.Hmax} Hmin={p.Hmin} H_steady={p.H_steady}
+                      snapshot={p.snapshots[si]?.H} snapshotTime={p.snapshots[si]?.t} />
+                  </ChartFrame>
                 </div>
               ))}
             </div>
@@ -464,13 +467,17 @@ export function ProtectionCalculator({ excelData }: { excelData?: WorkbookData |
             {dnH_wo.length > 0 && (
               <div>
                 <p className="result-section-title" style={{ marginBottom: 8 }}>末端水頭 H(t) 比較</p>
-                <MocTimeChart downstreamH={dnH_wo} H0={H0ref} HR={HR_wo}
-                  vibrationPeriod={pipeWithout.vibrationPeriod} />
+                <ChartFrame filename="protection_time_baseline">
+                  <MocTimeChart downstreamH={dnH_wo} H0={H0ref} HR={HR_wo}
+                    vibrationPeriod={pipeWithout.vibrationPeriod} />
+                </ChartFrame>
                 <p className="result-standard" style={{ marginTop: 4 }}>↑ 防護なし（ベースライン）</p>
                 {dnH_wi.length > 0 && (
                   <>
-                    <MocTimeChart downstreamH={dnH_wi} H0={H0ref} HR={HR_wo}
-                      vibrationPeriod={pipeWithout.vibrationPeriod} />
+                    <ChartFrame filename="protection_time_with">
+                      <MocTimeChart downstreamH={dnH_wi} H0={H0ref} HR={HR_wo}
+                        vibrationPeriod={pipeWithout.vibrationPeriod} />
+                    </ChartFrame>
                     <p className="result-standard" style={{ marginTop: 4 }}>
                       ↑ 防護あり（{info.label.split("（")[0]}）
                     </p>

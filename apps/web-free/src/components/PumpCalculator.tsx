@@ -16,6 +16,7 @@ import { DEMO_CASE_01_PIPE } from "@open-waterhammer/sample-data";
 import { MocEnvelopeChart } from "./MocEnvelopeChart";
 import { MocTimeChart } from "./MocTimeChart";
 import { PumpSpeedChart } from "./PumpSpeedChart";
+import { ChartFrame } from "./ChartFrame";
 
 const DEMO_PIPE: Pipe = DEMO_CASE_01_PIPE;
 const DEMO_PUMP = { Q0_Ls: "75", H0: "50", Hs: "60" };
@@ -387,9 +388,11 @@ export function PumpCalculator({ excelData }: { excelData?: WorkbookData | null 
               初期
             </button>
           </div>
-          <MocEnvelopeChart pipeLength={pipeLength}
-            Hmax={pipe0.Hmax} Hmin={pipe0.Hmin} H_steady={H_steady}
-            snapshot={currentSnap?.H} snapshotTime={currentSnap?.t} />
+          <ChartFrame filename="pump_envelope">
+            <MocEnvelopeChart pipeLength={pipeLength}
+              Hmax={pipe0.Hmax} Hmin={pipe0.Hmin} H_steady={H_steady}
+              snapshot={currentSnap?.H} snapshotTime={currentSnap?.t} />
+          </ChartFrame>
           <p className="result-standard" style={{ marginTop: 6 }}>
             赤線: Hmax包絡　緑線: Hmin包絡　灰破線: 初期水頭　青線: H(x,t)スナップショット
           </p>
@@ -398,8 +401,10 @@ export function PumpCalculator({ excelData }: { excelData?: WorkbookData | null 
         {/* ポンプ端 H(t) */}
         <div>
           <p className="result-section-title" style={{ marginBottom: 8 }}>ポンプ端水頭 H(t) 時系列</p>
-          <MocTimeChart downstreamH={pumpHSeries} H0={H0ref} HR={HR}
-            vibrationPeriod={pipe0.vibrationPeriod} />
+          <ChartFrame filename="pump_head_time">
+            <MocTimeChart downstreamH={pumpHSeries} H0={H0ref} HR={HR}
+              vibrationPeriod={pipe0.vibrationPeriod} />
+          </ChartFrame>
         </div>
 
         {/* 回転速度 N(t) — GD² モデル使用時のみ */}
@@ -411,8 +416,10 @@ export function PumpCalculator({ excelData }: { excelData?: WorkbookData | null 
                 GD² = {tripForm.GD2} N·m²　N₀ = {tripForm.N0} min⁻¹
               </span>
             </p>
-            <PumpSpeedChart Nseries={pumpNSeries} N0={N0val}
-              vibrationPeriod={pipe0.vibrationPeriod} />
+            <ChartFrame filename="pump_rotation_speed">
+              <PumpSpeedChart Nseries={pumpNSeries} N0={N0val}
+                vibrationPeriod={pipe0.vibrationPeriod} />
+            </ChartFrame>
             <p className="result-standard" style={{ marginTop: 4 }}>
               紫線: N(t)　青破線: 定格回転速度 N₀　技術書式(8.4.10-11) GD²慣性方程式
             </p>

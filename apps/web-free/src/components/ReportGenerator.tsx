@@ -14,6 +14,12 @@ import type {
 } from "@open-waterhammer/core";
 import type { WorkbookData } from "@open-waterhammer/excel-io";
 
+function handlePrintPdf() {
+  // ブラウザの印刷ダイアログを起動。ユーザーが「PDF として保存」を選ぶことで PDF 出力できる。
+  // CJK フォントをブラウザがそのまま使うため、文字化けのリスクが無い。
+  window.print();
+}
+
 interface ReportFormState {
   staticWaterLevel: string;
   waterhammerMode: "ratio" | "fixed";
@@ -252,13 +258,25 @@ export function ReportGenerator({ excelData }: { excelData?: WorkbookData | null
                     </div>
                   </div>
 
-                  <button
-                    className="btn btn--primary report-download-btn"
-                    onClick={handleDownload}
-                    disabled={downloading}
-                  >
-                    {downloading ? "生成中…" : "水理計算書をダウンロード (.xlsx)"}
-                  </button>
+                  <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                    <button
+                      className="btn btn--primary report-download-btn"
+                      onClick={handleDownload}
+                      disabled={downloading}
+                    >
+                      {downloading ? "生成中…" : "水理計算書をダウンロード (.xlsx)"}
+                    </button>
+                    <button
+                      className="btn btn--secondary report-download-btn"
+                      onClick={handlePrintPdf}
+                      title="ブラウザの印刷ダイアログから「PDF として保存」を選択してください"
+                    >
+                      水理計算書を PDF 出力（印刷経由）
+                    </button>
+                  </div>
+                  <p className="excel-action-note" style={{ marginTop: 6 }}>
+                    PDF 出力は OS の印刷ダイアログを使います。送付先で「<strong>PDF として保存</strong>」を選択してください。
+                  </p>
                 </>
               ) : (
                 <div className="result-empty">静水位を入力してください。</div>
@@ -267,6 +285,87 @@ export function ReportGenerator({ excelData }: { excelData?: WorkbookData | null
           </div>
         )}
       </section>
+
+      {/* ─── 印刷用ビュー（画面では非表示、print 時のみ表示） ─── */}
+      {previewResult && (
+        <div className="report-print-area print-only">
+          <h1>水理計算書</h1>
+          <table style={{ marginBottom: "6mm" }}>
+            <tbody>
+              <tr>
+                <th style={{ width: "25%" }}>案件名</th>
+                <td colSpan={3}>{form.projectName || "（未入力）"}</td>
+              </tr>
+              <tr>
+                <th>計算ケース</th>
+                <td>{previewResult.caseName}</td>
+                <th>静水位 HWL</th>
+                <td>{previewResult.staticWaterLevel.toFixed(3)} m</td>
+              </tr>
+              <tr>
+                <th>測点数</th>
+                <td>{previewResult.pointResults.length}</td>
+                <th>最大流速</th>
+                <td>{previewResult.maxVelocity.toFixed(2)} m/s</td>
+              </tr>
+              <tr>
+                <th>最大設計内圧</th>
+                <td colSpan={3}>{previewResult.maxDesignPressure.toFixed(3)} MPa</td>
+              </tr>
+            </tbody>
+          </table>
+
+          <h2>測点別計算結果</h2>
+          <table>
+            <thead>
+              <tr>
+                <th>測点</th>
+                <th>V [m/s]</th>
+                <th>I</th>
+                <th>hf [m]</th>
+                <th>Σhc [m]</th>
+                <th>EL [m]</th>
+                <th>WLm [m]</th>
+                <th>Ps [MPa]</th>
+                <th>Pi [MPa]</th>
+                <th>Pp [MPa]</th>
+              </tr>
+            </thead>
+            <tbody>
+              {previewResult.pointResults.map((p) => (
+                <tr key={p.pointId}>
+                  <td style={{ textAlign: "left" }}>{p.pointId}</td>
+                  <td>{p.velocity.toFixed(2)}</td>
+                  <td>{p.hydraulicGradient.toFixed(5)}</td>
+                  <td>{p.frictionLoss.toFixed(3)}</td>
+                  <td>{p.minorLoss.toFixed(3)}</td>
+                  <td>{p.energyLevel.toFixed(2)}</td>
+                  <td>{p.hydraulicGradeLine.toFixed(2)}</td>
+                  <td>{p.staticPressure.toFixed(3)}</td>
+                  <td>{p.waterhammerPressure.toFixed(3)}</td>
+                  <td>{p.designPressure.toFixed(3)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+
+          {previewResult.warnings.length > 0 && (
+            <>
+              <h2>警告</h2>
+              <ul style={{ fontSize: "9pt", paddingLeft: "5mm" }}>
+                {previewResult.warnings.map((w, i) => (
+                  <li key={i}>{w}</li>
+                ))}
+              </ul>
+            </>
+          )}
+
+          <p style={{ marginTop: "8mm", fontSize: "8pt", color: "#666" }}>
+            出典: 土地改良事業計画設計基準 設計「パイプライン」技術書（令和3年6月改訂）／
+            生成: open-waterhammer (AGPL-3.0) — 同梱サンプルはダミーデータです
+          </p>
+        </div>
+      )}
     </div>
   );
 }
