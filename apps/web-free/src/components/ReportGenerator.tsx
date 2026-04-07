@@ -13,6 +13,7 @@ import type {
   LongitudinalHydraulicResult,
 } from "@open-waterhammer/core";
 import type { WorkbookData } from "@open-waterhammer/excel-io";
+import { RefLink } from "./RefLink";
 
 function handlePrintPdf() {
   // ブラウザの印刷ダイアログを起動。ユーザーが「PDF として保存」を選ぶことで PDF 出力できる。
@@ -271,11 +272,15 @@ export function ReportGenerator({ excelData }: { excelData?: WorkbookData | null
                       onClick={handlePrintPdf}
                       title="ブラウザの印刷ダイアログから「PDF として保存」を選択してください"
                     >
-                      水理計算書を PDF 出力（印刷経由）
+                      PDF として保存（ブラウザの印刷ダイアログ）
                     </button>
                   </div>
                   <p className="excel-action-note" style={{ marginTop: 6 }}>
-                    PDF 出力は OS の印刷ダイアログを使います。送付先で「<strong>PDF として保存</strong>」を選択してください。
+                    PDF はブラウザ標準の印刷ダイアログから出力します。プリンタ選択欄で
+                    「<strong>Microsoft Print to PDF</strong>」または「<strong>PDF として保存</strong>」を選択してください。
+                  </p>
+                  <p className="excel-action-note">
+                    準拠様式: <RefLink topicId="hydraulic-sheet">成果品様式 — 水理計算書（24列帳票）</RefLink>
                   </p>
                 </>
               ) : (

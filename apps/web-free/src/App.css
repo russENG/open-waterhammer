@@ -2933,3 +2933,172 @@ select.input--narrow {
 .print-only {
   display: none;
 }
+
+/* ─── RefLink: 基準照会への内部リンク ──────────────────────────── */
+.ref-link {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 2px;
+  padding: 0 2px;
+  background: none;
+  border: none;
+  border-bottom: 1px dashed #2563eb;
+  color: #2563eb;
+  font: inherit;
+  cursor: pointer;
+  line-height: 1.4;
+}
+.ref-link:hover {
+  color: #1d4ed8;
+  border-bottom-style: solid;
+  background: #eff6ff;
+}
+.ref-link-icon {
+  font-size: 0.75em;
+  opacity: 0.7;
+}
+
+/* ─── ReferencePage: 該当トピックのハイライト ──────────────────── */
+.ref-topic--highlight {
+  animation: ref-topic-flash 1.6s ease-out;
+}
+@keyframes ref-topic-flash {
+  0%   { background: #fef3c7; box-shadow: 0 0 0 4px #fde68a; }
+  100% { background: transparent; box-shadow: none; }
+}
+
+/* ─── ExcelPanel: 折りたたみトグル ─────────────────────────────── */
+.excel-panel-toggle {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  padding: 0;
+  background: none;
+  border: none;
+  cursor: pointer;
+  text-align: left;
+}
+.excel-panel-toggle:hover .card-title {
+  color: #2563eb;
+}
+.excel-panel-toggle-icon {
+  font-size: 0.9rem;
+  color: #718096;
+  margin-left: 8px;
+}
+
+/* ─── DemoBanner: ジャンプボタン群 ─────────────────────────────── */
+.demo-banner-actions {
+  display: flex;
+  gap: 6px;
+  flex-shrink: 0;
+  flex-wrap: wrap;
+}
+
+/* ─── PipeNetGuide: 単管路 vs 管路網 案内 ──────────────────────── */
+.pipe-net-guide {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 0 0 12px 0;
+  padding: 10px 14px;
+  background: #f1f5f9;
+  border-left: 3px solid #64748b;
+  border-radius: 4px;
+  font-size: 0.82rem;
+  color: #334155;
+}
+.pipe-net-guide-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  line-height: 1.5;
+}
+.pipe-net-guide-tag {
+  display: inline-block;
+  flex-shrink: 0;
+  padding: 2px 8px;
+  font-size: 0.7rem;
+  font-weight: 700;
+  color: #fff;
+  border-radius: 3px;
+}
+.pipe-net-guide-tag--single { background: #0891b2; }
+.pipe-net-guide-tag--net    { background: #7c3aed; }
+
+/* ─── 任意ステップへの誘導ヒント ───────────────────────────────── */
+.step-route-hint {
+  margin: 0 0 12px 0;
+  padding: 10px 14px;
+  background: #fff7ed;
+  border-left: 3px solid #f59e0b;
+  border-radius: 4px;
+  font-size: 0.82rem;
+  color: #78350f;
+  line-height: 1.5;
+}
+
+/* ─── 前提条件マスタートグル ───────────────────────────────────── */
+.wh-prereq-master {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  padding: 10px 16px;
+  margin-bottom: 6px;
+  background: #f7fafc;
+  border: 1px dashed #cbd5e0;
+  border-radius: 6px;
+  cursor: pointer;
+  text-align: left;
+}
+.wh-prereq-master:hover {
+  background: #edf2f7;
+  border-color: #a0aec0;
+}
+.wh-prereq-master-label {
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: #4a5568;
+}
+.wh-prereq-master-hint {
+  flex: 1;
+  font-size: 0.78rem;
+  color: #718096;
+}
+.wh-prereq-master-toggle {
+  font-size: 0.85rem;
+  color: #718096;
+}
+
+/* ─── ステップジャンプ時のフラッシュアニメーション ─────────────── */
+.wh-step--flash {
+  animation: wh-step-flash 1.6s ease-out;
+}
+@keyframes wh-step-flash {
+  0%   { box-shadow: 0 0 0 4px #fde68a, 0 0 16px rgba(245, 158, 11, 0.5); }
+  100% { box-shadow: none; }
+}
+
+/* ─── 管路諸元テーブルの役割説明 ───────────────────────────────── */
+.pipe-table-role {
+  margin: 0 0 10px 0;
+  padding: 8px 12px;
+  background: #ecfdf5;
+  border-left: 3px solid #10b981;
+  border-radius: 4px;
+  font-size: 0.82rem;
+  color: #065f46;
+  line-height: 1.5;
+}
+
+/* ─── ChartFrame: 初回ヒント表示 ───────────────────────────────── */
+.chart-frame-hint {
+  font-size: 0.72rem;
+  color: #b45309;
+  background: #fef3c7;
+  padding: 1px 8px;
+  border-radius: 3px;
+  margin-left: 8px;
+}

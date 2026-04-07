@@ -25,16 +25,19 @@ export interface ExcelPanelProps {
   onLoad: (data: WorkbookData) => void;
   /** 読み込み済みデータ（レポート出力用） */
   loadedData?: WorkbookData | null;
+  /** デモ中はデフォルト折りたたみ */
+  collapsedByDefault?: boolean;
 }
 
 // ─── コンポーネント ───────────────────────────────────────────────────────────
 
-export function ExcelPanel({ onLoad, loadedData }: ExcelPanelProps) {
+export function ExcelPanel({ onLoad, loadedData, collapsedByDefault }: ExcelPanelProps) {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [status, setStatus] = useState<"idle" | "loading" | "ok" | "error">("idle");
   const [errors, setErrors] = useState<ParseError[]>([]);
   const [warnings, setWarnings] = useState<string[]>([]);
   const [fileName, setFileName] = useState<string>("");
+  const [open, setOpen] = useState(!collapsedByDefault);
 
   // ─── テンプレートダウンロード ───────────────────────────────────────────────
 
@@ -146,8 +149,20 @@ export function ExcelPanel({ onLoad, loadedData }: ExcelPanelProps) {
 
   return (
     <section className="card excel-panel">
-      <h2 className="card-title">Excel 入出力</h2>
+      <button
+        type="button"
+        className="excel-panel-toggle"
+        onClick={() => setOpen(v => !v)}
+        aria-expanded={open}
+      >
+        <h2 className="card-title" style={{ margin: 0 }}>
+          Excel 入出力（自分の管路データを使う場合）
+        </h2>
+        <span className="excel-panel-toggle-icon">{open ? '▲' : '▼'}</span>
+      </button>
 
+      {!open ? null : (
+      <>
       <div className="excel-actions">
         {/* ダウンロード */}
         <div className="excel-action-group">
@@ -241,6 +256,8 @@ export function ExcelPanel({ onLoad, loadedData }: ExcelPanelProps) {
             </div>
           ))}
         </div>
+      )}
+      </>
       )}
     </section>
   );

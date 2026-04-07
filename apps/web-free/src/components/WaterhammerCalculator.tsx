@@ -25,6 +25,7 @@ import {
 import { Formula } from "./Formula";
 import { PressureChart } from "./PressureChart";
 import { ChartFrame } from "./ChartFrame";
+import { RefLink } from "./RefLink";
 import type { WorkbookData } from "@open-waterhammer/excel-io";
 
 // ─── デモケース定義 ──────────────────────────────────────────────────────────
@@ -598,7 +599,7 @@ export function WaterhammerCalculator({ excelData }: { excelData?: WorkbookData 
 
               <div className="result-footer">
                 <span className="result-standard">
-                  準拠: 土地改良設計基準　設計「パイプライン」技術書（令和3年6月改訂）
+                  準拠: <RefLink topicId="waterhammer-estimate">技術書 §8.3（水撃圧の推定）</RefLink>
                 </span>
               </div>
             </>

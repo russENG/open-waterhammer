@@ -15,9 +15,11 @@ interface ChartFrameProps {
   title?: string;
   filename: string;
   children: ReactNode;
+  /** 初回表示用ヒント（PNG/SVGダウンロードに気付かないユーザー向け） */
+  showHint?: boolean;
 }
 
-export function ChartFrame({ title, filename, children }: ChartFrameProps) {
+export function ChartFrame({ title, filename, children, showHint }: ChartFrameProps) {
   const ref = useRef<HTMLDivElement>(null);
   const [busy, setBusy] = useState<"png" | "svg" | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -58,6 +60,7 @@ export function ChartFrame({ title, filename, children }: ChartFrameProps) {
     <div className="chart-frame">
       <div className="chart-frame-header">
         {title && <span className="chart-frame-title">{title}</span>}
+        {showHint && <span className="chart-frame-hint">→ チャートは PNG / SVG で保存できます</span>}
         <div className="chart-frame-actions">
           <button
             type="button"

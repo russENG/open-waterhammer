@@ -26,6 +26,22 @@ import { ReportGenerator } from '../components/ReportGenerator'
 import { SessionPanel } from '../components/SessionPanel'
 import { SteadyNetworkCalculator } from '../components/SteadyNetworkCalculator'
 
+// 単管路 / 管路網の使い分けを案内するインライン説明
+function PipeNetGuide({ kind }: { kind: 'steady' | 'moc' }) {
+  return (
+    <div className="pipe-net-guide">
+      <div className="pipe-net-guide-row">
+        <span className="pipe-net-guide-tag pipe-net-guide-tag--single">単管路</span>
+        <span>1本の管路（口径変化のみ）の場合 — 上のパネル「{kind === 'steady' ? '定常水理計算' : '特性曲線法（MOC）'}」</span>
+      </div>
+      <div className="pipe-net-guide-row">
+        <span className="pipe-net-guide-tag pipe-net-guide-tag--net">管路網</span>
+        <span>分岐・合流（T字・三方弁・複数水源）を含む場合 — 下のパネル「{kind === 'steady' ? '定常網計算' : 'ネットワークMOC'}」</span>
+      </div>
+    </div>
+  )
+}
+
 interface StepDef {
   id: string
   num: string
@@ -96,36 +112,36 @@ const STEPS: StepDef[] = [
     num: '5.2',
     title: '水撃圧の検討（単点・任意）',
     ref: '§5.2',
-    desc: '単点でのジューコフスキー式・アリエビ式・経験則による確認用パネル。実務の検討は下のMOC計算を主とし、本ステップは式の挙動確認に使用',
+    desc: '単点でのジューコフスキー式・アリエビ式・経験則による確認用パネル。実務の検討は下の特性曲線法（MOC）を主とし、本ステップは式の挙動確認に使用',
     optional: true,
   },
   {
     id: 'moc',
     num: '添付',
-    title: '水撃圧計算（特性曲線法）',
-    ref: '添付資料',
-    desc: 'バルブ閉鎖シナリオの時系列水撃圧を特性曲線法（MOC）で数値解析。包絡線図で管路全体の最大・最小水頭を確認',
-  },
-  {
-    id: 'pump',
-    num: '5.4',
-    title: 'その他の非定常時の検討（ポンプ）',
-    ref: '§5.4',
-    desc: 'ポンプ急停止・起動時の過渡解析。GD²（はずみ車効果）慣性方程式による水撃圧の算定',
+    title: '水撃圧計算（特性曲線法・本計算）',
+    ref: '添付資料 / §8.4',
+    desc: 'バルブ閉鎖シナリオの時系列水撃圧を特性曲線法（MOC）で数値解析。単管路 / 分岐合流（管路網）の両方に対応',
   },
   {
     id: 'protection',
     num: '5.2.2',
-    title: '水撃圧の推定結果と対策',
+    title: '水撃圧の推定結果と対策（防護工）',
     ref: '§5.2.2',
     desc: '許容内圧との照合・対策の要否判定。エアチャンバ・サージタンク・吸気弁等の防護工効果をMOCで定量評価',
   },
   {
+    id: 'pump',
+    num: '5.4',
+    title: 'その他の非定常時の検討（ポンプ過渡）',
+    ref: '§5.4',
+    desc: 'ポンプ急停止・起動時の過渡解析。GD²（はずみ車効果）慣性方程式による水撃圧の算定',
+  },
+  {
     id: 'report',
     num: '成果',
-    title: '水理計算資料の作成',
+    title: '水理計算資料の作成（Excel/PDF出力）',
     ref: '成果品様式',
-    desc: '定常時の水理計算書・水撃圧検討書を成果品様式に準拠したExcel帳票として出力',
+    desc: '読込みデータと縦断計算結果を成果品様式準拠でExcelまたはPDFで出力',
   },
 ]
 
@@ -265,6 +281,7 @@ function StepContent({ id, excelData }: { id: string; excelData: WorkbookData | 
   switch (id) {
     case 'steady-flow': return (
       <>
+        <PipeNetGuide kind="steady" />
         <SteadyFlowCalculator excelData={excelData} />
         <div style={{ marginTop: 24 }}>
           <SteadyNetworkCalculator />
@@ -273,6 +290,10 @@ function StepContent({ id, excelData }: { id: string; excelData: WorkbookData | 
     )
     case 'wave-speed': return (
       <>
+        <div className="step-route-hint">
+          ※ このステップは <strong>単点での式の挙動確認</strong> 用です。
+          実務の水撃圧検討は下の <strong>「水撃圧計算（特性曲線法・本計算）」</strong> を使用してください。
+        </div>
         <WaterhammerCalculator excelData={excelData} />
         <div style={{ marginTop: 16 }}>
           <EmpiricalCalculator />
@@ -281,6 +302,7 @@ function StepContent({ id, excelData }: { id: string; excelData: WorkbookData | 
     )
     case 'moc': return (
       <>
+        <PipeNetGuide kind="moc" />
         <MocCalculator excelData={excelData} />
         <div style={{ marginTop: 24 }}>
           <NetworkMocCalculator />
@@ -289,14 +311,7 @@ function StepContent({ id, excelData }: { id: string; excelData: WorkbookData | 
     )
     case 'pump': return <PumpCalculator excelData={excelData} />
     case 'protection': return <ProtectionCalculator excelData={excelData} />
-    case 'report': return (
-      <>
-        <ReportGenerator excelData={excelData} />
-        <div style={{ marginTop: 24 }}>
-          <SessionPanel />
-        </div>
-      </>
-    )
+    case 'report': return <ReportGenerator excelData={excelData} />
     default: return null
   }
 }
@@ -429,6 +444,7 @@ export function WaterHammerPage() {
     () => new Set(['steady-flow', 'moc', 'report']),
   )
   const [guideOpen, setGuideOpen] = useState(false)
+  const [prereqOpen, setPrereqOpen] = useState(false)
   // 起動時にデモ用ダミーデータを適用 — ユーザーは即座に MOC グラフ等を確認できる
   const [excelData, setExcelData] = useState<WorkbookData | null>(DEMO_WORKBOOK)
   const [usingDemo, setUsingDemo] = useState(true)
@@ -448,8 +464,30 @@ export function WaterHammerPage() {
   }
 
   function resetToDemo() {
+    if (!usingDemo) {
+      const ok = window.confirm(
+        '読み込んだユーザー Excel データを破棄してデモデータに戻します。よろしいですか？',
+      )
+      if (!ok) return
+    }
     setExcelData(DEMO_WORKBOOK)
     setUsingDemo(true)
+  }
+
+  function jumpToStep(id: string) {
+    setOpenSteps(prev => {
+      const next = new Set(prev)
+      next.add(id)
+      return next
+    })
+    setTimeout(() => {
+      const el = document.getElementById(`wh-step-${id}`)
+      if (el) {
+        el.scrollIntoView({ behavior: 'smooth', block: 'start' })
+        el.classList.add('wh-step--flash')
+        setTimeout(() => el.classList.remove('wh-step--flash'), 1600)
+      }
+    }, 50)
   }
 
   return (
@@ -466,13 +504,19 @@ export function WaterHammerPage() {
         <div className="demo-banner">
           <span className="demo-banner-tag">DEMO</span>
           <span className="demo-banner-text">
-            <strong>サンプル管路（成果品様式記入例ベースのダミーデータ）</strong>を読み込み済みです。
-            下の「定常時の水理計算」「水撃圧計算（特性曲線法）」「水理計算資料の作成」を開くと、
-            アップロード不要でグラフ・帳票・PDFまで一通り試せます。
+            <strong>サンプル管路</strong>を読み込み済み。アップロード不要でそのまま試せます。
           </span>
-          <button className="btn btn--small btn--secondary demo-banner-btn" onClick={resetToDemo}>
-            デモを再読み込み
-          </button>
+          <div className="demo-banner-actions">
+            <button className="btn btn--small btn--primary" onClick={() => jumpToStep('steady-flow')}>
+              ① 定常計算へ
+            </button>
+            <button className="btn btn--small btn--primary" onClick={() => jumpToStep('moc')}>
+              ② MOC計算へ
+            </button>
+            <button className="btn btn--small btn--primary" onClick={() => jumpToStep('report')}>
+              ③ 帳票出力へ
+            </button>
+          </div>
         </div>
       )}
       {!usingDemo && (
@@ -486,26 +530,42 @@ export function WaterHammerPage() {
         </div>
       )}
 
-      {/* Excel入出力（ページ上部に配置） */}
-      <ExcelPanel onLoad={handleExcelLoad} loadedData={excelData} />
+      {/* Excel入出力 — デモ中は折りたたんで視覚的優先度を下げる */}
+      <ExcelPanel onLoad={handleExcelLoad} loadedData={excelData} collapsedByDefault={usingDemo} />
 
       {/* 読み込んだ管路諸元の表示 */}
       {excelData && excelData.pipes.length > 0 && (
         <section className="card">
+          <p className="pipe-table-role">
+            ↓ 下記の管路諸元は <strong>定常水理計算 / MOC計算 / 防護工 / ポンプ過渡 / 帳票出力</strong> の各ステップで共通入力として使用されます。
+          </p>
           <PipeTable pipes={excelData.pipes} cases={excelData.cases} />
           {excelData.measurementPoints.length > 0 && (
             <div className="long-calc-summary" style={{ marginTop: 12 }}>
               測点データ: {excelData.measurementPoints.length} 点 読込済
-              （Step 1「縦断計算」タブで水理計算書を作成できます）
+              （ステップ「水理計算資料の作成」で水理計算書として出力できます）
             </div>
           )}
         </section>
       )}
 
-      {/* 前提ステップ（設計条件・管路諸元） */}
+      {/* 前提ステップ（設計条件・管種・管径・縦断） — デフォルトはまとめて折りたたみ */}
       <div className="wh-steps">
-        <div className="wh-steps-label">前提：管路諸元の決定</div>
-        {STEPS.filter(s => s.prerequisite).map((step) => {
+        <button
+          type="button"
+          className="wh-prereq-master"
+          onClick={() => setPrereqOpen(v => !v)}
+          aria-expanded={prereqOpen}
+        >
+          <span className="wh-prereq-master-label">
+            前提条件（4項目: 設計条件・管種・管径・縦断）
+          </span>
+          <span className="wh-prereq-master-hint">
+            {prereqOpen ? '計算前のチェックリスト — 閉じる' : '計算前のチェックリスト — 展開'}
+          </span>
+          <span className="wh-prereq-master-toggle">{prereqOpen ? '▲' : '▼'}</span>
+        </button>
+        {prereqOpen && STEPS.filter(s => s.prerequisite).map((step) => {
           const isOpen = openSteps.has(step.id)
           return (
             <div key={step.id} className={`wh-step wh-step--prereq${isOpen ? ' wh-step--open' : ''}`}>
@@ -540,7 +600,11 @@ export function WaterHammerPage() {
         {STEPS.filter(s => !s.prerequisite).map((step) => {
           const isOpen = openSteps.has(step.id)
           return (
-            <div key={step.id} className={`wh-step${isOpen ? ' wh-step--open' : ''}${step.optional ? ' wh-step--optional' : ''}`}>
+            <div
+              key={step.id}
+              id={`wh-step-${step.id}`}
+              className={`wh-step${isOpen ? ' wh-step--open' : ''}${step.optional ? ' wh-step--optional' : ''}`}
+            >
               <button
                 className="wh-step-header"
                 onClick={() => toggleStep(step.id)}
@@ -568,6 +632,11 @@ export function WaterHammerPage() {
           )
         })}
       </div>
+
+      {/* セッション管理（独立カード） */}
+      <section className="card" style={{ marginTop: 16 }}>
+        <SessionPanel />
+      </section>
 
       {/* 手法選定ガイド（参考） */}
       <div className="wh-guide">

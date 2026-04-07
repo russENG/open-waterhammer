@@ -17,6 +17,7 @@ import { DEMO_CASE_01_PIPE } from "@open-waterhammer/sample-data";
 import { MocEnvelopeChart } from "./MocEnvelopeChart";
 import { MocTimeChart } from "./MocTimeChart";
 import { ChartFrame } from "./ChartFrame";
+import { RefLink } from "./RefLink";
 
 const DEMO_PIPE: Pipe = DEMO_CASE_01_PIPE;
 
@@ -491,7 +492,7 @@ export function ProtectionCalculator({ excelData }: { excelData?: WorkbookData |
 
       <div className="result-footer" style={{ marginTop: 16 }}>
         <p className="result-standard">
-          出典: 土地改良設計基準　設計「パイプライン」技術書（令和3年6月改訂）§8.3（水撃圧防護設備）/ §8.5（剛体理論）／
+          出典: <RefLink topicId="waterhammer-result">技術書 §8.3 / §8.5（防護設備・剛体理論）</RefLink>　／
           特性曲線法（MOC）・弾性管モデル・準定常 H-W 摩擦
         </p>
       </div>

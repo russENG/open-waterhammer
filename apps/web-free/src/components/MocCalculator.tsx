@@ -23,6 +23,7 @@ import {
 import { MocTimeChart } from "./MocTimeChart";
 import { MocEnvelopeChart } from "./MocEnvelopeChart";
 import { ChartFrame } from "./ChartFrame";
+import { RefLink } from "./RefLink";
 
 // ─── デモケース ───────────────────────────────────────────────────────────────
 
@@ -447,7 +448,7 @@ export function MocCalculator({ excelData }: { excelData?: WorkbookData | null }
 
       <div className="result-footer" style={{ marginTop: 16 }}>
         <p className="result-standard">
-          出典: 土地改良設計基準　設計「パイプライン」技術書（令和3年6月改訂）§8.4（特性曲線法）／
+          出典: <RefLink topicId="moc">技術書 §8.4（特性曲線法）</RefLink>　／
           単一管路・定水頭上流境界・線形バルブ閉操作・準定常摩擦（Darcy-Weisbach）
         </p>
       </div>

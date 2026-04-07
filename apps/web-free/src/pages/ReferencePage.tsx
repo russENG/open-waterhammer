@@ -10,7 +10,7 @@
  * 右: PDF閲覧パネル
  */
 
-import { useState, useRef } from 'react'
+import { useState, useRef, useEffect } from 'react'
 
 // ─── PDF ソース定義 ──────────────────────────────────────────────────────────
 
@@ -191,12 +191,32 @@ function groupByCategory(topics: Topic[]): { category: string; topics: Topic[] }
 
 // ─── コンポーネント ──────────────────────────────────────────────────────────
 
-export function ReferencePage() {
+export function ReferencePage({ initialTopicId }: { initialTopicId?: string } = {}) {
   const [sources, setSources] = useState<PdfSource[]>(INITIAL_SOURCES)
   const [activeSourceId, setActiveSourceId] = useState('seikahinyoshiki')
   const [pdfPage, setPdfPage] = useState<number | undefined>(undefined)
   const [activeRefKey, setActiveRefKey] = useState('')
   const fileInputRefs = useRef<Record<string, HTMLInputElement | null>>({})
+  const topicRefs = useRef<Record<string, HTMLDivElement | null>>({})
+
+  // 外部から initialTopicId が指定された場合、該当トピックの最初の参照を自動的に開く
+  useEffect(() => {
+    if (!initialTopicId) return
+    const topic = TOPICS.find(t => t.id === initialTopicId)
+    if (!topic || topic.refs.length === 0) return
+    const firstRef = topic.refs[0]!
+    const src = INITIAL_SOURCES.find(s => s.id === firstRef.pdfId)
+    if (!src) return
+    if (src.onlineUrl || src.localUrl) {
+      setActiveSourceId(firstRef.pdfId)
+      setPdfPage(firstRef.page)
+      setActiveRefKey(topic.id + ':' + firstRef.pdfId + ':' + firstRef.page)
+    }
+    // メニュー側のスクロール
+    setTimeout(() => {
+      topicRefs.current[topic.id]?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+    }, 50)
+  }, [initialTopicId])
 
   const activeSource = sources.find(s => s.id === activeSourceId) ?? sources[2]!
 
@@ -296,7 +316,11 @@ export function ReferencePage() {
             <div key={cat.category} className="ref-cat-group">
               <div className="ref-cat-label">{cat.category}</div>
               {cat.topics.map(topic => (
-                <div key={topic.id} className="ref-topic">
+                <div
+                  key={topic.id}
+                  className={`ref-topic${initialTopicId === topic.id ? ' ref-topic--highlight' : ''}`}
+                  ref={el => { topicRefs.current[topic.id] = el }}
+                >
                   <div className="ref-topic-title">{topic.title}</div>
                   <div className="ref-topic-refs">
                     {topic.refs.map((ref, i) => {

@@ -6,6 +6,7 @@
 import { useState, useMemo } from "react";
 import { calcEmpiricalWaterhammer } from "@open-waterhammer/core";
 import type { PipelineSystemType } from "@open-waterhammer/core";
+import { RefLink } from "./RefLink";
 
 // ─── 方式区分定義 ─────────────────────────────────────────────────────────────
 
@@ -199,7 +200,7 @@ export function EmpiricalCalculator() {
 
               <div className="result-footer">
                 <p className="result-standard">
-                  出典: 土地改良設計基準　設計「パイプライン」技術書（令和3年6月改訂）§8.3.5
+                  出典: <RefLink topicId="waterhammer-estimate">技術書 §8.3.5（経験則）</RefLink>
                 </p>
               </div>
             </>

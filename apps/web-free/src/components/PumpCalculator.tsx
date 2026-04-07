@@ -17,6 +17,7 @@ import { MocEnvelopeChart } from "./MocEnvelopeChart";
 import { MocTimeChart } from "./MocTimeChart";
 import { PumpSpeedChart } from "./PumpSpeedChart";
 import { ChartFrame } from "./ChartFrame";
+import { RefLink } from "./RefLink";
 
 const DEMO_PIPE: Pipe = DEMO_CASE_01_PIPE;
 const DEMO_PUMP = { Q0_Ls: "75", H0: "50", Hs: "60" };
@@ -451,7 +452,7 @@ export function PumpCalculator({ excelData }: { excelData?: WorkbookData | null 
 
       <div className="result-footer" style={{ marginTop: 16 }}>
         <p className="result-standard">
-          出典: 土地改良設計基準　設計「パイプライン」技術書（令和3年6月改訂）§8.4（特性曲線法）／
+          出典: <RefLink topicId="pump">技術書 §8.4（特性曲線法・ポンプ過渡）</RefLink>　／
           {tab === "trip"
             ? `ポンプ急停止・放物線型 H-Q 特性・${tripForm.useGD2 ? "GD²慣性方程式（式8.4.10-11）" : "線形回転数減衰（簡易モデル）"}`
             : "ポンプ起動・放物線型 H-Q 特性・線形回転数上昇"}
