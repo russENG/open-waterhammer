@@ -23,7 +23,6 @@ import {
   DEMO_CASE_02_CLOSE_TIME,
 } from "@open-waterhammer/sample-data";
 import { Formula } from "./Formula";
-import { ExcelPanel } from "./ExcelPanel";
 import { PressureChart } from "./PressureChart";
 import type { WorkbookData } from "@open-waterhammer/excel-io";
 
@@ -291,16 +290,38 @@ function ClosureBadge({ type }: { type: SimpleFormulaResult["closureType"] }) {
 
 // ─── メインコンポーネント ────────────────────────────────────────────────────
 
-export function WaterhammerCalculator() {
+export function WaterhammerCalculator({ excelData }: { excelData?: WorkbookData | null }) {
+  const excelPipes = excelData?.pipes ?? [];
+  const excelCases = excelData?.cases ?? [];
+  const hasExcel = excelPipes.length > 0;
+
   const [selectedDemo, setSelectedDemo] = useState<"01" | "02">("01");
   const [form, setForm] = useState<FormState>(() =>
     demoToForm(DEMO_CASE_01_PIPE, DEMO_CASE_01_CASE, DEMO_CASE_01_CLOSE_TIME)
   );
-  // Excel から読み込んだ管路・ケース選択肢
-  const [excelPipes, setExcelPipes] = useState<Pipe[]>([]);
-  const [excelCases, setExcelCases] = useState<CalculationCase[]>([]);
   const [selectedExcelCase, setSelectedExcelCase] = useState<string>("");
   const [inputSource, setInputSource] = useState<"demo" | "excel">("demo");
+
+  // Excel データが新しく読み込まれたら自動切替
+  const [lastExcelLen, setLastExcelLen] = useState(0);
+  if (excelPipes.length > 0 && excelPipes.length !== lastExcelLen) {
+    setLastExcelLen(excelPipes.length);
+    setInputSource("excel");
+    const pipe = excelPipes[0]!;
+    const cas = excelCases[0];
+    setSelectedExcelCase(cas?.id ?? "");
+    setForm((prev) => ({
+      ...prev,
+      innerDiameter: String(pipe.innerDiameter * 1000),
+      wallThickness: String(pipe.wallThickness * 1000),
+      length: String(pipe.length),
+      ...(cas ? {
+        initialVelocity: String(cas.initialVelocity),
+        initialHead: String(cas.initialHead),
+      } : {}),
+      closeTime: "1.0",
+    }));
+  }
 
   function handleDemoChange(id: "01" | "02") {
     setSelectedDemo(id);
@@ -312,28 +333,6 @@ export function WaterhammerCalculator() {
     setForm((prev) => ({ ...prev, [field]: value }));
   }
 
-  // Excel 読み込み完了時: 最初のケースをフォームに反映
-  function handleExcelLoad(data: WorkbookData) {
-    setExcelPipes(data.pipes);
-    setExcelCases(data.cases);
-    setInputSource("excel");
-    if (data.cases.length > 0 && data.pipes.length > 0) {
-      const cas = data.cases[0]!;
-      const pipe = data.pipes[0]!;
-      setSelectedExcelCase(cas.id);
-      setForm((prev) => ({
-        ...prev,
-        innerDiameter: String(pipe.innerDiameter * 1000),
-        wallThickness: String(pipe.wallThickness * 1000),
-        length: String(pipe.length),
-        initialVelocity: String(cas.initialVelocity),
-        initialHead: String(cas.initialHead),
-        closeTime: "1.0", // Excel にはまだ closeTime なし → デフォルト
-      }));
-    }
-  }
-
-  // Excel ケース切替
   function handleExcelCaseChange(caseId: string) {
     setSelectedExcelCase(caseId);
     const cas = excelCases.find((c) => c.id === caseId);
@@ -413,9 +412,6 @@ export function WaterhammerCalculator() {
 
   return (
     <div className="calculator">
-      {/* Excel 入出力パネル */}
-      <ExcelPanel onLoad={handleExcelLoad} />
-
       <section className="card">
         <h2 className="card-title">計算ケース選択</h2>
 
@@ -433,9 +429,9 @@ export function WaterhammerCalculator() {
           <button
             className={`source-tab${inputSource === "excel" ? " source-tab--active" : ""}`}
             onClick={() => setInputSource("excel")}
-            disabled={excelCases.length === 0}
+            disabled={!hasExcel}
           >
-            Excel 読み込みデータ {excelCases.length > 0 ? `(${excelCases.length}件)` : ""}
+            Excel 読み込みデータ {hasExcel ? `(${excelCases.length}件)` : ""}
           </button>
         </div>
 
@@ -458,7 +454,7 @@ export function WaterhammerCalculator() {
           </>
         )}
 
-        {inputSource === "excel" && excelCases.length > 0 && (
+        {inputSource === "excel" && hasExcel && excelCases.length > 0 && (
           <div className="excel-case-select" style={{ marginTop: 12 }}>
             <label className="input-label">ケース選択</label>
             <select

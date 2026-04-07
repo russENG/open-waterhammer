@@ -5,7 +5,7 @@
  */
 
 import * as XLSX from "xlsx";
-import type { Pipe, Node, CalculationCase, PipeType, NodeType, OperationType } from "@open-waterhammer/core";
+import type { Pipe, Node, CalculationCase, MeasurementPoint, PipeType, NodeType, OperationType } from "@open-waterhammer/core";
 import type { ProjectMeta, WorkbookData, ParseResult, ParseError } from "./types.js";
 
 // ─── 内部ヘルパー ─────────────────────────────────────────────────────────────
@@ -28,12 +28,26 @@ function requireNum(v: unknown, label: string, errors: ParseError[], sheet: stri
   return n;
 }
 
+/** 複合ヘッダー "field_id\n(日本語名)" → "field_id" に正規化 */
+function normalizeKey(key: string): string {
+  const idx = key.indexOf("\n");
+  return idx >= 0 ? key.substring(0, idx) : key;
+}
+
 /** シートを { header行の列名 → セル値 }[] の配列に変換 */
 function sheetToRows(ws: XLSX.WorkSheet): Record<string, unknown>[] {
   if (!ws) return [];
-  return XLSX.utils.sheet_to_json<Record<string, unknown>>(ws, {
+  const rows = XLSX.utils.sheet_to_json<Record<string, unknown>>(ws, {
     defval: null,
     raw: false,
+  });
+  // 複合ヘッダー対応: キーを正規化
+  return rows.map(row => {
+    const out: Record<string, unknown> = {};
+    for (const [k, v] of Object.entries(row)) {
+      out[normalizeKey(k)] = v;
+    }
+    return out;
   });
 }
 
@@ -159,7 +173,7 @@ function sectionToRows(
   );
   if (headerIdx === -1) return [];
 
-  const headers = raw[headerIdx]!.map((h) => str(h));
+  const headers = raw[headerIdx]!.map((h) => normalizeKey(str(h)));
   const result: Record<string, unknown>[] = [];
 
   for (let i = headerIdx + 1; i < raw.length; i++) {
@@ -243,6 +257,48 @@ function parseCases(wb: XLSX.WorkBook, errors: ParseError[]): CalculationCase[] 
   return cases;
 }
 
+// ─── 測点シート ──────────────────────────────────────────────────────────────
+
+function parseMeasurementPoints(wb: XLSX.WorkBook, errors: ParseError[]): MeasurementPoint[] {
+  const ws = wb.Sheets["測点データ"] ?? wb.Sheets["measurement_points"];
+  if (!ws) {
+    // 測点シートは任意（後方互換のため）
+    return [];
+  }
+
+  const rows = sheetToRows(ws);
+  const points: MeasurementPoint[] = [];
+
+  for (let i = 0; i < rows.length; i++) {
+    const row = rows[i]!;
+    const rowNum = i + 2;
+
+    const id = str(row["point_id"] ?? row["測点ID"]);
+    if (!id) continue;
+
+    const pt: MeasurementPoint = {
+      id,
+      horizontalDistance: requireNum(row["horizontal_distance"] ?? row["単距離 Lh"], "単距離", errors, "測点データ", rowNum),
+      groundLevel: requireNum(row["ground_level"] ?? row["地盤高 GL"], "地盤高", errors, "測点データ", rowNum),
+      pipeCenterHeight: requireNum(row["pipe_center_height"] ?? row["管中心高 FH"], "管中心高", errors, "測点データ", rowNum),
+      pipeLength: requireNum(row["pipe_length"] ?? row["管長 SL"], "管長", errors, "測点データ", rowNum),
+      flowRate: requireNum(row["flow_rate"] ?? row["流量 Q"], "流量", errors, "測点データ", rowNum),
+      diameter: requireNum(row["diameter"] ?? row["管径 D"], "管径", errors, "測点データ", rowNum),
+      roughnessC: requireNum(row["roughness_c"] ?? row["流速係数 CI"], "流速係数", errors, "測点データ", rowNum),
+      bendLossCoeff: num(row["bend_loss_coeff"] ?? row["湾曲損失係数 fb"]) ?? 0,
+      valveLossCoeff: num(row["valve_loss_coeff"] ?? row["バルブ損失係数 fv"]) ?? 0,
+      branchLossCoeff: num(row["branch_loss_coeff"] ?? row["直角分流損失係数 fβ"]) ?? 0,
+    };
+    const ptName = str(row["point_name"] ?? row["測点名"]);
+    if (ptName) pt.name = ptName;
+    const other = num(row["other_loss"] ?? row["その他損失"]);
+    if (other !== undefined) pt.otherLoss = other;
+    points.push(pt);
+  }
+
+  return points;
+}
+
 // ─── メイン ──────────────────────────────────────────────────────────────────
 
 /**
@@ -261,7 +317,7 @@ export function parseWorkbook(buffer: ArrayBuffer | Buffer): ParseResult {
   } catch (e) {
     errors.push({ sheet: "(global)", message: `ファイルの読み取りに失敗しました: ${e}` });
     return {
-      data: { meta: { projectName: "", standardId: "" }, pipes: [], nodes: [], cases: [] },
+      data: { meta: { projectName: "", standardId: "" }, pipes: [], nodes: [], cases: [], measurementPoints: [] },
       errors,
       warnings,
     };
@@ -270,13 +326,14 @@ export function parseWorkbook(buffer: ArrayBuffer | Buffer): ParseResult {
   const meta = parseMeta(wb, errors);
   const { pipes, nodes } = parseNetwork(wb, errors);
   const cases = parseCases(wb, errors);
+  const measurementPoints = parseMeasurementPoints(wb, errors);
 
   if (pipes.length === 0) {
     warnings.push("管路データが0件です。networkシートを確認してください。");
   }
 
   return {
-    data: { meta, pipes, nodes, cases },
+    data: { meta, pipes, nodes, cases, measurementPoints },
     errors,
     warnings,
   };

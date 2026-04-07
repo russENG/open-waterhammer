@@ -15,6 +15,7 @@ import {
   DEMO_CASE_01_CASE,
   DEMO_CASE_02_PIPE,
   DEMO_CASE_02_CASE,
+  DEMO_MEASUREMENT_POINTS,
 } from "@open-waterhammer/sample-data";
 
 // ─── Props ───────────────────────────────────────────────────────────────────
@@ -22,11 +23,13 @@ import {
 export interface ExcelPanelProps {
   /** アップロード成功時に呼び出す */
   onLoad: (data: WorkbookData) => void;
+  /** 読み込み済みデータ（レポート出力用） */
+  loadedData?: WorkbookData | null;
 }
 
 // ─── コンポーネント ───────────────────────────────────────────────────────────
 
-export function ExcelPanel({ onLoad }: ExcelPanelProps) {
+export function ExcelPanel({ onLoad, loadedData }: ExcelPanelProps) {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [status, setStatus] = useState<"idle" | "loading" | "ok" | "error">("idle");
   const [errors, setErrors] = useState<ParseError[]>([]);
@@ -46,6 +49,7 @@ export function ExcelPanel({ onLoad }: ExcelPanelProps) {
       pipes: [DEMO_CASE_01_PIPE, DEMO_CASE_02_PIPE],
       nodes: [],
       cases: [DEMO_CASE_01_CASE, DEMO_CASE_02_CASE],
+      measurementPoints: DEMO_MEASUREMENT_POINTS,
     });
 
     const blob = new Blob([buf], {
@@ -55,6 +59,45 @@ export function ExcelPanel({ onLoad }: ExcelPanelProps) {
     const a = document.createElement("a");
     a.href = url;
     a.download = "waterhammer-template.xlsx";
+    a.click();
+    URL.revokeObjectURL(url);
+  }
+
+  // ─── レポート出力 ───────────────────────────────────────────────────────────
+
+  async function handleReportDownload() {
+    if (!loadedData) return;
+
+    const { generateReport } = await getExcelIO();
+    const { calcLongitudinalHydraulic } = await import("@open-waterhammer/core");
+
+    // 縦断計算を実行（測点データがある場合）
+    const hydraulicResults = [];
+    if (loadedData.measurementPoints.length > 0) {
+      // デフォルト条件で計算（ユーザーが条件を調整するのはStep 1のUI側）
+      const result = calcLongitudinalHydraulic({
+        points: loadedData.measurementPoints,
+        staticWaterLevel: 0, // 仮値 — 要改善
+        waterhammerRatio: 0.4,
+        caseName: "計画最大流量",
+      });
+      hydraulicResults.push(result);
+    }
+
+    const buf = generateReport({
+      meta: loadedData.meta,
+      data: loadedData,
+      results: [], // 水撃圧計算結果は別途
+      hydraulicResults: hydraulicResults.length > 0 ? hydraulicResults : undefined,
+    });
+
+    const blob = new Blob([buf], {
+      type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `waterhammer-report-${loadedData.meta.projectName || "unnamed"}.xlsx`;
     a.click();
     URL.revokeObjectURL(url);
   }
@@ -149,6 +192,19 @@ export function ExcelPanel({ onLoad }: ExcelPanelProps) {
             )}
           </div>
         </div>
+        {/* レポート出力 */}
+        {loadedData && (
+          <div className="excel-action-group">
+            <div className="excel-action-label">レポート出力</div>
+            <button className="btn btn--secondary" onClick={handleReportDownload}>
+              <span className="btn-icon">↓</span>
+              計算結果レポートをダウンロード (.xlsx)
+            </button>
+            <p className="excel-action-note">
+              読み込んだデータと計算結果を成果品様式で出力します。
+            </p>
+          </div>
+        )}
       </div>
 
       {/* 結果表示 */}

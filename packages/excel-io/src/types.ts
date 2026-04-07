@@ -3,7 +3,7 @@
  * シートスキーマ: docs/excel-template-spec.md 参照
  */
 
-import type { Pipe, Node, CalculationCase } from "@open-waterhammer/core";
+import type { Pipe, Node, CalculationCase, MeasurementPoint } from "@open-waterhammer/core";
 
 /** 案件情報（meta シート） */
 export interface ProjectMeta {
@@ -22,6 +22,8 @@ export interface WorkbookData {
   pipes: Pipe[];
   nodes: Node[];
   cases: CalculationCase[];
+  /** 測点データ（水理計算書用） */
+  measurementPoints: MeasurementPoint[];
 }
 
 /** 読み取りエラー情報 */

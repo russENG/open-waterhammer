@@ -12,6 +12,7 @@ import {
   headToMpa,
 } from "@open-waterhammer/core";
 import type { Pipe, MocResult } from "@open-waterhammer/core";
+import type { WorkbookData } from "@open-waterhammer/excel-io";
 import { DEMO_CASE_01_PIPE } from "@open-waterhammer/sample-data";
 import { MocEnvelopeChart } from "./MocEnvelopeChart";
 import { MocTimeChart } from "./MocTimeChart";
@@ -97,7 +98,9 @@ const DEVICE_INFO: Record<DeviceTab, { label: string; desc: string; basis: strin
 
 // ═══════════════════════════════════════════════════════════════════════════════
 
-export function ProtectionCalculator() {
+export function ProtectionCalculator({ excelData }: { excelData?: WorkbookData | null }) {
+  const excelPipes = excelData?.pipes ?? [];
+
   const [deviceTab, setDeviceTab] = useState<DeviceTab>("air_chamber");
   const [base, setBase] = useState<BaseForm>(defaultBase);
   const [acForm, setAcForm] = useState<AirChamberForm>({ V_air0: "0.5", H_air0: "50", polytropicIndex: "1.2" });
@@ -107,6 +110,19 @@ export function ProtectionCalculator() {
 
   const [snapWithIdx, setSnapWithIdx] = useState(0);
   const [snapWithoutIdx, setSnapWithoutIdx] = useState(0);
+
+  // Excel データが読み込まれたら管路諸元を反映
+  const [lastExcelLen, setLastExcelLen] = useState(0);
+  if (excelPipes.length > 0 && excelPipes.length !== lastExcelLen) {
+    setLastExcelLen(excelPipes.length);
+    const pipe = excelPipes[0]!;
+    setBase((f) => ({
+      ...f,
+      innerDiameter: String(pipe.innerDiameter * 1000),
+      wallThickness: String(pipe.wallThickness * 1000),
+      length: String(pipe.length),
+    }));
+  }
 
   function updBase<K extends keyof BaseForm>(k: K, v: BaseForm[K]) {
     setBase((f) => ({ ...f, [k]: v }));
@@ -126,9 +142,10 @@ export function ProtectionCalculator() {
     const sd = parseFloat(base.shutdownTime);
     const N = Math.max(4, Math.min(40, parseInt(base.nReaches, 10) || 10));
     if ([D, t, L, Q0, H0, Hs, sd].some(isNaN) || D <= 0 || Q0 <= 0 || H0 <= 0) return null;
-    const pipe: Pipe = { ...DEMO_PIPE, innerDiameter: D, wallThickness: t, length: L };
+    const basePipe = excelPipes.length > 0 ? excelPipes[0]! : DEMO_PIPE;
+    const pipe: Pipe = { ...basePipe, innerDiameter: D, wallThickness: t, length: L };
     return { pipe, Q0, H0, Hs, sd, N };
-  }, [base]);
+  }, [base, excelPipes]);
 
   // ── 防護なし（ベースライン） ──────────────────────────────────────────────
   const resultWithout = useMemo<MocResult | null>(() => {

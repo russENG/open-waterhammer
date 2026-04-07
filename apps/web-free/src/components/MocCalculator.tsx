@@ -11,6 +11,7 @@ import {
   headToMpa,
 } from "@open-waterhammer/core";
 import type { Pipe } from "@open-waterhammer/core";
+import type { WorkbookData } from "@open-waterhammer/excel-io";
 import {
   DEMO_CASE_01_PIPE,
   DEMO_CASE_01_CASE,
@@ -73,17 +74,57 @@ function n(v: number, d = 2): string { return v.toFixed(d); }
 
 // ─── コンポーネント ───────────────────────────────────────────────────────────
 
-export function MocCalculator() {
+export function MocCalculator({ excelData }: { excelData?: WorkbookData | null }) {
+  const excelPipes = excelData?.pipes ?? [];
+  const excelCases = excelData?.cases ?? [];
+  const hasExcel = excelPipes.length > 0;
+
   const [demoId, setDemoId] = useState<"01" | "02">("01");
   const [form, setForm] = useState<FormState>(
     () => demoToForm(DEMO_CASE_01_PIPE, DEMO_CASE_01_CASE, DEMO_CASE_01_CLOSE_TIME),
   );
   const [snapIdx, setSnapIdx] = useState(0);
+  const [inputSource, setInputSource] = useState<"demo" | "excel">("demo");
+  const [selectedExcelCase, setSelectedExcelCase] = useState<string>("");
+
+  // Excel データが新しく読み込まれたら自動切替
+  const [lastExcelLen, setLastExcelLen] = useState(0);
+  if (excelPipes.length > 0 && excelPipes.length !== lastExcelLen) {
+    setLastExcelLen(excelPipes.length);
+    setInputSource("excel");
+    const pipe = excelPipes[0]!;
+    const cas = excelCases[0];
+    setSelectedExcelCase(cas?.id ?? "");
+    setForm({
+      innerDiameter: String(pipe.innerDiameter * 1000),
+      wallThickness: String(pipe.wallThickness * 1000),
+      length: String(pipe.length),
+      initialVelocity: cas ? String(cas.initialVelocity) : "1.0",
+      initialHead: cas ? String(cas.initialHead) : "30",
+      closeTime: "1.0",
+      nReaches: "10",
+    });
+    setSnapIdx(0);
+  }
 
   function selectDemo(id: "01" | "02") {
     const d = DEMO_CASES.find((c) => c.id === id)!;
     setDemoId(id);
+    setInputSource("demo");
     setForm(demoToForm(d.pipe, d.cas, d.closeTime));
+    setSnapIdx(0);
+  }
+
+  function selectExcelCase(caseId: string) {
+    setSelectedExcelCase(caseId);
+    const cas = excelCases.find((c) => c.id === caseId);
+    if (cas) {
+      setForm((f) => ({
+        ...f,
+        initialVelocity: String(cas.initialVelocity),
+        initialHead: String(cas.initialHead),
+      }));
+    }
     setSnapIdx(0);
   }
 
@@ -102,17 +143,23 @@ export function MocCalculator() {
     const tv = parseFloat(form.closeTime);
     const N = Math.max(4, Math.min(40, parseInt(form.nReaches, 10) || 10));
 
-    const demo = DEMO_CASES.find((d) => d.id === demoId)!;
+    let basePipe: Pipe;
+    if (inputSource === "excel" && excelPipes.length > 0) {
+      basePipe = excelPipes[0]!;
+    } else {
+      basePipe = DEMO_CASES.find((d) => d.id === demoId)!.pipe;
+    }
+
     const pipe: Pipe = {
-      ...demo.pipe,
-      innerDiameter: isNaN(D) ? demo.pipe.innerDiameter : D,
-      wallThickness: isNaN(t) ? demo.pipe.wallThickness : t,
-      length: isNaN(L) ? demo.pipe.length : L,
+      ...basePipe,
+      innerDiameter: isNaN(D) ? basePipe.innerDiameter : D,
+      wallThickness: isNaN(t) ? basePipe.wallThickness : t,
+      length: isNaN(L) ? basePipe.length : L,
     };
 
     if (isNaN(V0) || isNaN(H0) || isNaN(tv) || V0 < 0 || H0 <= 0 || tv < 0) return null;
     return { pipe, V0, H0, tv, N };
-  }, [form, demoId]);
+  }, [form, demoId, inputSource, excelPipes]);
 
   // ── MOC 実行 ──────────────────────────────────────────────────────────────
   const result = useMemo(() => {
@@ -159,18 +206,44 @@ export function MocCalculator() {
     <div className="card">
       <h2 className="card-title">特性曲線法（MOC）非定常水撃圧計算（§8.4）</h2>
 
-      {/* デモ選択 */}
-      <div className="demo-tabs" style={{ marginBottom: 16 }}>
-        {DEMO_CASES.map((d) => (
-          <button
-            key={d.id}
-            className={`demo-tab${demoId === d.id ? " demo-tab--active" : ""}`}
-            onClick={() => selectDemo(d.id)}
-          >
-            {d.label}
-          </button>
-        ))}
+      {/* ソース切替 */}
+      <div className="source-tabs" style={{ marginBottom: 12 }}>
+        <button
+          className={`source-tab${inputSource === "demo" ? " source-tab--active" : ""}`}
+          onClick={() => { setInputSource("demo"); selectDemo(demoId); }}
+        >デモデータ</button>
+        <button
+          className={`source-tab${inputSource === "excel" ? " source-tab--active" : ""}`}
+          onClick={() => setInputSource("excel")}
+          disabled={!hasExcel}
+        >Excel 読み込みデータ {hasExcel ? `(${excelCases.length}件)` : ""}</button>
       </div>
+
+      {inputSource === "demo" && (
+        <div className="demo-tabs" style={{ marginBottom: 16 }}>
+          {DEMO_CASES.map((d) => (
+            <button
+              key={d.id}
+              className={`demo-tab${demoId === d.id ? " demo-tab--active" : ""}`}
+              onClick={() => selectDemo(d.id)}
+            >
+              {d.label}
+            </button>
+          ))}
+        </div>
+      )}
+
+      {inputSource === "excel" && hasExcel && excelCases.length > 0 && (
+        <div style={{ marginBottom: 16 }}>
+          <label className="input-label">ケース選択</label>
+          <select className="input" value={selectedExcelCase}
+            onChange={(e) => selectExcelCase(e.target.value)}>
+            {excelCases.map((c) => (
+              <option key={c.id} value={c.id}>{c.name}</option>
+            ))}
+          </select>
+        </div>
+      )}
 
       <div className="calculator-body">
         {/* ── 左: 入力 ── */}

@@ -60,6 +60,34 @@
   text-align: right;
 }
 
+.header-actions {
+  display: flex;
+  gap: 4px;
+}
+
+.header-nav-btn {
+  background: transparent;
+  border: 1px solid rgba(255,255,255,0.25);
+  color: #aab;
+  padding: 6px 14px;
+  border-radius: 6px;
+  font-size: 0.82rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.header-nav-btn:hover {
+  background: rgba(255,255,255,0.1);
+  color: #fff;
+}
+
+.header-nav-btn--active {
+  background: #3a86ff;
+  border-color: #3a86ff;
+  color: #fff;
+}
+
 /* ─── ナビゲーション ─────────────────────────────────────────────────────── */
 
 .nav {
@@ -123,6 +151,11 @@
   width: 100%;
   margin: 0 auto;
   padding: 24px 24px 40px;
+}
+
+.main--fullwidth {
+  max-width: none;
+  padding: 0;
   box-sizing: border-box;
 }
 
@@ -138,6 +171,29 @@
 
 .footer p {
   margin: 0;
+}
+
+.footer-links {
+  margin-top: 8px;
+}
+
+.footer-link {
+  background: none;
+  border: none;
+  color: #6688aa;
+  cursor: pointer;
+  font-size: 0.75rem;
+  text-decoration: underline;
+  padding: 0;
+}
+
+.footer-link:hover {
+  color: #aabbcc;
+}
+
+.footer-sep {
+  margin: 0 8px;
+  color: #445566;
 }
 
 /* ─── カード ─────────────────────────────────────────────────────────────── */
@@ -572,6 +628,45 @@
 
 .btn--secondary:hover {
   background: #e2e8f0;
+}
+
+.btn--primary {
+  background: #3182ce;
+  color: #fff;
+}
+
+.btn--primary:hover {
+  background: #2b6cb0;
+}
+
+.btn--small {
+  padding: 4px 10px;
+  font-size: 0.78rem;
+}
+
+.btn--danger {
+  background: #fed7d7;
+  color: #c53030;
+  border: 1px solid #feb2b2;
+}
+
+.btn--danger:hover {
+  background: #feb2b2;
+}
+
+.input--narrow {
+  width: 90px;
+  padding: 4px 6px;
+  font-size: 0.82rem;
+}
+
+select.input--narrow {
+  width: auto;
+  min-width: 90px;
+}
+
+.pipe-table-selected {
+  background: #ebf8ff !important;
 }
 
 .btn-icon {
@@ -1483,6 +1578,330 @@
   flex-shrink: 0;
 }
 
+/* ─── 管路諸元テーブル ─────────────────────────────────────────────────── */
+
+.pipe-table-wrap {
+  padding: 4px 0;
+}
+
+.pipe-table-title {
+  font-size: 0.85rem;
+  font-weight: 700;
+  color: #2d3748;
+  margin: 0 0 8px;
+}
+
+.pipe-table-scroll {
+  overflow-x: auto;
+}
+
+.pipe-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.8rem;
+}
+
+.pipe-table th {
+  background: #f7fafc;
+  border: 1px solid #e2e8f0;
+  padding: 6px 10px;
+  font-weight: 600;
+  color: #4a5568;
+  white-space: nowrap;
+  text-align: left;
+}
+
+.pipe-table td {
+  border: 1px solid #e2e8f0;
+  padding: 5px 10px;
+  white-space: nowrap;
+}
+
+.pipe-table-num {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.pipe-table tbody tr:hover {
+  background: #f0f7ff;
+}
+
+.pipe-table-computed {
+  color: #2563eb;
+  font-weight: 600;
+}
+
+.pipe-table-formula-toggle {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 10px;
+  padding: 6px 0;
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: #718096;
+  font-family: inherit;
+}
+
+.pipe-table-formula-toggle:hover {
+  color: #2d3748;
+}
+
+.pipe-table-formula {
+  margin-top: 8px;
+  padding: 16px;
+  background: #f7fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  font-size: 0.82rem;
+}
+
+.pipe-table-formula-block {
+  margin-bottom: 14px;
+}
+
+.pipe-table-formula-eq {
+  font-family: "Times New Roman", serif;
+  font-size: 1.05rem;
+  font-weight: 600;
+  color: #2d3748;
+  margin: 0 0 8px;
+  padding: 8px 12px;
+  background: #fff;
+  border: 1px solid #e2e8f0;
+  border-radius: 6px;
+  display: inline-block;
+}
+
+.pipe-table-formula-vars {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 2px 12px;
+  margin: 0;
+  font-size: 0.8rem;
+}
+
+.pipe-table-formula-vars dt {
+  font-family: "Times New Roman", serif;
+  font-weight: 600;
+  color: #4a5568;
+  text-align: right;
+}
+
+.pipe-table-formula-vars dd {
+  margin: 0;
+  color: #718096;
+}
+
+.pipe-table-formula-note {
+  margin: 12px 0 0;
+  padding: 8px 12px;
+  background: #fffbeb;
+  border-left: 3px solid #d69e2e;
+  border-radius: 0 6px 6px 0;
+  font-size: 0.78rem;
+  color: #744210;
+  line-height: 1.5;
+}
+
+/* ─── ステップアコーディオン ────────────────────────────────────────────── */
+
+.wh-steps {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-bottom: 24px;
+}
+
+.wh-steps-label {
+  font-size: 0.72rem;
+  font-weight: 700;
+  color: #a0aec0;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  padding: 4px 0;
+}
+
+.wh-step {
+  background: #fff;
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  overflow: hidden;
+  transition: border-color 0.15s;
+}
+
+.wh-step--prereq {
+  border-left: 3px solid #a0aec0;
+}
+
+.wh-step--prereq .wh-step-num {
+  background: #718096;
+}
+
+.wh-step--open {
+  border-color: #3a86ff;
+}
+
+.wh-step--prereq.wh-step--open {
+  border-color: #718096;
+  border-left-color: #718096;
+}
+
+/* 前提ステップ本文 */
+
+.prereq-content {
+  padding: 8px 0;
+}
+
+.prereq-heading {
+  font-size: 0.88rem;
+  font-weight: 700;
+  color: #2d3748;
+  margin: 0 0 16px;
+}
+
+.prereq-checklist {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: 16px;
+}
+
+.prereq-group {
+  background: #f7fafc;
+  border-radius: 8px;
+  padding: 14px 16px;
+}
+
+.prereq-group-title {
+  font-size: 0.78rem;
+  font-weight: 700;
+  color: #4a5568;
+  margin: 0 0 8px;
+}
+
+.prereq-items {
+  margin: 0;
+  padding-left: 18px;
+  font-size: 0.82rem;
+  color: #4a5568;
+  line-height: 1.7;
+}
+
+.prereq-items--ordered {
+  list-style-type: decimal;
+}
+
+.prereq-note {
+  font-size: 0.75rem;
+  color: #a0aec0;
+  margin: 14px 0 0;
+  line-height: 1.5;
+}
+
+.wh-step-header {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 16px 20px;
+  background: none;
+  border: none;
+  cursor: pointer;
+  text-align: left;
+  font-family: inherit;
+}
+
+.wh-step-header:hover {
+  background: #f7fafc;
+}
+
+.wh-step-left {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-shrink: 0;
+}
+
+.wh-step-num {
+  font-size: 0.72rem;
+  font-weight: 700;
+  background: #3a86ff;
+  color: #fff;
+  padding: 2px 8px;
+  border-radius: 4px;
+  white-space: nowrap;
+}
+
+.wh-step-title-block {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+}
+
+.wh-step-title {
+  font-size: 0.95rem;
+  font-weight: 700;
+  color: #2d3748;
+  white-space: nowrap;
+}
+
+.wh-step-ref {
+  font-size: 0.75rem;
+  color: #718096;
+  white-space: nowrap;
+}
+
+.wh-step-desc {
+  flex: 1;
+  font-size: 0.8rem;
+  color: #718096;
+  min-width: 0;
+}
+
+.wh-step-toggle {
+  flex-shrink: 0;
+  font-size: 0.75rem;
+  color: #a0aec0;
+}
+
+.wh-step-body {
+  padding: 0 20px 20px;
+  border-top: 1px solid #edf2f7;
+}
+
+.wh-guide {
+  margin-top: 8px;
+  margin-bottom: 24px;
+}
+
+.wh-guide-toggle {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 20px;
+  background: #f7fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  cursor: pointer;
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: #718096;
+  font-family: inherit;
+  text-align: left;
+}
+
+.wh-guide-toggle:hover {
+  background: #edf2f7;
+}
+
+.wh-guide-body {
+  margin-top: 8px;
+}
+
 /* ─── 手法選定フロー ─────────────────────────────────────────────────────── */
 
 .msf-wrap {
@@ -1859,4 +2278,490 @@
 .msf-result-desc {
   font-size: 0.84rem;
   color: #718096;
+}
+
+/* ─── 水理計算書テーブル（成果品様式準拠） ────────────────────────────────── */
+
+.hydraulic-table-scroll {
+  overflow-x: auto;
+  margin: 12px 0;
+}
+
+.hydraulic-table {
+  border-collapse: collapse;
+  font-size: 0.72rem;
+  white-space: nowrap;
+  min-width: 1400px;
+}
+
+.hydraulic-table th {
+  background: #1a1a2e;
+  color: #fff;
+  padding: 4px 6px;
+  text-align: center;
+  font-weight: 600;
+  border: 1px solid #2d3748;
+  line-height: 1.2;
+  vertical-align: middle;
+}
+
+.hydraulic-table th small {
+  font-weight: 400;
+  opacity: 0.7;
+  display: block;
+}
+
+.hydraulic-table td {
+  padding: 3px 6px;
+  border: 1px solid #e2e8f0;
+}
+
+.hydraulic-td-id {
+  font-weight: 600;
+  background: #f7fafc;
+  position: sticky;
+  left: 0;
+  z-index: 1;
+}
+
+.hydraulic-td-num {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.hydraulic-td-computed {
+  color: #2563eb;
+  font-weight: 600;
+}
+
+.hydraulic-td-hl {
+  font-weight: 600;
+}
+
+.hydraulic-td-pressure {
+  color: #7c3aed;
+  font-weight: 600;
+}
+
+.hydraulic-td-design {
+  color: #dc2626;
+  font-weight: 700;
+  background: #fef2f2;
+}
+
+.hydraulic-table tbody tr:hover {
+  background: #ebf5ff;
+}
+
+.hydraulic-table-header1 th,
+.hydraulic-table-header2 th {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+}
+
+/* ─── 縦断計算 補助 ───────────────────────────────────────────────────────── */
+
+.long-calc-summary {
+  font-size: 0.82rem;
+  color: #3a86ff;
+  font-weight: 600;
+  padding: 8px 12px;
+  background: #ebf5ff;
+  border-radius: 6px;
+  margin-top: 12px;
+}
+
+.card-title-sub {
+  font-size: 0.8rem;
+  font-weight: 400;
+  color: #718096;
+  margin-left: 8px;
+}
+
+.source-tab-badge {
+  font-size: 0.6rem;
+  background: #e2e8f0;
+  color: #718096;
+  padding: 1px 5px;
+  border-radius: 3px;
+  margin-left: 6px;
+}
+
+/* ─── レポート生成パネル ─────────────────────────────────────────────────── */
+
+.report-preview {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+  gap: 12px;
+  margin: 12px 0;
+}
+
+.report-preview-item {
+  background: #f7fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.report-preview-label {
+  font-size: 0.75rem;
+  color: #718096;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.report-preview-value {
+  font-size: 1.1rem;
+  font-weight: 700;
+  color: #1a1a2e;
+}
+
+.report-preview-value--hl {
+  color: #dc2626;
+}
+
+.report-sheets {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 8px 0 16px;
+}
+
+.report-sheet-item {
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
+  padding: 8px 12px;
+  background: #f7fafc;
+  border-radius: 6px;
+  border-left: 3px solid #3a86ff;
+}
+
+.report-sheet-name {
+  font-weight: 700;
+  font-size: 0.85rem;
+  color: #1a1a2e;
+  white-space: nowrap;
+}
+
+.report-sheet-desc {
+  font-size: 0.78rem;
+  color: #718096;
+}
+
+.report-download-btn {
+  width: 100%;
+  margin-top: 8px;
+  padding: 14px;
+  font-size: 1rem;
+  font-weight: 700;
+}
+
+/* ─── 基準照会ページ ─────────────────────────────────────────────────────── */
+
+.ref-page {
+  display: flex;
+  height: calc(100vh - 60px);
+  overflow: hidden;
+}
+
+.ref-menu {
+  width: 320px;
+  min-width: 280px;
+  background: #fff;
+  border-right: 1px solid #e2e8f0;
+  overflow-y: auto;
+  padding: 20px 16px;
+  flex-shrink: 0;
+}
+
+.ref-menu-title {
+  font-size: 1.1rem;
+  font-weight: 700;
+  color: #1a1a2e;
+  margin: 0 0 6px;
+}
+
+.ref-menu-desc {
+  font-size: 0.78rem;
+  color: #718096;
+  margin: 0 0 16px;
+  line-height: 1.5;
+}
+
+/* 文書パネル */
+
+.ref-sources-panel {
+  margin-bottom: 20px;
+  padding-bottom: 16px;
+  border-bottom: 1px solid #e2e8f0;
+}
+
+.ref-section-label {
+  font-size: 0.7rem;
+  font-weight: 700;
+  color: #a0aec0;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  margin: 0 0 8px;
+}
+
+.ref-source-row {
+  margin-bottom: 4px;
+}
+
+.ref-source-btn {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  text-align: left;
+  padding: 8px 12px;
+  border: 1px solid #e2e8f0;
+  border-left: 3px solid;
+  border-radius: 6px;
+  background: #fff;
+  color: #4a5568;
+  font-size: 0.82rem;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.ref-source-btn:hover {
+  background: #f7fafc;
+}
+
+.ref-source-btn--active {
+  background: #ebf5ff;
+  border-color: #cbd5e0;
+}
+
+.ref-source-btn--unloaded {
+  opacity: 0.7;
+}
+
+.ref-source-short {
+  font-weight: 700;
+  font-size: 0.78rem;
+  min-width: 32px;
+}
+
+.ref-source-name {
+  flex: 1;
+  font-weight: 600;
+  font-size: 0.82rem;
+}
+
+.ref-source-status {
+  font-size: 0.68rem;
+  font-weight: 700;
+  padding: 1px 6px;
+  border-radius: 4px;
+}
+
+.ref-source-status--ok {
+  color: #38a169;
+  background: #f0fff4;
+}
+
+.ref-source-status--none {
+  color: #a0aec0;
+  background: #f7fafc;
+}
+
+.ref-sources-note {
+  font-size: 0.72rem;
+  color: #a0aec0;
+  margin: 8px 0 0;
+  line-height: 1.5;
+}
+
+/* トピック横串メニュー */
+
+.ref-nav {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.ref-cat-group {
+  margin-bottom: 12px;
+}
+
+.ref-cat-label {
+  font-size: 0.7rem;
+  font-weight: 700;
+  color: #a0aec0;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  padding: 8px 0 4px;
+  border-bottom: 1px solid #edf2f7;
+  margin-bottom: 4px;
+}
+
+.ref-topic {
+  margin-bottom: 6px;
+}
+
+.ref-topic-title {
+  font-size: 0.82rem;
+  font-weight: 700;
+  color: #1a1a2e;
+  padding: 4px 0 2px;
+}
+
+.ref-topic-refs {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  padding-left: 4px;
+}
+
+.ref-topic-ref {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+  text-align: left;
+  padding: 5px 8px;
+  border: none;
+  border-radius: 4px;
+  background: transparent;
+  color: #4a5568;
+  font-size: 0.75rem;
+  cursor: pointer;
+  transition: all 0.12s;
+}
+
+.ref-topic-ref:hover {
+  background: #f0f4f8;
+  color: #1a1a2e;
+}
+
+.ref-topic-ref--active {
+  background: #ebf5ff;
+  color: #2563eb;
+  font-weight: 600;
+}
+
+.ref-topic-ref--dim {
+  opacity: 0.5;
+}
+
+.ref-topic-ref-badge {
+  display: inline-block;
+  font-size: 0.62rem;
+  font-weight: 700;
+  color: #fff;
+  padding: 1px 5px;
+  border-radius: 3px;
+  min-width: 28px;
+  text-align: center;
+  flex-shrink: 0;
+}
+
+.ref-topic-ref-note {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ref-topic-ref-page {
+  font-size: 0.66rem;
+  color: #a0aec0;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.ref-topic-ref--active .ref-topic-ref-page {
+  color: #3a86ff;
+}
+
+/* PDF ビューア */
+
+.ref-viewer {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  background: #2d3748;
+  min-width: 0;
+}
+
+.ref-viewer-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 16px;
+  background: #1a1a2e;
+  color: #fff;
+  flex-shrink: 0;
+}
+
+.ref-viewer-badge {
+  display: inline-block;
+  font-size: 0.7rem;
+  font-weight: 700;
+  color: #fff;
+  padding: 2px 8px;
+  border-radius: 4px;
+  flex-shrink: 0;
+}
+
+.ref-viewer-title {
+  font-weight: 700;
+  font-size: 0.88rem;
+}
+
+.ref-viewer-desc {
+  font-size: 0.75rem;
+  color: #8899aa;
+}
+
+.ref-viewer-page {
+  font-size: 0.75rem;
+  color: #3a86ff;
+  font-weight: 700;
+  margin-left: auto;
+}
+
+.ref-viewer-iframe {
+  flex: 1;
+  border: none;
+  width: 100%;
+  background: #4a5568;
+}
+
+.ref-viewer-empty {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+  color: #a0aec0;
+  font-size: 0.9rem;
+}
+
+/* レスポンシブ */
+@media (max-width: 768px) {
+  .ref-page {
+    flex-direction: column;
+    height: auto;
+  }
+  .ref-menu {
+    width: 100%;
+    max-height: 40vh;
+    border-right: none;
+    border-bottom: 1px solid #e2e8f0;
+  }
+  .ref-viewer {
+    height: 60vh;
+  }
 }

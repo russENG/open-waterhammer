@@ -1,90 +1,527 @@
 /**
  * 水撃圧計算ページ
- * §8.3 選定フローに沿って解析手法を選択し、対応するコンポーネントを表示
+ * Excel入出力 → 管路諸元一覧（伝播速度自動算定） → 各ステップ（アコーディオン）の構成
  */
 import { useState } from 'react'
-import { MethodSelectionFlow, type SelectedMethod } from '../components/MethodSelectionFlow'
+import type { Pipe, CalculationCase } from '@open-waterhammer/core'
+import { PIPE_MATERIALS, calcWaveSpeed, calcVibrationPeriod, GRAVITY, BULK_MODULUS_WATER, WATER_UNIT_WEIGHT } from '@open-waterhammer/core'
+import type { WorkbookData } from '@open-waterhammer/excel-io'
+import { ExcelPanel } from '../components/ExcelPanel'
+import { MethodSelectionFlow } from '../components/MethodSelectionFlow'
+import { SteadyFlowCalculator } from '../components/SteadyFlowCalculator'
 import { WaterhammerCalculator } from '../components/WaterhammerCalculator'
 import { EmpiricalCalculator } from '../components/EmpiricalCalculator'
 import { MocCalculator } from '../components/MocCalculator'
+import { NetworkMocCalculator } from '../components/NetworkMocCalculator'
 import { PumpCalculator } from '../components/PumpCalculator'
 import { ProtectionCalculator } from '../components/ProtectionCalculator'
+import { ReportGenerator } from '../components/ReportGenerator'
+import { SessionPanel } from '../components/SessionPanel'
+import { SteadyNetworkCalculator } from '../components/SteadyNetworkCalculator'
+
+interface StepDef {
+  id: string
+  num: string
+  title: string
+  ref: string
+  desc: string
+  /** 前提ステップ（計算機能なし・情報表示のみ） */
+  prerequisite?: boolean
+}
+
+const STEPS: StepDef[] = [
+  {
+    id: 'design-conditions',
+    num: '1',
+    title: '設計条件の整理',
+    ref: '§1〜§3',
+    desc: '計画諸元（計画最大流量・設計水頭等）、路線計画、水源・調整施設の条件を整理する',
+    prerequisite: true,
+  },
+  {
+    id: 'pipe-selection',
+    num: '4.1',
+    title: '管種の決定',
+    ref: '§4.1',
+    desc: '内圧・外圧・土質・施工条件・経済性を考慮し、管種（DCIP, SP, PVC, PE等）を選定する',
+    prerequisite: true,
+  },
+  {
+    id: 'pipe-diameter',
+    num: '4.2',
+    title: '管径の決定',
+    ref: '§4.2',
+    desc: '計画最大流量に対して許容流速（原則3.0 m/s以下）を満たす管径を決定する',
+    prerequisite: true,
+  },
+  {
+    id: 'longitudinal-profile',
+    num: '4.3',
+    title: '管路縦断の設定',
+    ref: '§4.3',
+    desc: '測点ごとの地盤高・管中心高・管路延長を設定し、縦断図を作成する。土被り・管路勾配の確認を含む',
+    prerequisite: true,
+  },
+  {
+    id: 'steady-flow',
+    num: '5.1',
+    title: '定常時の水理計算',
+    ref: '§5.1',
+    desc: '計算手法・計算式及び条件の設定、摩擦損失・局部損失の累積による各測点の動水位・静水圧の算定',
+  },
+  {
+    id: 'wave-speed',
+    num: '5.2',
+    title: '水撃圧の検討',
+    ref: '§5.2',
+    desc: '検討必要区間と推定方法の選定、計算法（ジューコフスキー式・アリエビ式）と経験則による水撃圧の推定・対比',
+  },
+  {
+    id: 'moc',
+    num: '添付',
+    title: '水撃圧計算（特性曲線法）',
+    ref: '添付資料',
+    desc: 'バルブ閉鎖シナリオの時系列水撃圧を特性曲線法（MOC）で数値解析。包絡線図で管路全体の最大・最小水頭を確認',
+  },
+  {
+    id: 'pump',
+    num: '5.4',
+    title: 'その他の非定常時の検討（ポンプ）',
+    ref: '§5.4',
+    desc: 'ポンプ急停止・起動時の過渡解析。GD²（はずみ車効果）慣性方程式による水撃圧の算定',
+  },
+  {
+    id: 'protection',
+    num: '5.2.2',
+    title: '水撃圧の推定結果と対策',
+    ref: '§5.2.2',
+    desc: '許容内圧との照合・対策の要否判定。エアチャンバ・サージタンク・吸気弁等の防護工効果をMOCで定量評価',
+  },
+  {
+    id: 'report',
+    num: '成果',
+    title: '水理計算資料の作成',
+    ref: '成果品様式',
+    desc: '定常時の水理計算書・水撃圧検討書を成果品様式に準拠したExcel帳票として出力',
+  },
+]
+
+function PrerequisiteContent({ id }: { id: string }) {
+  switch (id) {
+    case 'design-conditions':
+      return (
+        <div className="prereq-content">
+          <h3 className="prereq-heading">以下の設計条件を整理してから水理計算に進む</h3>
+          <div className="prereq-checklist">
+            <div className="prereq-group">
+              <h4 className="prereq-group-title">計画諸元</h4>
+              <ul className="prereq-items">
+                <li>計画最大流量 Q [L/s]</li>
+                <li>設計水頭（静水位 HWL）[m]</li>
+                <li>計画最小流量（必要に応じて）</li>
+              </ul>
+            </div>
+            <div className="prereq-group">
+              <h4 className="prereq-group-title">路線条件</h4>
+              <ul className="prereq-items">
+                <li>水源（ダム・ため池・河川取水等）の位置・水位</li>
+                <li>末端（ファームポンド・調整池・分水工等）の位置・条件</li>
+                <li>路線延長・主要経過地の地形条件</li>
+              </ul>
+            </div>
+            <div className="prereq-group">
+              <h4 className="prereq-group-title">システム構成</h4>
+              <ul className="prereq-items">
+                <li>自然圧送 or ポンプ圧送の別</li>
+                <li>調圧水槽（サージタンク）・エアチャンバの有無</li>
+                <li>分岐・合流の有無</li>
+                <li>制水弁・減圧弁等の配置計画</li>
+              </ul>
+            </div>
+          </div>
+          <p className="prereq-note">
+            基準照会ページで設計基準 第1章〜第3章の関連記述を参照できます。
+          </p>
+        </div>
+      )
+    case 'pipe-selection':
+      return (
+        <div className="prereq-content">
+          <h3 className="prereq-heading">管種選定の検討事項</h3>
+          <div className="prereq-checklist">
+            <div className="prereq-group">
+              <h4 className="prereq-group-title">選定の考慮要因</h4>
+              <ul className="prereq-items">
+                <li>内圧条件（設計内圧に対する耐圧性能）</li>
+                <li>外圧条件（土被り・活荷重に対するたわみ・座屈）</li>
+                <li>土質・地下水条件（腐食性・電食・不同沈下）</li>
+                <li>施工条件（口径・重量・接合方法・現場溶接の要否）</li>
+                <li>経済性（管体費・施工費・維持管理費のLCC比較）</li>
+              </ul>
+            </div>
+            <div className="prereq-group">
+              <h4 className="prereq-group-title">主な管種と特性</h4>
+              <ul className="prereq-items">
+                <li><strong>DCIP</strong>（ダクタイル鋳鉄管）— 高耐圧・耐食性、農業用で最も一般的</li>
+                <li><strong>SP</strong>（鋼管）— 大口径・高圧に適、溶接継手、防食塗覆装が必要</li>
+                <li><strong>PVC</strong>（硬質塩化ビニル管）— 軽量・耐食・安価、中小口径向け</li>
+                <li><strong>PE</strong>（ポリエチレン管）— 可撓性・耐震性、融着継手</li>
+                <li><strong>FRP</strong>（強化プラスチック管）— 軽量・耐食、大口径可</li>
+              </ul>
+            </div>
+          </div>
+          <p className="prereq-note">
+            管種により伝播速度（波速 a）が大きく異なり、水撃圧の算定に直接影響します。
+            基準照会ページで技術書 第3章を参照してください。
+          </p>
+        </div>
+      )
+    case 'pipe-diameter':
+      return (
+        <div className="prereq-content">
+          <h3 className="prereq-heading">管径決定の手順</h3>
+          <div className="prereq-checklist">
+            <div className="prereq-group">
+              <h4 className="prereq-group-title">決定手順</h4>
+              <ol className="prereq-items prereq-items--ordered">
+                <li>計画最大流量 Q と許容流速 V<sub>max</sub> から必要最小内径を算出: D ≥ √(4Q / πV<sub>max</sub>)</li>
+                <li>管種の規格口径から仮口径を選定</li>
+                <li>実流速 V = Q / A を確認（原則 V ≤ 3.0 m/s）</li>
+                <li>損失水頭を概算し、設計水頭内に収まることを確認</li>
+                <li>必要に応じて口径を変更し、経済比較を行う</li>
+              </ol>
+            </div>
+            <div className="prereq-group">
+              <h4 className="prereq-group-title">留意事項</h4>
+              <ul className="prereq-items">
+                <li>口径変更点（異径接合部）は水撃圧の反射点となる</li>
+                <li>維持管理（通水断面の確保）の観点から過小口径は避ける</li>
+                <li>最終的な管径は §5.1 の水理計算結果を踏まえて確定する</li>
+              </ul>
+            </div>
+          </div>
+        </div>
+      )
+    case 'longitudinal-profile':
+      return (
+        <div className="prereq-content">
+          <h3 className="prereq-heading">管路縦断の設定項目</h3>
+          <div className="prereq-checklist">
+            <div className="prereq-group">
+              <h4 className="prereq-group-title">測点ごとの設定項目</h4>
+              <ul className="prereq-items">
+                <li>測点名（IP番号等）</li>
+                <li>単距離・追加距離 [m]</li>
+                <li>地盤高 GL [m]</li>
+                <li>管中心高 [m]（= GL − 土被り − D/2）</li>
+                <li>管路延長 [m]（水平距離と異なる場合あり）</li>
+              </ul>
+            </div>
+            <div className="prereq-group">
+              <h4 className="prereq-group-title">確認事項</h4>
+              <ul className="prereq-items">
+                <li>土被り（原則 1.2 m 以上、道路下は道路管理者基準に従う）</li>
+                <li>管路勾配と空気溜まり発生のリスク</li>
+                <li>屈曲部の局部損失係数（曲管 f<sub>b</sub>・弁 f<sub>v</sub>・分岐 f<sub>β</sub>）</li>
+                <li>弁室・水管橋・伏越し等の特殊構造物の位置</li>
+              </ul>
+            </div>
+          </div>
+          <p className="prereq-note">
+            Excelテンプレートの「測点データ」シートにこれらの情報を入力します。
+            ページ上部のExcel入出力からテンプレートをダウンロードしてください。
+          </p>
+        </div>
+      )
+    default:
+      return null
+  }
+}
+
+function StepContent({ id, excelData }: { id: string; excelData: WorkbookData | null }) {
+  switch (id) {
+    case 'steady-flow': return (
+      <>
+        <SteadyFlowCalculator excelData={excelData} />
+        <div style={{ marginTop: 24 }}>
+          <SteadyNetworkCalculator />
+        </div>
+      </>
+    )
+    case 'wave-speed': return (
+      <>
+        <WaterhammerCalculator excelData={excelData} />
+        <div style={{ marginTop: 16 }}>
+          <EmpiricalCalculator />
+        </div>
+      </>
+    )
+    case 'moc': return (
+      <>
+        <MocCalculator excelData={excelData} />
+        <div style={{ marginTop: 24 }}>
+          <NetworkMocCalculator />
+        </div>
+      </>
+    )
+    case 'pump': return <PumpCalculator excelData={excelData} />
+    case 'protection': return <ProtectionCalculator excelData={excelData} />
+    case 'report': return (
+      <>
+        <ReportGenerator excelData={excelData} />
+        <div style={{ marginTop: 24 }}>
+          <SessionPanel />
+        </div>
+      </>
+    )
+    default: return null
+  }
+}
+
+// ─── 管路諸元テーブル（伝播速度自動算定付き） ─────────────────────────────────
+
+function PipeTable({ pipes, cases }: { pipes: Pipe[]; cases: CalculationCase[] }) {
+  const [formulaOpen, setFormulaOpen] = useState(false)
+
+  return (
+    <div className="pipe-table-wrap">
+      <h3 className="pipe-table-title">管路諸元（{pipes.length}区間）</h3>
+      <div className="pipe-table-scroll">
+        <table className="pipe-table">
+          <thead>
+            <tr>
+              <th>管路ID</th>
+              <th>管路名</th>
+              <th>管種</th>
+              <th>内径 D [mm]</th>
+              <th>管厚 t [mm]</th>
+              <th>延長 L [m]</th>
+              <th>粗度係数 C</th>
+              <th>伝播速度 a [m/s]</th>
+              <th>振動周期 T₀ [s]</th>
+            </tr>
+          </thead>
+          <tbody>
+            {pipes.map((p) => {
+              const a = calcWaveSpeed(p)
+              const T0 = calcVibrationPeriod(p.length, a)
+              return (
+                <tr key={p.id}>
+                  <td>{p.id}</td>
+                  <td>{p.name ?? ''}</td>
+                  <td>{PIPE_MATERIALS[p.pipeType]?.name ?? p.pipeType}</td>
+                  <td className="pipe-table-num">{(p.innerDiameter * 1000).toFixed(0)}</td>
+                  <td className="pipe-table-num">{(p.wallThickness * 1000).toFixed(1)}</td>
+                  <td className="pipe-table-num">{p.length.toFixed(0)}</td>
+                  <td className="pipe-table-num">{p.roughnessCoeff}</td>
+                  <td className="pipe-table-num pipe-table-computed">{a.toFixed(1)}</td>
+                  <td className="pipe-table-num pipe-table-computed">{T0.toFixed(3)}</td>
+                </tr>
+              )
+            })}
+          </tbody>
+        </table>
+      </div>
+
+      {/* 伝播速度算定式の解説 */}
+      <button
+        className="pipe-table-formula-toggle"
+        onClick={() => setFormulaOpen(v => !v)}
+        aria-expanded={formulaOpen}
+      >
+        {formulaOpen ? '▲' : '▼'} 伝播速度の算定式（§8.3.1 / 式 8.2.4）
+      </button>
+      {formulaOpen && (
+        <div className="pipe-table-formula">
+          <div className="pipe-table-formula-block">
+            <p className="pipe-table-formula-eq">
+              a = 1 / √( w₀/g × (1/K + D·C₁/(E<sub>s</sub>·t)) )
+            </p>
+            <dl className="pipe-table-formula-vars">
+              <dt>a</dt><dd>圧力波伝播速度 [m/s]</dd>
+              <dt>w₀</dt><dd>水の単位体積重量 = {WATER_UNIT_WEIGHT} kN/m³</dd>
+              <dt>g</dt><dd>重力加速度 = {GRAVITY} m/s²</dd>
+              <dt>K</dt><dd>水の体積弾性係数 = {(BULK_MODULUS_WATER / 1e6).toFixed(2)} × 10⁶ kN/m²</dd>
+              <dt>D</dt><dd>管内径 [m]</dd>
+              <dt>t</dt><dd>管厚 [m]</dd>
+              <dt>E<sub>s</sub></dt><dd>管材のヤング係数 [kN/m²]（管種により異なる — 表-8.2.1）</dd>
+              <dt>C₁</dt><dd>埋設状況係数（通常 1.0）</dd>
+            </dl>
+          </div>
+          <div className="pipe-table-formula-block">
+            <p className="pipe-table-formula-eq">
+              T₀ = 4L / a
+            </p>
+            <dl className="pipe-table-formula-vars">
+              <dt>T₀</dt><dd>圧力振動周期 [s] — 水撃圧が管路を1往復する時間の2倍</dd>
+              <dt>L</dt><dd>管路延長 [m]</dd>
+            </dl>
+          </div>
+          <p className="pipe-table-formula-note">
+            管種が柔らかいほど（E<sub>s</sub> が小さいほど）伝播速度は低下します。
+            鋼管で約 1,200 m/s、ダクタイル鋳鉄管で約 1,100 m/s、塩ビ管で約 400 m/s が目安です。
+            多段口径管路では区間ごとに a を算定し、各計算ステップで個別に使用します。
+          </p>
+        </div>
+      )}
+
+      {cases.length > 0 && (
+        <>
+          <h3 className="pipe-table-title" style={{ marginTop: 16 }}>計算ケース（{cases.length}件）</h3>
+          <div className="pipe-table-scroll">
+            <table className="pipe-table">
+              <thead>
+                <tr>
+                  <th>ケースID</th>
+                  <th>ケース名</th>
+                  <th>操作種別</th>
+                  <th>初期流速 V₀ [m/s]</th>
+                  <th>初期水頭 H₀ [m]</th>
+                </tr>
+              </thead>
+              <tbody>
+                {cases.map((c) => (
+                  <tr key={c.id}>
+                    <td>{c.id}</td>
+                    <td>{c.name}</td>
+                    <td>{c.operationType}</td>
+                    <td className="pipe-table-num">{c.initialVelocity.toFixed(2)}</td>
+                    <td className="pipe-table-num">{c.initialHead.toFixed(1)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </>
+      )}
+    </div>
+  )
+}
+
+// ─── メインページ ──────────────────────────────────────────────────────────────
 
 export function WaterHammerPage() {
-  const [method, setMethod] = useState<SelectedMethod | null>(null)
+  const [openSteps, setOpenSteps] = useState<Set<string>>(new Set())
+  const [guideOpen, setGuideOpen] = useState(false)
+  const [excelData, setExcelData] = useState<WorkbookData | null>(null)
 
-  const showEmpirical = method === 'empirical'
-  const showNumerical = method === 'numerical-nopump' || method === 'numerical-pump'
-  const showPump = method === 'numerical-pump'
+  function toggleStep(id: string) {
+    setOpenSteps(prev => {
+      const next = new Set(prev)
+      if (next.has(id)) next.delete(id)
+      else next.add(id)
+      return next
+    })
+  }
+
+  function handleExcelLoad(data: WorkbookData) {
+    setExcelData(data)
+  }
 
   return (
     <div className="page-waterhammer">
       <div className="page-header">
         <h2 className="page-title">水撃圧計算</h2>
         <p className="page-desc">
-          土地改良設計基準　設計「パイプライン」技術書（令和3年6月改訂）§8 準拠。
-          以下の選定フローに従って解析手法を選択してください。
+          土地改良設計基準　設計「パイプライン」技術書（令和3年6月改訂）§8 準拠
         </p>
       </div>
 
-      {/* 手法選定フロー */}
-      <MethodSelectionFlow onSelect={setMethod} selected={method} />
+      {/* Excel入出力（ページ上部に配置） */}
+      <ExcelPanel onLoad={handleExcelLoad} loadedData={excelData} />
 
-      {/* 手法選定後のみ表示 */}
-      {method && (
-        <>
-          {/* 伝播速度計算は常に先頭 */}
-          <div className="wh-section-label">
-            <span className="wh-section-step">Step 1</span>
-            伝播速度の算定（§8.3.1）
-          </div>
-          <WaterhammerCalculator />
-
-          {/* 経験則 */}
-          {showEmpirical && (
-            <>
-              <div className="wh-section-label">
-                <span className="wh-section-step">Step 2</span>
-                経験則による水撃圧の算定（§8.3.2）
-              </div>
-              <EmpiricalCalculator />
-            </>
+      {/* 読み込んだ管路諸元の表示 */}
+      {excelData && excelData.pipes.length > 0 && (
+        <section className="card">
+          <PipeTable pipes={excelData.pipes} cases={excelData.cases} />
+          {excelData.measurementPoints.length > 0 && (
+            <div className="long-calc-summary" style={{ marginTop: 12 }}>
+              測点データ: {excelData.measurementPoints.length} 点 読込済
+              （Step 1「縦断計算」タブで水理計算書を作成できます）
+            </div>
           )}
-
-          {/* 数値解析（MOC）*/}
-          {showNumerical && (
-            <>
-              <div className="wh-section-label">
-                <span className="wh-section-step">Step 2</span>
-                特性曲線法（MOC）による水撃圧の解析（§8.4）
-              </div>
-              <MocCalculator />
-            </>
-          )}
-
-          {/* ポンプ解析 */}
-          {showPump && (
-            <>
-              <div className="wh-section-label">
-                <span className="wh-section-step">Step 3</span>
-                ポンプ急停止・起動解析（§8.4.4〜§8.4.5）
-              </div>
-              <PumpCalculator />
-            </>
-          )}
-
-          {/* 防護工解析（数値解析の場合） */}
-          {showNumerical && (
-            <>
-              <div className="wh-section-label">
-                <span className="wh-section-step">{showPump ? 'Step 4' : 'Step 3'}</span>
-                水撃圧防護工の選定・効果検証（§8.4.6）
-              </div>
-              <ProtectionCalculator />
-            </>
-          )}
-        </>
+        </section>
       )}
+
+      {/* 前提ステップ（設計条件・管路諸元） */}
+      <div className="wh-steps">
+        <div className="wh-steps-label">前提：管路諸元の決定</div>
+        {STEPS.filter(s => s.prerequisite).map((step) => {
+          const isOpen = openSteps.has(step.id)
+          return (
+            <div key={step.id} className={`wh-step wh-step--prereq${isOpen ? ' wh-step--open' : ''}`}>
+              <button
+                className="wh-step-header"
+                onClick={() => toggleStep(step.id)}
+                aria-expanded={isOpen}
+              >
+                <div className="wh-step-left">
+                  <span className="wh-step-num">{step.num}</span>
+                  <div className="wh-step-title-block">
+                    <span className="wh-step-title">{step.title}</span>
+                    <span className="wh-step-ref">{step.ref}</span>
+                  </div>
+                </div>
+                <span className="wh-step-desc">{step.desc}</span>
+                <span className="wh-step-toggle">{isOpen ? '▲' : '▼'}</span>
+              </button>
+              {isOpen && (
+                <div className="wh-step-body">
+                  <PrerequisiteContent id={step.id} />
+                </div>
+              )}
+            </div>
+          )
+        })}
+      </div>
+
+      {/* 計算ステップ */}
+      <div className="wh-steps">
+        <div className="wh-steps-label">水理計算・水撃圧検討</div>
+        {STEPS.filter(s => !s.prerequisite).map((step) => {
+          const isOpen = openSteps.has(step.id)
+          return (
+            <div key={step.id} className={`wh-step${isOpen ? ' wh-step--open' : ''}`}>
+              <button
+                className="wh-step-header"
+                onClick={() => toggleStep(step.id)}
+                aria-expanded={isOpen}
+              >
+                <div className="wh-step-left">
+                  <span className="wh-step-num">{step.num}</span>
+                  <div className="wh-step-title-block">
+                    <span className="wh-step-title">{step.title}</span>
+                    <span className="wh-step-ref">{step.ref}</span>
+                  </div>
+                </div>
+                <span className="wh-step-desc">{step.desc}</span>
+                <span className="wh-step-toggle">{isOpen ? '▲' : '▼'}</span>
+              </button>
+              {isOpen && (
+                <div className="wh-step-body">
+                  <StepContent id={step.id} excelData={excelData} />
+                </div>
+              )}
+            </div>
+          )
+        })}
+      </div>
+
+      {/* 手法選定ガイド（参考） */}
+      <div className="wh-guide">
+        <button
+          className="wh-guide-toggle"
+          onClick={() => setGuideOpen(v => !v)}
+          aria-expanded={guideOpen}
+        >
+          {guideOpen ? '▲' : '▼'} 参考：手法選定ガイド（§8.3.2 準拠）
+        </button>
+        {guideOpen && (
+          <div className="wh-guide-body">
+            <MethodSelectionFlow onSelect={() => {}} selected={null} />
+          </div>
+        )}
+      </div>
     </div>
   )
 }

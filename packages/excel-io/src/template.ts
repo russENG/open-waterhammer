@@ -4,7 +4,7 @@
  */
 
 import * as XLSX from "xlsx";
-import type { Pipe, Node, CalculationCase } from "@open-waterhammer/core";
+import type { Pipe, Node, CalculationCase, MeasurementPoint } from "@open-waterhammer/core";
 import type { ProjectMeta } from "./types.js";
 
 interface TemplateOptions {
@@ -12,6 +12,7 @@ interface TemplateOptions {
   pipes?: Pipe[];
   nodes?: Node[];
   cases?: CalculationCase[];
+  measurementPoints?: MeasurementPoint[];
 }
 
 // ─── シート生成ヘルパー ───────────────────────────────────────────────────────
@@ -32,10 +33,10 @@ function makeMetaSheet(meta: Partial<ProjectMeta>): XLSX.WorkSheet {
 
 function makePipeRows(pipes: Pipe[]): unknown[][] {
   const header = [
-    "テーブル", "pipe_id", "pipe_name",
-    "start_node", "end_node", "pipe_type",
-    "inner_diameter", "wall_thickness", "length",
-    "roughness_coeff", "youngs_modulus", "c1_coeff",
+    "テーブル", "pipe_id\n(管路ID)", "pipe_name\n(管路名)",
+    "start_node\n(始点節点)", "end_node\n(終点節点)", "pipe_type\n(管種コード)",
+    "inner_diameter\n(内径 [m])", "wall_thickness\n(管厚 [m])", "length\n(延長 [m])",
+    "roughness_coeff\n(粗度係数)", "youngs_modulus\n(ヤング係数 [kN/m²])", "c1_coeff\n(埋設状況係数)",
   ];
   const dataRows = pipes.map((p) => [
     "pipe", p.id, p.name ?? "",
@@ -48,8 +49,8 @@ function makePipeRows(pipes: Pipe[]): unknown[][] {
 
 function makeNodeRows(nodes: Node[]): unknown[][] {
   const header = [
-    "テーブル", "node_id", "node_name",
-    "elevation", "node_type", "hydraulic_grade",
+    "テーブル", "node_id\n(節点ID)", "node_name\n(節点名)",
+    "elevation\n(標高 [m])", "node_type\n(節点種別)", "hydraulic_grade\n(動水位 [m])",
   ];
   const dataRows = nodes.map((n) => [
     "node", n.id, n.name ?? "",
@@ -73,9 +74,9 @@ function makeNetworkSheet(pipes: Pipe[], nodes: Node[]): XLSX.WorkSheet {
 
 function makeCasesSheet(cases: CalculationCase[]): XLSX.WorkSheet {
   const header = [
-    "case_id", "case_name", "description",
-    "operation_type", "target_facility_id",
-    "initial_flow", "initial_head",
+    "case_id\n(ケースID)", "case_name\n(ケース名)", "description\n(説明)",
+    "operation_type\n(操作種別)", "target_facility_id\n(対象施設ID)",
+    "initial_flow\n(初期流速 V₀ [m/s])", "initial_head\n(初期水頭 H₀ [m])",
   ];
   const dataRows = cases.map((c) => [
     c.id, c.name, c.description ?? "",
@@ -85,6 +86,27 @@ function makeCasesSheet(cases: CalculationCase[]): XLSX.WorkSheet {
   return XLSX.utils.aoa_to_sheet([header, ...dataRows]);
 }
 
+function makeMeasurementPointsSheet(points: MeasurementPoint[]): XLSX.WorkSheet {
+  const header = [
+    "point_id\n(測点ID)", "point_name\n(測点名)",
+    "horizontal_distance\n(単距離 Lh [m])", "ground_level\n(地盤高 GL [m])", "pipe_center_height\n(管中心高 FH [m])",
+    "pipe_length\n(管長 SL [m])", "flow_rate\n(流量 Q [m³/s])", "diameter\n(管径 D [m])", "roughness_c\n(流速係数 CI)",
+    "bend_loss_coeff\n(湾曲損失係数 fb)", "valve_loss_coeff\n(バルブ損失係数 fv)", "branch_loss_coeff\n(直角分流損失係数 fβ)",
+    "other_loss\n(その他損失 [m])",
+  ];
+
+  const dataRows = points.map((pt) => [
+    pt.id, pt.name ?? "",
+    pt.horizontalDistance, pt.groundLevel, pt.pipeCenterHeight,
+    pt.pipeLength, pt.flowRate, pt.diameter, pt.roughnessC,
+    pt.bendLossCoeff, pt.valveLossCoeff, pt.branchLossCoeff,
+    pt.otherLoss ?? "",
+  ]);
+
+  const rows = [header, ...dataRows];
+  return XLSX.utils.aoa_to_sheet(rows);
+}
+
 function makeInstructionSheet(): XLSX.WorkSheet {
   const rows = [
     ["open-waterhammer 入力帳票"],
@@ -92,6 +114,7 @@ function makeInstructionSheet(): XLSX.WorkSheet {
     ["■ シート構成"],
     ["案件情報", "プロジェクト名・採用基準などのメタ情報"],
     ["管路・節点", "管路区間と節点の諸元（Pipeテーブル・Nodeテーブル）"],
+    ["測点データ", "水理計算書用の測点データ（成果品様式準拠）"],
     ["ケース設定", "計算ケースの一覧（操作種別・初期条件）"],
     [""],
     ["■ 管種コード一覧（pipe_type 欄に入力）"],
@@ -112,6 +135,21 @@ function makeInstructionSheet(): XLSX.WorkSheet {
     ["length（管路延長）", "m"],
     ["initial_flow（初期流速）", "m/s"],
     ["initial_head（初期圧力水頭）", "m"],
+    [""],
+    [""],
+    ["■ 測点データの入力"],
+    ["測点ID", "測点名称（IP点番号、No等）"],
+    ["単距離 Lh", "前測点からの水平距離 [m]"],
+    ["地盤高 GL", "地盤標高 [m]"],
+    ["管中心高 FH", "管路中心の標高 [m]（= GL - 土被り - D/2）"],
+    ["管長 SL", "実延長（斜距離）[m]"],
+    ["流量 Q", "設計流量 [m³/s]"],
+    ["管径 D", "管内径 [m]"],
+    ["流速係数 CI", "Hazen-Williams 粗度係数 C"],
+    ["湾曲損失係数 fb", "曲管・ベンド部の損失係数 [-]"],
+    ["バルブ損失係数 fv", "バルブ・弁類の損失係数 [-]"],
+    ["直角分流損失係数 fβ", "分水工の損失係数 [-]"],
+    ["その他損失", "上記以外の局部損失水頭 [m]（直接入力）"],
     [""],
     ["準拠: 土地改良設計基準パイプライン（令和3年6月改訂）"],
     ["ライセンス: AGPL-3.0-or-later"],
@@ -141,6 +179,7 @@ export function generateTemplate(options: TemplateOptions = {}): ArrayBuffer {
   XLSX.utils.book_append_sheet(wb, makeInstructionSheet(), "使い方");
   XLSX.utils.book_append_sheet(wb, makeMetaSheet(options.meta ?? {}), "案件情報");
   XLSX.utils.book_append_sheet(wb, makeNetworkSheet(options.pipes ?? [], options.nodes ?? []), "管路・節点");
+  XLSX.utils.book_append_sheet(wb, makeMeasurementPointsSheet(options.measurementPoints ?? []), "測点データ");
   XLSX.utils.book_append_sheet(wb, makeCasesSheet(options.cases ?? []), "ケース設定");
 
   return XLSX.write(wb, { type: "array", bookType: "xlsx" }) as ArrayBuffer;

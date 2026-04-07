@@ -11,6 +11,7 @@ import {
   headToMpa,
 } from "@open-waterhammer/core";
 import type { Pipe } from "@open-waterhammer/core";
+import type { WorkbookData } from "@open-waterhammer/excel-io";
 import { DEMO_CASE_01_PIPE } from "@open-waterhammer/sample-data";
 import { MocEnvelopeChart } from "./MocEnvelopeChart";
 import { MocTimeChart } from "./MocTimeChart";
@@ -77,7 +78,9 @@ function Field({ label, value, unit, onChange, min = "0" }: {
 
 // ═══════════════════════════════════════════════════════════════════════════════
 
-export function PumpCalculator() {
+export function PumpCalculator({ excelData }: { excelData?: WorkbookData | null }) {
+  const excelPipes = excelData?.pipes ?? [];
+
   const [tab, setTab] = useState<ScenarioTab>("trip");
   const [tripForm, setTripForm] = useState<TripForm>(defaultTripForm);
   const [startForm, setStartForm] = useState<StartForm>(defaultStartForm);
@@ -85,6 +88,20 @@ export function PumpCalculator() {
   const [playing, setPlaying] = useState(false);
   const playRef = useRef(playing);
   playRef.current = playing;
+
+  // Excel データが読み込まれたら管路諸元を反映
+  const [lastExcelLen, setLastExcelLen] = useState(0);
+  if (excelPipes.length > 0 && excelPipes.length !== lastExcelLen) {
+    setLastExcelLen(excelPipes.length);
+    const pipe = excelPipes[0]!;
+    const pipeFields = {
+      innerDiameter: String(pipe.innerDiameter * 1000),
+      wallThickness: String(pipe.wallThickness * 1000),
+      length: String(pipe.length),
+    };
+    setTripForm((f) => ({ ...f, ...pipeFields }));
+    setStartForm((f) => ({ ...f, ...pipeFields }));
+  }
 
   function updateTrip<K extends keyof TripForm>(k: K, v: TripForm[K]) {
     setTripForm((f) => ({ ...f, [k]: v }));
@@ -106,7 +123,8 @@ export function PumpCalculator() {
     const sd = parseFloat(tripForm.shutdownTime);
     const N = Math.max(4, Math.min(40, parseInt(tripForm.nReaches, 10) || 10));
     if ([D, t, L, Q0, H0, Hs, sd].some(isNaN) || D <= 0 || L <= 0 || Q0 <= 0 || H0 <= 0) return null;
-    const pipe: Pipe = { ...DEMO_PIPE, innerDiameter: D, wallThickness: t, length: L };
+    const basePipe = excelPipes.length > 0 ? excelPipes[0]! : DEMO_PIPE;
+    const pipe: Pipe = { ...basePipe, innerDiameter: D, wallThickness: t, length: L };
 
     // GD² パラメータ
     let gd2Params: { GD2: number; N0: number; eta0: number } | null = null;
@@ -120,7 +138,7 @@ export function PumpCalculator() {
     }
 
     return { pipe, Q0, H0, Hs, sd, N, checkValve: tripForm.checkValve, gd2Params };
-  }, [tripForm]);
+  }, [tripForm, excelPipes]);
 
   const parsedStart = useMemo(() => {
     const D = parseFloat(startForm.innerDiameter) / 1000;
@@ -133,9 +151,10 @@ export function PumpCalculator() {
     const sh = parseFloat(startForm.staticHead);
     const N = Math.max(4, Math.min(40, parseInt(startForm.nReaches, 10) || 10));
     if ([D, t, L, Qr, H0, Hs, st].some(isNaN) || D <= 0 || L <= 0 || Qr <= 0 || H0 <= 0) return null;
-    const pipe: Pipe = { ...DEMO_PIPE, innerDiameter: D, wallThickness: t, length: L };
+    const basePipe = excelPipes.length > 0 ? excelPipes[0]! : DEMO_PIPE;
+    const pipe: Pipe = { ...basePipe, innerDiameter: D, wallThickness: t, length: L };
     return { pipe, Qr, H0, Hs, st, sh: isNaN(sh) ? 0 : sh, N };
-  }, [startForm]);
+  }, [startForm, excelPipes]);
 
   // ── MOC 実行 ─────────────────────────────────────────────────────────────
   const resultTrip = useMemo(() => {

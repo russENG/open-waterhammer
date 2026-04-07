@@ -49,6 +49,7 @@ const data: WorkbookData = {
       initialHead: 30.0,
     },
   ],
+  measurementPoints: [],
 };
 
 const results: SimpleFormulaResult[] = [
@@ -96,7 +97,7 @@ describe("generateReport", () => {
     const wb = XLSX.read(buf, { type: "buffer" });
     const ws = wb.Sheets["計算結果"]!;
     // title=4行 + header=1行 + data=2行 → 7行
-    const rows = XLSX.utils.sheet_to_json<Record<string, unknown>>(ws, { header: 1 }) as unknown[][];
+    const rows = XLSX.utils.sheet_to_json(ws, { header: 1 }) as unknown as unknown[][];
     assert.ok(rows.length >= 7, `rows.length = ${rows.length}`);
   });
 
