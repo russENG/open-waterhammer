@@ -26,20 +26,22 @@ interface PdfSource {
   color: string
 }
 
-/** 3文書の初期定義 */
+/** 3文書の初期定義 — いずれも農林水産省が公式PDFを無償公開している */
 const INITIAL_SOURCES: PdfSource[] = [
   {
     id: 'kijun',
     shortLabel: '基準',
     fullLabel: '設計基準（本編）',
-    description: '土地改良事業計画設計基準 設計「パイプライン」（令和3年3月改定）',
+    description: '土地改良事業計画設計基準 設計「パイプライン」基準・運用・運用の解説（令和3年改定）',
+    onlineUrl: 'https://www.maff.go.jp/j/nousin/pipeline/attach/pdf/pipeline-67.pdf',
     color: '#e53e3e',
   },
   {
     id: 'gijutsusho',
     shortLabel: '技術書',
     fullLabel: '技術書',
-    description: '土地改良事業計画設計基準 設計「パイプライン」技術書（令和3年6月改訂）',
+    description: '土地改良事業計画設計基準 設計「パイプライン」技術書（令和3年改定 / 通知・基準書・技術書 p1〜p273 統合版）',
+    onlineUrl: 'https://www.maff.go.jp/j/nousin/pipeline/attach/pdf/pipeline-66.pdf',
     color: '#38a169',
   },
   {
@@ -283,7 +285,8 @@ export function ReferencePage() {
             )
           })}
           <p className="ref-sources-note">
-            設計基準・技術書はローカルPDFを登録してください。成果品様式はオンラインで閲覧可能です。
+            3文書はすべて農林水産省の公式PDF（無償公開）を直接参照しています。
+            社内回線等でオンラインPDFにアクセスできない場合は、ローカルPDFを登録すると上書きできます。
           </p>
         </div>
 
