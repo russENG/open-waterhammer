@@ -8,7 +8,7 @@
  * MOCソルバーで一括解析する。
  */
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import {
   runMoc,
   calcWaveSpeed,
@@ -245,12 +245,23 @@ function buildBC(n: NodeRow): BoundaryCondition | null {
 
 // ─── コンポーネント ──────────────────────────────────────────────────────────
 
-export function NetworkMocCalculator() {
+export interface NetworkMocCalculatorProps {
+  /** ネットワーク・結果を親に通知（セッション保存用） */
+  onResult?: (network: MocNetwork | null, result: MocResult | null) => void;
+}
+
+export function NetworkMocCalculator({ onResult }: NetworkMocCalculatorProps = {}) {
   const demo = makeDemoTJunction();
   const [pipes, setPipes] = useState<PipeRow[]>(demo.pipes);
   const [nodes, setNodes] = useState<NodeRow[]>(demo.nodes);
   const [tMax, setTMax] = useState("20");
+  const [network, setNetwork] = useState<MocNetwork | null>(null);
   const [result, setResult] = useState<MocResult | null>(null);
+
+  // 親へ通知（セッション保存用）
+  useEffect(() => {
+    onResult?.(network, result);
+  }, [network, result, onResult]);
   const [errors, setErrors] = useState<string[]>([]);
   const [selectedPipe, setSelectedPipe] = useState("");
   const [selectedNode, setSelectedNode] = useState("");
@@ -300,6 +311,7 @@ export function NetworkMocCalculator() {
     const built = buildNetwork(pipes, nodes);
     if (!built) {
       setErrors(["管路データがありません"]);
+      setNetwork(null);
       setResult(null);
       return;
     }
@@ -311,6 +323,7 @@ export function NetworkMocCalculator() {
     try {
       const t = parseFloat(tMax);
       const res = runMoc(built.network, { tMax: isNaN(t) ? undefined : t });
+      setNetwork(built.network);
       setResult(res);
       // 最初の管路を選択
       const firstPipeId = Object.keys(res.pipes)[0];
@@ -318,7 +331,8 @@ export function NetworkMocCalculator() {
       const firstNodeId = Object.keys(res.nodes)[0];
       if (firstNodeId) setSelectedNode(firstNodeId);
     } catch (e: any) {
-      setErrors(prev => [...prev, `MOC実行エラー: ${e.message}`]);
+      setErrors(prev => [...prev, `数値解析 実行エラー: ${e.message}`]);
+      setNetwork(null);
       setResult(null);
     }
   }
@@ -327,6 +341,7 @@ export function NetworkMocCalculator() {
     const d = makeDemoTJunction();
     setPipes(d.pipes);
     setNodes(d.nodes);
+    setNetwork(null);
     setResult(null);
     setErrors([]);
   }
@@ -338,7 +353,7 @@ export function NetworkMocCalculator() {
   return (
     <div className="calculator">
       <section className="card">
-        <h2 className="card-title">管路網 MOC 解析</h2>
+        <h2 className="card-title">管路網 水撃圧 数値解析</h2>
         <p className="card-title-sub">分岐・合流を含む管路網の非定常解析</p>
 
         {/* デモ読み込み */}
@@ -471,7 +486,7 @@ export function NetworkMocCalculator() {
           <div className="input-field" style={{ display: "inline-flex", gap: 12, alignItems: "center" }}>
             <label className="input-label">シミュレーション時間 [s]</label>
             <input className="input" type="number" value={tMax} onChange={e => setTMax(e.target.value)} style={{ width: 100 }} />
-            <button className="btn btn--primary" onClick={handleRun}>MOC 解析実行</button>
+            <button className="btn btn--primary" onClick={handleRun}>数値解析 実行</button>
           </div>
         </div>
 

@@ -86,8 +86,9 @@ export function calcDarcyWeisbach(input: DarcyWeisbachInput): SteadyFlowResult {
 /**
  * Hazen-Williams 式による摩擦損失水頭
  *
- *   V = 0.84935 × C × R^0.63 × I^0.54
- *   → I = (V / (0.84935 × C × R^0.63))^(1/0.54)
+ * 技術書 式(7.2.2):
+ *   V = 0.849 × C × R^0.63 × I^0.54
+ *   → I = (V / (0.849 × C × R^0.63))^(1/0.54)
  *   → hf = I × L
  *
  * @param input 管路諸元・流量・粗度係数 C
@@ -100,7 +101,7 @@ export function calcHazenWilliams(input: HazenWilliamsInput): SteadyFlowResult {
   const A = Math.PI * D * D / 4;
   const V = Q / A;
   const R = D / 4; // 円管の動水半径 = D/4
-  const I = Math.pow(V / (0.84935 * C * Math.pow(R, 0.63)), 1 / 0.54);
+  const I = Math.pow(V / (0.849 * C * Math.pow(R, 0.63)), 1 / 0.54);
   const hf = I * L;
   const velocityHead = V * V / (2 * GRAVITY);
   const elevationDiff = downstreamElevation - upstreamElevation;

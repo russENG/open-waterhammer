@@ -493,7 +493,7 @@ export function ProtectionCalculator({ excelData }: { excelData?: WorkbookData |
       <div className="result-footer" style={{ marginTop: 16 }}>
         <p className="result-standard">
           出典: <RefLink topicId="waterhammer-result">技術書 §8.3 / §8.5（防護設備・剛体理論）</RefLink>　／
-          特性曲線法（MOC）・弾性管モデル・準定常 H-W 摩擦
+          数値解析（特性曲線法）・弾性管モデル・準定常 H-W 摩擦
         </p>
       </div>
     </div>

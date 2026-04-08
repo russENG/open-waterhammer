@@ -3,14 +3,14 @@
  * 出典: 土地改良設計基準　設計「パイプライン」技術書（令和3年6月改訂）§8.4
  */
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import {
   runMocSinglePipe,
   calcWaveSpeed,
   joukowsky,
   headToMpa,
 } from "@open-waterhammer/core";
-import type { Pipe } from "@open-waterhammer/core";
+import type { Pipe, MocResult } from "@open-waterhammer/core";
 import type { WorkbookData } from "@open-waterhammer/excel-io";
 import {
   DEMO_CASE_01_PIPE,
@@ -76,7 +76,13 @@ function n(v: number, d = 2): string { return v.toFixed(d); }
 
 // ─── コンポーネント ───────────────────────────────────────────────────────────
 
-export function MocCalculator({ excelData }: { excelData?: WorkbookData | null }) {
+export interface MocCalculatorProps {
+  excelData?: WorkbookData | null;
+  /** 計算結果を親に通知（セッション保存用） */
+  onResult?: (result: MocResult | null) => void;
+}
+
+export function MocCalculator({ excelData, onResult }: MocCalculatorProps) {
   const excelPipes = excelData?.pipes ?? [];
   const excelCases = excelData?.cases ?? [];
   const hasExcel = excelPipes.length > 0;
@@ -178,6 +184,11 @@ export function MocCalculator({ excelData }: { excelData?: WorkbookData | null }
     });
   }, [parsed]);
 
+  // 親へ通知（セッション保存用）
+  useEffect(() => {
+    onResult?.(result);
+  }, [result, onResult]);
+
   // ── 単一管路結果の取り出し ────────────────────────────────────────────────
   const pipe0 = result?.pipes["pipe_0"] ?? null;
   const upstreamNodeH   = result?.nodes["upstream"]   ?? null;
@@ -206,7 +217,7 @@ export function MocCalculator({ excelData }: { excelData?: WorkbookData | null }
 
   return (
     <div className="card">
-      <h2 className="card-title">特性曲線法（MOC）非定常水撃圧計算（§8.4）</h2>
+      <h2 className="card-title">水撃圧 数値解析（§8.4）</h2>
 
       {/* ソース切替 */}
       <div className="source-tabs" style={{ marginBottom: 12 }}>
@@ -363,7 +374,7 @@ export function MocCalculator({ excelData }: { excelData?: WorkbookData | null }
                     </span>
                   </div>
                   <div className="result-row">
-                    <span className="result-label">MOC/Joukowsky 比</span>
+                    <span className="result-label">数値解析/Joukowsky 比</span>
                     <span className="result-value">
                       {((Hmax_downstream - parsed.H0) / joukowskyRef.dH * 100).toFixed(1)}<span className="result-unit"> %</span>
                     </span>

@@ -86,12 +86,12 @@ export function DesignFlowPage() {
                   <span className="flow-item-desc">§8.4.2 簡易式（直接水撃・間接水撃）による概算。設計初期の適否判定に使用</span>
                 </div>
                 <div className="flow-item flow-item--active">
-                  <span className="flow-item-name">特性曲線法（MOC）解析</span>
+                  <span className="flow-item-name">数値解析（特性曲線法）</span>
                   <span className="flow-item-desc">§8.4.3〜8.4.6 バルブ閉鎖・ポンプ急停止・起動シナリオの詳細時系列解析</span>
                 </div>
                 <div className="flow-item flow-item--active">
                   <span className="flow-item-name">防護工の選定・検証</span>
-                  <span className="flow-item-desc">エアチャンバ・サージタンク・吸気弁・減圧弁の効果をMOCで定量評価</span>
+                  <span className="flow-item-desc">エアチャンバ・サージタンク・吸気弁・減圧弁の効果を数値解析で定量評価</span>
                 </div>
               </div>
             </div>

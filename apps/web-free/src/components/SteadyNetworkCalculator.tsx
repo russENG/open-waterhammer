@@ -311,8 +311,8 @@ export function SteadyNetworkCalculator() {
           </div>
 
           <p className="demo-note" style={{ marginTop: 8 }}>
-            この定常結果をMOC解析の初期条件として使用できます。
-            管路網MOC解析パネルで管路定義・境界条件を設定し、定常流量と水頭を初期値として入力してください。
+            この定常結果を水撃圧 数値解析の初期条件として使用できます。
+            管路網 数値解析パネルで管路定義・境界条件を設定し、定常流量と水頭を初期値として入力してください。
           </p>
         </section>
       )}

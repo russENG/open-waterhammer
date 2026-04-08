@@ -86,7 +86,7 @@ export function AboutPage() {
             <div className="about-scope-item about-scope-active">
               <span className="about-scope-status about-scope-status--active">実装済</span>
               <strong>農業用パイプライン</strong>
-              <span>水撃圧計算（MOC・経験式）</span>
+              <span>水撃圧計算（数値解析・経験式）</span>
             </div>
             <div className="about-scope-item about-scope-planned">
               <span className="about-scope-status about-scope-status--planned">計画中</span>

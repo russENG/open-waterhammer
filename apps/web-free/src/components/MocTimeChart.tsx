@@ -73,7 +73,7 @@ export function MocTimeChart({ downstreamH, H0, HR, vibrationPeriod }: MocTimeCh
         viewBox={`0 0 ${W} ${H_SVG}`}
         width="100%"
         style={{ display: "block", maxWidth: W, fontFamily: "system-ui, sans-serif" }}
-        aria-label="MOC水頭時系列チャート"
+        aria-label="水頭時系列チャート"
       >
         {/* グリッド（Y） */}
         {yTicks.map((h) => {

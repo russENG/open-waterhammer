@@ -2,8 +2,15 @@
  * 水撃圧計算ページ
  * Excel入出力 → 管路諸元一覧（伝播速度自動算定） → 各ステップ（アコーディオン）の構成
  */
-import { useState } from 'react'
-import type { Pipe, CalculationCase } from '@open-waterhammer/core'
+import { useState, useCallback } from 'react'
+import type {
+  Pipe,
+  CalculationCase,
+  MocResult,
+  MocNetwork,
+  LongitudinalHydraulicInput,
+  LongitudinalHydraulicResult,
+} from '@open-waterhammer/core'
 import { PIPE_MATERIALS, calcWaveSpeed, calcVibrationPeriod, GRAVITY, BULK_MODULUS_WATER, WATER_UNIT_WEIGHT } from '@open-waterhammer/core'
 import type { WorkbookData } from '@open-waterhammer/excel-io'
 import {
@@ -32,11 +39,11 @@ function PipeNetGuide({ kind }: { kind: 'steady' | 'moc' }) {
     <div className="pipe-net-guide">
       <div className="pipe-net-guide-row">
         <span className="pipe-net-guide-tag pipe-net-guide-tag--single">単管路</span>
-        <span>1本の管路（口径変化のみ）の場合 — 上のパネル「{kind === 'steady' ? '定常水理計算' : '特性曲線法（MOC）'}」</span>
+        <span>1本の管路（口径変化のみ）の場合 — 上のパネル「{kind === 'steady' ? '定常水理計算' : '水撃圧 数値解析'}」</span>
       </div>
       <div className="pipe-net-guide-row">
         <span className="pipe-net-guide-tag pipe-net-guide-tag--net">管路網</span>
-        <span>分岐・合流（T字・三方弁・複数水源）を含む場合 — 下のパネル「{kind === 'steady' ? '定常網計算' : 'ネットワークMOC'}」</span>
+        <span>分岐・合流（T字・三方弁・複数水源）を含む場合 — 下のパネル「{kind === 'steady' ? '定常網計算' : '管路網 水撃圧 数値解析'}」</span>
       </div>
     </div>
   )
@@ -112,22 +119,22 @@ const STEPS: StepDef[] = [
     num: '5.2',
     title: '水撃圧の検討（単点・任意）',
     ref: '§5.2',
-    desc: '単点でのジューコフスキー式・アリエビ式・経験則による確認用パネル。実務の検討は下の特性曲線法（MOC）を主とし、本ステップは式の挙動確認に使用',
+    desc: '単点でのジューコフスキー式・アリエビ式・経験則による確認用パネル。実務の検討は下の水撃圧 数値解析を主とし、本ステップは式の挙動確認に使用',
     optional: true,
   },
   {
     id: 'moc',
     num: '添付',
-    title: '水撃圧計算（特性曲線法・本計算）',
+    title: '水撃圧の数値解析（本計算）',
     ref: '添付資料 / §8.4',
-    desc: 'バルブ閉鎖シナリオの時系列水撃圧を特性曲線法（MOC）で数値解析。単管路 / 分岐合流（管路網）の両方に対応',
+    desc: 'バルブ閉鎖シナリオの時系列水撃圧を数値解析（特性曲線法）で算定。単管路 / 分岐合流（管路網）の両方に対応',
   },
   {
     id: 'protection',
     num: '5.2.2',
     title: '水撃圧の推定結果と対策（防護工）',
     ref: '§5.2.2',
-    desc: '許容内圧との照合・対策の要否判定。エアチャンバ・サージタンク・吸気弁等の防護工効果をMOCで定量評価',
+    desc: '許容内圧との照合・対策の要否判定。エアチャンバ・サージタンク・吸気弁等の防護工効果を数値解析で定量評価',
   },
   {
     id: 'pump',
@@ -277,12 +284,20 @@ function PrerequisiteContent({ id }: { id: string }) {
   }
 }
 
-function StepContent({ id, excelData }: { id: string; excelData: WorkbookData | null }) {
+interface StepContentProps {
+  id: string
+  excelData: WorkbookData | null
+  onSteadyResult?: (input: LongitudinalHydraulicInput | null, result: LongitudinalHydraulicResult | null) => void
+  onMocResult?: (result: MocResult | null) => void
+  onNetworkMocResult?: (network: MocNetwork | null, result: MocResult | null) => void
+}
+
+function StepContent({ id, excelData, onSteadyResult, onMocResult, onNetworkMocResult }: StepContentProps) {
   switch (id) {
     case 'steady-flow': return (
       <>
         <PipeNetGuide kind="steady" />
-        <SteadyFlowCalculator excelData={excelData} />
+        <SteadyFlowCalculator excelData={excelData} onLongResult={onSteadyResult} />
         <div style={{ marginTop: 24 }}>
           <SteadyNetworkCalculator />
         </div>
@@ -303,9 +318,9 @@ function StepContent({ id, excelData }: { id: string; excelData: WorkbookData | 
     case 'moc': return (
       <>
         <PipeNetGuide kind="moc" />
-        <MocCalculator excelData={excelData} />
+        <MocCalculator excelData={excelData} onResult={onMocResult} />
         <div style={{ marginTop: 24 }}>
-          <NetworkMocCalculator />
+          <NetworkMocCalculator onResult={onNetworkMocResult} />
         </div>
       </>
     )
@@ -449,6 +464,31 @@ export function WaterHammerPage() {
   const [excelData, setExcelData] = useState<WorkbookData | null>(DEMO_WORKBOOK)
   const [usingDemo, setUsingDemo] = useState(true)
 
+  // ── セッション保存用 currentState（各 calculator から bubble up）─────────────
+  const [steadyInput, setSteadyInput] = useState<LongitudinalHydraulicInput | null>(null)
+  const [steadyResult, setSteadyResult] = useState<LongitudinalHydraulicResult | null>(null)
+  const [mocResult, setMocResult] = useState<MocResult | null>(null)
+  const [mocNetwork, setMocNetwork] = useState<MocNetwork | null>(null)
+
+  const handleSteadyResult = useCallback((input: LongitudinalHydraulicInput | null, result: LongitudinalHydraulicResult | null) => {
+    setSteadyInput(input)
+    setSteadyResult(result)
+  }, [])
+  const handleMocResult = useCallback((result: MocResult | null) => {
+    setMocResult(result)
+  }, [])
+  const handleNetworkMocResult = useCallback((network: MocNetwork | null, result: MocResult | null) => {
+    setMocNetwork(network)
+    setMocResult(result)
+  }, [])
+
+  const currentState = {
+    ...(steadyInput && { steadyInput }),
+    ...(steadyResult && { steadyResult }),
+    ...(mocNetwork && { mocNetwork }),
+    ...(mocResult && { mocResult }),
+  }
+
   function toggleStep(id: string) {
     setOpenSteps(prev => {
       const next = new Set(prev)
@@ -511,7 +551,7 @@ export function WaterHammerPage() {
               ① 定常計算へ
             </button>
             <button className="btn btn--small btn--primary" onClick={() => jumpToStep('moc')}>
-              ② MOC計算へ
+              ② 水撃圧 数値解析へ
             </button>
             <button className="btn btn--small btn--primary" onClick={() => jumpToStep('report')}>
               ③ 帳票出力へ
@@ -537,7 +577,7 @@ export function WaterHammerPage() {
       {excelData && excelData.pipes.length > 0 && (
         <section className="card">
           <p className="pipe-table-role">
-            ↓ 下記の管路諸元は <strong>定常水理計算 / MOC計算 / 防護工 / ポンプ過渡 / 帳票出力</strong> の各ステップで共通入力として使用されます。
+            ↓ 下記の管路諸元は <strong>定常水理計算 / 水撃圧 数値解析 / 防護工 / ポンプ過渡 / 帳票出力</strong> の各ステップで共通入力として使用されます。
           </p>
           <PipeTable pipes={excelData.pipes} cases={excelData.cases} />
           {excelData.measurementPoints.length > 0 && (
@@ -625,7 +665,13 @@ export function WaterHammerPage() {
               </button>
               {isOpen && (
                 <div className="wh-step-body">
-                  <StepContent id={step.id} excelData={excelData} />
+                  <StepContent
+                    id={step.id}
+                    excelData={excelData}
+                    onSteadyResult={handleSteadyResult}
+                    onMocResult={handleMocResult}
+                    onNetworkMocResult={handleNetworkMocResult}
+                  />
                 </div>
               )}
             </div>
@@ -635,7 +681,7 @@ export function WaterHammerPage() {
 
       {/* セッション管理（独立カード） */}
       <section className="card" style={{ marginTop: 16 }}>
-        <SessionPanel />
+        <SessionPanel currentState={currentState} />
       </section>
 
       {/* 手法選定ガイド（参考） */}

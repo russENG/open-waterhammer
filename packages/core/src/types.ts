@@ -265,6 +265,7 @@ export interface DesignPressureResult {
  */
 export type PipelineSystemType =
   | "gravity_open"           // 自然圧送 オープンタイプ
+  | "gravity_closed"         // 自然圧送 クローズドタイプ（§8.3.5 a.② で セミクローズドと同式）
   | "gravity_semi_closed"    // 自然圧送 セミ・クローズドタイプ
   | "pump_distribution_tank" // ポンプ系 配水槽方式
   | "pump_direct"            // ポンプ系 直送方式（コントロールなし/あり）

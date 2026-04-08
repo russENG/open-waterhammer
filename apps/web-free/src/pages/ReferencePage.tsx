@@ -157,7 +157,7 @@ const TOPICS: Topic[] = [
   {
     id: 'moc',
     category: '水撃圧',
-    title: '特性曲線法（MOC）',
+    title: '水撃圧の数値解析（特性曲線法）',
     refs: [
       { pdfId: 'kijun', note: '§8.4 水撃圧の数値解析' },
       { pdfId: 'gijutsusho', chapterUrl: GIJUTSUSHO_CHAPTERS.ch8, note: '第8章 §8.4 特性曲線法の基礎理論・境界条件' },

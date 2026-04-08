@@ -75,9 +75,9 @@ export function MethodSelectionFlow({ onSelect }: Props) {
     'empirical': 'ジューコフスキーの式（急閉そく）またはアリエビの近似式（緩閉そく）による推定。' +
       '計算による値との対比を行って採用値を決定すること（§8.3.2(2)）。' +
       '負圧の検討が必要になった場合は数値解法へ移行。',
-    'numerical-nopump': 'バルブ操作を境界条件とした MOC 数値解析。上昇圧・下降圧を時系列で評価。' +
+    'numerical-nopump': 'バルブ操作を境界条件とした数値解析（特性曲線法）。上昇圧・下降圧を時系列で評価。' +
       '防護工の効果検証まで対応。経験則による値との対比を行うこと（§8.3.2(2)）。',
-    'numerical-pump': 'ポンプ急停止・起動を GD² 慣性方程式で扱う MOC 数値解析。' +
+    'numerical-pump': 'ポンプ急停止・起動を GD² 慣性方程式で扱う数値解析（特性曲線法）。' +
       '上昇圧・下降圧・防護工の効果検証まで対応。',
   }
   const methodColor: Record<SelectedMethod, string> = {
@@ -153,7 +153,7 @@ export function MethodSelectionFlow({ onSelect }: Props) {
                         <div className="msfd-leaves">
                           <div className="msfd-leaf msfd-leaf--impl">
                             <span className="msfd-impl-badge">実装済</span>
-                            <span className="msfd-leaf-name">特性曲線法（MOC）</span>
+                            <span className="msfd-leaf-name">特性曲線法</span>
                           </div>
                           <div className="msfd-leaf msfd-leaf--planned">
                             <span className="msfd-impl-badge msfd-impl-badge--planned">計画中</span>

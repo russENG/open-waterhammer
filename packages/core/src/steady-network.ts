@@ -120,7 +120,8 @@ function hazenWilliamsLoss(D: number, C: number, Q: number, L: number): {
     return { velocity: 0, velocityHead: 0, hydraulicGradient: 0, frictionLoss: 0 };
   }
   const R = D / 4;
-  const I = Math.pow(V / (0.84935 * C * Math.pow(R, 0.63)), 1 / 0.54);
+  // Hazen-Williams 式（技術書 式7.2.2）: V = 0.849·C·R^0.63·I^0.54
+  const I = Math.pow(V / (0.849 * C * Math.pow(R, 0.63)), 1 / 0.54);
   const hf = I * L;
   return { velocity: V, velocityHead, hydraulicGradient: I, frictionLoss: hf };
 }

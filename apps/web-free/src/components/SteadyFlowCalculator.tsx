@@ -4,7 +4,7 @@
  * - 縦断計算: 測点ベースの公式帳票形式（成果品様式準拠）
  */
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import {
   calcDarcyWeisbach,
   calcHazenWilliams,
@@ -65,7 +65,13 @@ const DEFAULT_LONG_FORM: LongFormState = {
 
 // ─── メインコンポーネント ────────────────────────────────────────────────────
 
-export function SteadyFlowCalculator({ excelData }: { excelData?: WorkbookData | null }) {
+export interface SteadyFlowCalculatorProps {
+  excelData?: WorkbookData | null;
+  /** 縦断計算の入力・結果を親に通知（セッション保存用） */
+  onLongResult?: (input: LongitudinalHydraulicInput | null, result: LongitudinalHydraulicResult | null) => void;
+}
+
+export function SteadyFlowCalculator({ excelData, onLongResult }: SteadyFlowCalculatorProps) {
   const excelPipes = excelData?.pipes ?? [];
   const excelPoints = excelData?.measurementPoints ?? [];
   const hasPoints = excelPoints.length > 0;
@@ -137,9 +143,8 @@ export function SteadyFlowCalculator({ excelData }: { excelData?: WorkbookData |
 
   // ─── 縦断計算 ───────────────────────────────────────────────────────────
 
-  const longResult = useMemo<LongitudinalHydraulicResult | null>(() => {
+  const longInput = useMemo<LongitudinalHydraulicInput | null>(() => {
     if (excelPoints.length === 0) return null;
-
     const swl = parseFloat(longForm.staticWaterLevel);
     if (isNaN(swl)) return null;
 
@@ -156,13 +161,22 @@ export function SteadyFlowCalculator({ excelData }: { excelData?: WorkbookData |
       const r = parseFloat(longForm.waterhammerRatio);
       if (!isNaN(r)) input.waterhammerRatio = r;
     }
+    return input;
+  }, [excelPoints, longForm]);
 
+  const longResult = useMemo<LongitudinalHydraulicResult | null>(() => {
+    if (!longInput) return null;
     try {
-      return calcLongitudinalHydraulic(input);
+      return calcLongitudinalHydraulic(longInput);
     } catch {
       return null;
     }
-  }, [excelPoints, longForm]);
+  }, [longInput]);
+
+  // 親へ通知（セッション保存用）
+  useEffect(() => {
+    onLongResult?.(longInput, longResult);
+  }, [longInput, longResult, onLongResult]);
 
   // ─── レンダリング ───────────────────────────────────────────────────────
 

@@ -108,10 +108,10 @@ describe("determineClosureType", () => {
     assert.equal(closureType, "numerical_required");
   });
 
-  test("α値 = tν / (2L/a)", () => {
+  test("α値 = tν / T₀ = tν·a / (4L)  (技術書 式8.2.6)", () => {
     const a = 1000, L = 500, tv = 2.0;
     const { alpha } = determineClosureType(tv, L, a);
-    const expected = tv / ((2 * L) / a);
+    const expected = (tv * a) / (4 * L);
     assert.ok(Math.abs(alpha - expected) < 1e-10);
   });
 });
@@ -139,11 +139,13 @@ describe("joukowsky", () => {
 // ─── アリエビの近似式 ─────────────────────────────────────────────────────────
 
 describe("allievi", () => {
-  test("K₁ > 0 のとき Hmax_close > H₀", () => {
-    const H0 = 30, L = 500, V = 1.0, tv = 10, g = GRAVITY;
+  test("K₁ > 0 のとき surge > 0（圧力上昇）", () => {
+    // Hmax は静水頭からの surge 成分。閉操作なら正、開操作なら負。
+    const H0 = 30, L = 500, V = 1.0, tv = 10;
     const k1 = calcAllieviK1(L, V, H0, tv);
     const hmax = allieviClose(H0, k1);
-    assert.ok(hmax > H0, `Hmax=${hmax.toFixed(1)} > H₀=${H0}`);
+    assert.ok(hmax > 0, `surge=${hmax.toFixed(2)} > 0`);
+    assert.ok(hmax < H0, `surge=${hmax.toFixed(2)} < H₀=${H0} (K₁<2のため)`);
   });
 
   test("Hmax_open は負値（圧力低下）", () => {
@@ -151,6 +153,18 @@ describe("allievi", () => {
     const k1 = calcAllieviK1(L, V, H0, tv);
     const hmax_open = allieviOpen(H0, k1);
     assert.ok(hmax_open < 0);
+  });
+
+  test("技術書 式(8.3.7) と一致 (K₁=2 で Hmax/H₀=1+√3)", () => {
+    // Hmax/H₀ = K₁/2 + √(K₁²/4 + K₁) = 1 + √3 ≈ 2.7321
+    const hmax = allieviClose(1, 2);
+    assert.ok(Math.abs(hmax - (1 + Math.sqrt(3))) < 1e-9, `Hmax=${hmax}`);
+  });
+
+  test("技術書 式(8.3.8) と一致 (K₁=2 で Hmax/H₀=1-√3)", () => {
+    // Hmax/H₀ = K₁/2 - √(K₁²/4 + K₁) = 1 - √3 ≈ -0.7321
+    const hmax = allieviOpen(1, 2);
+    assert.ok(Math.abs(hmax - (1 - Math.sqrt(3))) < 1e-9, `Hmax=${hmax}`);
   });
 
   test("閉そく時間を延ばすと K₁ が減り水撃圧が下がる", () => {
@@ -227,6 +241,20 @@ describe("calcEmpiricalWaterhammer", () => {
   test("セミ・クローズド 高圧: max(静水圧×40%, 0.35MPa) — 0.35側が大きい場合", () => {
     const r = calcEmpiricalWaterhammer("gravity_semi_closed", 0.40);
     assert.ok(Math.abs(r.waterhammerMpa - 0.35) < 1e-9);
+  });
+
+  test("クローズドタイプは セミ・クローズド と同じ式 (§8.3.5 a.②)", () => {
+    // 低圧
+    const a1 = calcEmpiricalWaterhammer("gravity_closed", 0.20);
+    const b1 = calcEmpiricalWaterhammer("gravity_semi_closed", 0.20);
+    assert.equal(a1.waterhammerMpa, b1.waterhammerMpa);
+    // 高圧 (40%側)
+    const a2 = calcEmpiricalWaterhammer("gravity_closed", 1.00);
+    const b2 = calcEmpiricalWaterhammer("gravity_semi_closed", 1.00);
+    assert.equal(a2.waterhammerMpa, b2.waterhammerMpa);
+    // ラベルは区別されること
+    assert.match(a1.rule, /クローズド/);
+    assert.ok(!a1.rule.includes("セミ"));
   });
 
   test("配水槽方式 低圧: 通水圧 × 100%", () => {

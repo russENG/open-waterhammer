@@ -48,7 +48,7 @@ export function HydraulicOverviewPage() {
                 <td><span className="impl-badge impl-badge--done">実装済</span></td>
               </tr>
               <tr className="impl-row--done">
-                <td rowSpan={6}>特性曲線法（MOC）<br/>境界条件</td>
+                <td rowSpan={6}>数値解析（特性曲線法）<br/>境界条件</td>
                 <td>貯水池・末端死点 BC</td>
                 <td>§8.4.3</td>
                 <td><span className="impl-badge impl-badge--done">実装済</span></td>
@@ -79,7 +79,7 @@ export function HydraulicOverviewPage() {
                 <td><span className="impl-badge impl-badge--done">実装済</span></td>
               </tr>
               <tr className="impl-row--done">
-                <td rowSpan={4}>水撃防護工<br/>MOC解析</td>
+                <td rowSpan={4}>水撃防護工<br/>数値解析</td>
                 <td>エアチャンバ BC（ポリトロープ圧縮 + 予測修正法）</td>
                 <td>§8.4.6</td>
                 <td><span className="impl-badge impl-badge--done">実装済</span></td>
@@ -165,7 +165,7 @@ export function HydraulicOverviewPage() {
 
           <div className="method-card">
             <div className="method-card-header method-card-header--moc">
-              <h4>特性曲線法（MOC）</h4>
+              <h4>特性曲線法</h4>
               <span className="method-tag">§8.4.3〜8.4.6</span>
             </div>
             <div className="method-card-body">
@@ -215,7 +215,7 @@ export function HydraulicOverviewPage() {
                 <ul>
                   <li>大規模連立方程式の求解が必要</li>
                   <li>数値拡散が生じる場合がある</li>
-                  <li>本ツールでは未実装（MOC で対応）</li>
+                  <li>本ツールでは未実装（特性曲線法で対応）</li>
                 </ul>
               </div>
             </div>

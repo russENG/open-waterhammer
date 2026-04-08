@@ -27,7 +27,11 @@ import type {
   MocResult,
 } from "@open-waterhammer/core";
 import type { MocNetwork, MocOptions } from "@open-waterhammer/core";
-import { generateSessionReport } from "@open-waterhammer/excel-io";
+
+// excel-io は dynamic import で chunk 分離（INEFFECTIVE_DYNAMIC_IMPORT 警告対策）
+async function loadExcelIo() {
+  return import("@open-waterhammer/excel-io");
+}
 
 // ─── localStorage ───────────────────────────────────────────────────────────
 
@@ -98,7 +102,8 @@ export function SessionPanel({ currentState }: SessionPanelProps) {
     setDiffs(diffSessions(a, b));
   }
 
-  function handleExport(session: CalculationSession) {
+  async function handleExport(session: CalculationSession) {
+    const { generateSessionReport } = await loadExcelIo();
     const buf = generateSessionReport({ session });
     const blob = new Blob([buf], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" });
     const url = URL.createObjectURL(blob);
@@ -109,10 +114,11 @@ export function SessionPanel({ currentState }: SessionPanelProps) {
     URL.revokeObjectURL(url);
   }
 
-  function handleExportComparison() {
+  async function handleExportComparison() {
     const a = sessions.find(s => s.id === compareA);
     const b = sessions.find(s => s.id === compareB);
     if (!a || !b || !diffs) return;
+    const { generateSessionReport } = await loadExcelIo();
     const buf = generateSessionReport({ session: a, compareSession: b, diffs });
     const blob = new Blob([buf], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" });
     const url = URL.createObjectURL(blob);
@@ -159,7 +165,7 @@ export function SessionPanel({ currentState }: SessionPanelProps) {
                     <th>作成日時</th>
                     <th>管路数</th>
                     <th>定常</th>
-                    <th>MOC</th>
+                    <th>数値解析</th>
                     <th>変更数</th>
                     <th></th>
                   </tr>

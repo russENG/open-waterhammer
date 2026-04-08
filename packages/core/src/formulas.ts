@@ -49,9 +49,9 @@ export function calcVibrationPeriod(pipeLength: number, waveSpeed: number): numb
 /**
  * 急/緩閉そく判定 + α値
  *
- * α = tν / (2L/a)
- * α ≦ 1: 急閉そく
- * α > 1: 緩閉そく（アリエビ適用条件をさらに確認）
+ * 技術書 式(8.2.6): α = t₀ / T₀ （T₀ = 4L/a）
+ * 物理的判定: tν ≤ 2L/a で急閉そく（往復時間内に操作が完了）
+ *           ⇔ α ≤ 0.5
  *
  * @param closeTime 等価閉そく時間 tν [s]
  * @param pipeLength 管路延長 L [m]
@@ -62,10 +62,10 @@ export function determineClosureType(
   pipeLength: number,
   waveSpeed: number
 ): { closureType: ClosureType; alpha: number } {
-  const roundTripTime = (2 * pipeLength) / waveSpeed;
-  const alpha = closeTime / roundTripTime;
+  const T0 = (4 * pipeLength) / waveSpeed;
+  const alpha = closeTime / T0; // 技術書 式(8.2.6)
 
-  if (alpha <= 1.0) {
+  if (alpha <= 0.5) {
     return { closureType: "rapid", alpha };
   }
   // tν > L/300 でない場合は数値解析が必要
@@ -111,9 +111,8 @@ export function joukowsky(waveSpeed: number, deltaV: number): number {
 /**
  * アリエビ式 K₁ 算定
  *
- * K₁ = (L·V) / (g·H₀·tν)²
- *   ※ 注: 基準書の表記は K₁ = (a·V₀) / (g·H₀) を別途使う流派もあるが
- *       本実装は技術書式(8.3.7)の形を採用
+ * K₁ = (L·V) / (g·H₀·tν)
+ *   技術書 式(8.3.7) 直下の定義に従う。
  */
 export function calcAllieviK1(
   pipeLength: number,
@@ -127,7 +126,7 @@ export function calcAllieviK1(
 /**
  * アリエビの近似式（閉操作時最大水撃圧）(式 8.3.7)
  *
- * Hmax = H₀/2 × (K₁ + √(K₁² + 4))
+ * Hmax/H₀ = K₁/2 + √(K₁²/4 + K₁)
  *
  * 適用条件: tν > 2L/a かつ tν > L/300
  *
@@ -136,7 +135,7 @@ export function calcAllieviK1(
  * @returns 最大水撃圧水頭 Hmax [m]
  */
 export function allieviClose(staticHead: number, k1: number): number {
-  return (staticHead / 2) * (k1 + Math.sqrt(k1 * k1 + 4));
+  return staticHead * (k1 / 2 + Math.sqrt((k1 * k1) / 4 + k1));
 }
 
 /**
@@ -149,7 +148,7 @@ export function allieviClose(staticHead: number, k1: number): number {
  * @returns 最大圧力低下水頭 Hmax [m]（負値）
  */
 export function allieviOpen(staticHead: number, k1: number): number {
-  return (staticHead / 2) * (k1 - Math.sqrt(k1 * k1 + 4));
+  return staticHead * (k1 / 2 - Math.sqrt((k1 * k1) / 4 + k1));
 }
 
 // ─── 多段口径管路の等価管路長 ────────────────────────────────────────────────
@@ -261,14 +260,17 @@ export function calcEmpiricalWaterhammer(
       break;
     }
 
-    // ── 自然圧送 セミ・クローズドタイプ ────────────────────────────────────
+    // ── 自然圧送 クローズド / セミ・クローズドタイプ ───────────────────────
+    // §8.3.5 a.② は両タイプを同一式で扱う
+    case "gravity_closed":
     case "gravity_semi_closed": {
+      const typeLabel = systemType === "gravity_closed" ? "クローズド" : "セミ・クローズド";
       if (staticPressureMpa < 0.35) {
         waterhammerMpa = staticPressureMpa * 1.0;
-        rule = `セミ・クローズド（静水圧 < 0.35MPa）: 静水圧 ${staticPressureMpa.toFixed(3)} MPa × 100% = ${waterhammerMpa.toFixed(3)} MPa`;
+        rule = `${typeLabel}（静水圧 < 0.35MPa）: 静水圧 ${staticPressureMpa.toFixed(3)} MPa × 100% = ${waterhammerMpa.toFixed(3)} MPa`;
       } else {
         waterhammerMpa = Math.max(staticPressureMpa * 0.40, 0.35);
-        rule = `セミ・クローズド（静水圧 ≥ 0.35MPa）: max(${staticPressureMpa.toFixed(3)} × 40%, 0.35) = ${waterhammerMpa.toFixed(3)} MPa`;
+        rule = `${typeLabel}（静水圧 ≥ 0.35MPa）: max(${staticPressureMpa.toFixed(3)} × 40%, 0.35) = ${waterhammerMpa.toFixed(3)} MPa`;
       }
       break;
     }

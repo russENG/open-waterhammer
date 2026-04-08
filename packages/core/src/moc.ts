@@ -13,6 +13,8 @@
  *
  * 摩擦モデル: ハーゼン・ウィリアムス式 → Darcy-Weisbach 等価、局所可変（各ノード・各ステップ）
  * 時間積分: 陽的差分（クーラン条件 CFL=1: Δt = Δx/a）
+ *           ※技術書 式(8.4.8) は Δt ≤ Δx/(V+a) であり、V<<a（通常 V/a≦0.001）の
+ *             仮定下で常に安全側。runMoc は V を含めた厳密チェックも warning で報告。
  *
  * 出典: 土地改良設計基準パイプライン技術書 §8.4（特性曲線法）
  *       Wylie & Streeter "Fluid Transients in Systems" (1993)
@@ -240,18 +242,62 @@ export interface MocResult {
   tMax: number;
   pipes: Record<string, MocPipeResult>;
   nodes: Record<string, MocNodeResult>;
+  /** ソルバーが生成した警告（dt整合化など） */
+  warnings?: string[];
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // 内部ヘルパー
 // ═══════════════════════════════════════════════════════════════════════════════
 
+/**
+ * 全管路の Δt を統一し、nReaches を再計算する（技術書 §8.4.2(2) 表-8.4.1）
+ *
+ * 各管路の素の Δt_i = L_i/(a_i·N_i^init) から最小値を共通 Δt として採用し、
+ * 各管路の N_i を round(L_i/(a_i·Δt)) で再計算する。これにより
+ * 全管路で dx/(a·dt) ≒ 1 が成立し、特性線が格子点を正しく通る。
+ *
+ * 再調整による Δx の相対誤差が大きい場合（>5%）は警告を返す。
+ */
+export function harmonizeTimeStep(segs: MocPipeSegment[]): {
+  segs: MocPipeSegment[];
+  dt: number;
+  warnings: string[];
+} {
+  if (segs.length === 0) return { segs, dt: 0, warnings: [] };
+  const warnings: string[] = [];
+
+  const dtCandidates = segs.map((s) => s.pipe.length / (s.waveSpeed * Math.max(1, s.nReaches)));
+  const dt = Math.min(...dtCandidates);
+
+  const harmonized = segs.map((s) => {
+    const N_ideal = s.pipe.length / (s.waveSpeed * dt);
+    const N_new = Math.max(1, Math.round(N_ideal));
+    const dx_new = s.pipe.length / N_new;
+    const dx_ideal = s.waveSpeed * dt;
+    const relErr = Math.abs(dx_new - dx_ideal) / dx_ideal;
+    if (relErr > 0.05) {
+      warnings.push(
+        `${s.id}: dt整合化で nReaches=${s.nReaches}→${N_new}、`
+        + `Δx の理想値からの誤差 ${(relErr * 100).toFixed(1)}%（CFL≠1）。`
+        + `nReaches を増やすか管路長/波速の比を見直してください。`,
+      );
+    } else if (N_new !== s.nReaches) {
+      warnings.push(`${s.id}: dt整合化で nReaches=${s.nReaches}→${N_new}（誤差 ${(relErr * 100).toFixed(2)}%）`);
+    }
+    return { ...s, nReaches: N_new };
+  });
+
+  return { segs: harmonized, dt, warnings };
+}
+
 /** Hazen-Williams → Darcy-Weisbach 等価摩擦係数（局所流速版） */
 function localDarcyF(V: number, D: number, C: number): number {
   const absV = Math.abs(V);
   if (absV < 1e-4) return 0.02;
   const Rh = D / 4;
-  const S = Math.pow(absV / (0.8492 * C * Math.pow(Rh, 0.63)), 1 / 0.54);
+  // Hazen-Williams 式（技術書 式7.2.2）: V = 0.849·C·R^0.63·I^0.54
+  const S = Math.pow(absV / (0.849 * C * Math.pow(Rh, 0.63)), 1 / 0.54);
   return Math.max(0.005, Math.min((2 * GRAVITY * D * S) / (absV * absV), 0.15));
 }
 
@@ -302,6 +348,27 @@ function solveValve(
 /**
  * ポンプ BC（上流端専用）
  * 技術書式(8.4.10-11) GD²慣性方程式 or 線形フォールバック
+ *
+ * ── モデルの適用範囲と限界 ────────────────────────────────────────────────────
+ * 本実装は H-Q 特性を放物線 H = α²·Hs - Bq·Q² で近似し、トルクは相似則
+ *   M_t/M₀ = (Q·H·N₀)/(Q₀·H₀·N) （定効率仮定）
+ * から推算する**簡易モデル**である。技術書 §8.4.2(5)c が本来要求するのは
+ * Suter 変換による**4象限特性曲線**（正転正流 / 正転逆流 / 逆転逆流 / 逆転正流）
+ * を実機データから入力する方式で、以下のケースには本実装は不十分:
+ *
+ *   • 逆流（Q < 0）を含む過渡: 本実装は checkValve=true で Q≥0 にクランプし、
+ *     checkValve=false でも H-Q 放物線が逆流域を表現できない
+ *   • 逆転（N < 0）を含む長時間過渡: dN/dt は N>0 域でしか妥当でない
+ *   • 効率の動作点依存: 定効率 η₀ で固定
+ *   • サージ・キャビテーションを含む詳細解析
+ *
+ * 適用妥当範囲:
+ *   • 正転正流域でのポンプ急停止（trip）の最初の数秒〜数十秒の最大圧力推定
+ *   • チェック弁付きシステム
+ *   • 起動時のスムーズな立ち上げ（mode=start, prescribed α）
+ *
+ * 4象限特性が必要な場合は将来的に Suter 曲線データ入力 BC を追加する
+ * （MEMORY: project_moc_audit_followups.md 参照）。
  *
  * @param state  可変ポンプ状態 { N: 現在回転速度 [min⁻¹] }
  * @param dt     タイムステップ [s]（GD2 使用時に必要）
@@ -532,8 +599,12 @@ function steadyHeadProfile(H_upstream: number, hfTotal: number, N: number): numb
  * 直列・分岐管路、全境界条件タイプに対応
  */
 export function runMoc(network: MocNetwork, options: MocOptions = {}): MocResult {
-  const { pipes: segs, nodes } = network;
-  if (segs.length === 0) throw new Error("管路が 0 本です");
+  const { pipes: rawSegs, nodes } = network;
+  if (rawSegs.length === 0) throw new Error("管路が 0 本です");
+
+  // ── dt 整合化（技術書 §8.4.2(2)）─────────────────────────────────────────
+  const { segs, warnings: harmonizeWarnings } = harmonizeTimeStep(rawSegs);
+  const warnings: string[] = [...harmonizeWarnings];
 
   // ── ノード接続グラフ構築 ──────────────────────────────────────────────────
   // nodeFlowIn[nodeId]  = 管路インデックスの配列（この node が下流端である管路）
@@ -568,6 +639,23 @@ export function runMoc(network: MocNetwork, options: MocOptions = {}): MocResult
 
   // 全管路の dt の最小値（統一タイムステップ）
   const dt_global = Math.min(...physics.map((p) => p.dt));
+
+  // ── クーラン条件 Δt ≤ Δx/(V+a) の検証（技術書 式8.4.8）─────────────────────
+  // 実装は CFL=1 (Δt ≒ Δx/a) を採用するため、厳密には V/a の分だけ安全側を超える。
+  // 通常 V/a ≦ 0.001 で実害なしだが、V/a > 0.01（管内流速が波速の1%超）の高流速管路では
+  // 数値伝播速度が物理的伝播速度を上回る可能性を警告する。
+  for (let pi = 0; pi < segs.length; pi++) {
+    const ph = physics[pi]!;
+    const V0 = Math.abs(Q0arr[pi]!) / ph.A;
+    const ratio = V0 / segs[pi]!.waveSpeed;
+    if (ratio > 0.01) {
+      warnings.push(
+        `${segs[pi]!.id}: V/a=${ratio.toFixed(4)} > 0.01。技術書式(8.4.8) Δt≤Δx/(V+a) に対し`
+        + `本ソルバの Δt=Δx/a は ${(ratio * 100).toFixed(2)}% 超過しています。`
+        + `nReaches を増やすか、初期流速を見直してください。`,
+      );
+    }
+  }
   const T0_max = Math.max(...physics.map((p) => p.T0));
   const tMax = options.tMax ?? 3 * T0_max;
   const nSteps = Math.ceil(tMax / dt_global);
@@ -900,7 +988,13 @@ export function runMoc(network: MocNetwork, options: MocOptions = {}): MocResult
     nodesResult[id] = result;
   }
 
-  return { dt: dt_global, tMax, pipes: pipesResult, nodes: nodesResult };
+  return {
+    dt: dt_global,
+    tMax,
+    pipes: pipesResult,
+    nodes: nodesResult,
+    ...(warnings.length > 0 && { warnings }),
+  };
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════

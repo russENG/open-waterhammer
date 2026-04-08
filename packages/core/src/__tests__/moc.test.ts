@@ -23,6 +23,7 @@ import {
   runMoc,
   runMocSinglePipe,
   runMocPumpTrip,
+  harmonizeTimeStep,
 } from "../moc.js";
 import { calcWaveSpeed, joukowsky, GRAVITY } from "../formulas.js";
 import type { Pipe } from "../types.js";
@@ -437,5 +438,243 @@ describe("T字分岐 — 3管路ジャンクション", () => {
     const Hmax2 = Math.max(...r.nodes["valve2"]!.H.map((p) => p.H));
     assert.ok(Hmax1 > H0, `Hmax1=${Hmax1.toFixed(1)}`);
     assert.ok(Hmax2 > H0, `Hmax2=${Hmax2.toFixed(1)}`);
+  });
+});
+
+// ─── dt 整合化 (技術書 §8.4.2(2)) ─────────────────────────────────────────────
+
+describe("harmonizeTimeStep — Δt 統一化", () => {
+  // 同一管材だが管長が 500m と 200m → 素の dt が異なる
+  const PIPE_A: Pipe = { ...PIPE_DI_300, id: "pA", length: 500 };
+  const PIPE_B: Pipe = { ...PIPE_DI_300, id: "pB", length: 200 };
+  const aA = calcWaveSpeed(PIPE_A);
+  const aB = calcWaveSpeed(PIPE_B);
+
+  test("単一管路では nReaches を変更しない", () => {
+    const segs = [{ id: "s1", pipe: PIPE_A, waveSpeed: aA, nReaches: 10, upstreamNodeId: "u", downstreamNodeId: "d" }];
+    const r = harmonizeTimeStep(segs);
+    assert.equal(r.segs[0]!.nReaches, 10);
+    assert.equal(r.warnings.length, 0);
+    assert.ok(Math.abs(r.dt - 500 / (aA * 10)) < 1e-12);
+  });
+
+  test("異なる管路の dt を統一: 共通 Δt = min(各管路dt)", () => {
+    const segs = [
+      { id: "pA", pipe: PIPE_A, waveSpeed: aA, nReaches: 10, upstreamNodeId: "u", downstreamNodeId: "j" },
+      { id: "pB", pipe: PIPE_B, waveSpeed: aB, nReaches: 10, upstreamNodeId: "j", downstreamNodeId: "d" },
+    ];
+    const r = harmonizeTimeStep(segs);
+    const dtA_raw = 500 / (aA * 10);
+    const dtB_raw = 200 / (aB * 10);
+    const dtMin = Math.min(dtA_raw, dtB_raw);
+    assert.ok(Math.abs(r.dt - dtMin) < 1e-12, `dt=${r.dt} expected=${dtMin}`);
+  });
+
+  test("nReaches 再計算で dx/(a·Δt) ≒ 1 が成立", () => {
+    const segs = [
+      { id: "pA", pipe: PIPE_A, waveSpeed: aA, nReaches: 10, upstreamNodeId: "u", downstreamNodeId: "j" },
+      { id: "pB", pipe: PIPE_B, waveSpeed: aB, nReaches: 10, upstreamNodeId: "j", downstreamNodeId: "d" },
+    ];
+    const r = harmonizeTimeStep(segs);
+    for (const s of r.segs) {
+      const dx = s.pipe.length / s.nReaches;
+      const ratio = dx / (s.waveSpeed * r.dt);
+      assert.ok(Math.abs(ratio - 1) < 0.06, `${s.id}: dx/(a·dt)=${ratio.toFixed(3)}`);
+    }
+  });
+
+  test("nReaches=1 を最低保証する", () => {
+    const tinyPipe: Pipe = { ...PIPE_DI_300, id: "tiny", length: 1 };
+    const segs = [
+      { id: "long", pipe: PIPE_A, waveSpeed: aA, nReaches: 100, upstreamNodeId: "u", downstreamNodeId: "j" },
+      { id: "tiny", pipe: tinyPipe, waveSpeed: aA, nReaches: 1, upstreamNodeId: "j", downstreamNodeId: "d" },
+    ];
+    const r = harmonizeTimeStep(segs);
+    assert.ok(r.segs.every((s) => s.nReaches >= 1));
+  });
+});
+
+describe("クーラン条件 Δt ≤ Δx/(V+a) チェック (式8.4.8)", () => {
+  test("通常流速 (V/a < 0.01) では警告を出さない", () => {
+    // V0 = 1 m/s, a ≈ 1100 m/s → V/a ≈ 0.001
+    const r = runMocSinglePipe({
+      pipe: PIPE_DI_300, waveSpeed: a, initialVelocity: 1.0,
+      initialDownstreamHead: H0, closeTime: 0, nReaches: 10,
+    });
+    const cfl = (r.warnings ?? []).filter((w) => w.includes("V/a"));
+    assert.equal(cfl.length, 0);
+  });
+
+  test("高流速 (V/a > 0.01) では警告を出す", () => {
+    // V0 = 15 m/s（非現実的だが境界条件テスト用）, a ≈ 1100 m/s → V/a ≈ 0.014
+    const r = runMocSinglePipe({
+      pipe: PIPE_DI_300, waveSpeed: a, initialVelocity: 15.0,
+      initialDownstreamHead: H0, closeTime: 0, nReaches: 10,
+    });
+    const cfl = (r.warnings ?? []).filter((w) => w.includes("V/a"));
+    assert.ok(cfl.length > 0, `warnings=${JSON.stringify(r.warnings)}`);
+  });
+});
+
+// ─── §8.4.3 複合シナリオ統合テスト ────────────────────────────────────────────
+
+describe("§8.4.3 複合シナリオ — ポンプ→管路→バルブ", () => {
+  // pump → pipe → valve（下流側で同時にバルブ閉そく + ポンプ急停止）
+  const network: MocNetwork = {
+    pipes: [
+      {
+        id: "pipe_0",
+        pipe: PIPE_DI_300,
+        waveSpeed: a,
+        nReaches: 10,
+        upstreamNodeId: "pump",
+        downstreamNodeId: "valve",
+      },
+    ],
+    nodes: {
+      pump: {
+        type: "pump",
+        Q0,
+        H0: 50,
+        Hs: 60,
+        GD2: 500,
+        N0: 1450,
+        eta0: 0.80,
+        shutdownTime: 0,
+        checkValve: true,
+        mode: "trip",
+      },
+      valve: { type: "valve", Q0, H0v: 30, closeTime: 2.0, operation: "close" },
+    },
+  };
+  const r = runMoc(network, { initialFlow: Q0 });
+
+  test("ポンプ急停止＋バルブ閉そくが同時にクラッシュなく完走する", () => {
+    assert.ok(r.pipes["pipe_0"] !== undefined);
+    assert.ok(r.nodes["pump"] !== undefined);
+    assert.ok(r.nodes["valve"] !== undefined);
+  });
+
+  test("ポンプ側の回転速度が低下している", () => {
+    const Ns = r.nodes["pump"]!.N!;
+    assert.ok(Ns[Ns.length - 1]!.N < 1450);
+  });
+
+  test("両端の包絡線が初期水頭から振れている", () => {
+    const Hpump = r.nodes["pump"]!.H.map((p) => p.H);
+    const Hvalve = r.nodes["valve"]!.H.map((p) => p.H);
+    const range_pump = Math.max(...Hpump) - Math.min(...Hpump);
+    const range_valve = Math.max(...Hvalve) - Math.min(...Hvalve);
+    assert.ok(range_pump > 0.1, `pump H range=${range_pump.toFixed(2)}`);
+    assert.ok(range_valve > 0.1, `valve H range=${range_valve.toFixed(2)}`);
+  });
+});
+
+describe("§8.4.3 複合シナリオ — エアチャンバ＋分岐管路でのポンプ停止", () => {
+  // pump → pipe1 → junction → { pipe2 → air_chamber, pipe3 → dead_end }
+  const PIPE_BR: Pipe = { ...PIPE_DI_300, id: "p_br", length: 200 };
+  const aBr = calcWaveSpeed(PIPE_BR);
+  const network: MocNetwork = {
+    pipes: [
+      { id: "p1", pipe: PIPE_DI_300, waveSpeed: a,   nReaches: 10, upstreamNodeId: "pump",     downstreamNodeId: "junction" },
+      { id: "p2", pipe: PIPE_BR,     waveSpeed: aBr, nReaches: 10, upstreamNodeId: "junction", downstreamNodeId: "air_node"  },
+      { id: "p3", pipe: PIPE_BR,     waveSpeed: aBr, nReaches: 10, upstreamNodeId: "junction", downstreamNodeId: "dead"      },
+    ],
+    nodes: {
+      pump: {
+        type: "pump",
+        Q0: Q0 * 2, // 2本に分流
+        H0: 60, Hs: 72,
+        GD2: 600, N0: 1450, eta0: 0.80,
+        shutdownTime: 0, checkValve: true, mode: "trip",
+      },
+      air_node: {
+        type: "air_chamber",
+        V_air0: 0.5, H_air0: 50, polytropicIndex: 1.2,
+      },
+      dead: { type: "dead_end" },
+    },
+  };
+  const r = runMoc(network, { initialFlow: Q0 });
+
+  test("3管路+ポンプ+エアチャンバ+分岐がクラッシュなく完走する", () => {
+    assert.ok(r.pipes["p1"] !== undefined);
+    assert.ok(r.pipes["p2"] !== undefined);
+    assert.ok(r.pipes["p3"] !== undefined);
+    assert.ok(r.nodes["junction"] !== undefined);
+    assert.ok(r.nodes["air_node"]!.V_air !== undefined);
+  });
+
+  test("エアチャンバの空気容積時系列が変化している（過渡応答）", () => {
+    const Vs = r.nodes["air_node"]!.V_air!.map((p) => p.V);
+    const Vmin = Math.min(...Vs);
+    const Vmax = Math.max(...Vs);
+    assert.ok(Vmax - Vmin > 0, `V range=${(Vmax - Vmin).toExponential(2)}`);
+  });
+
+  test("分岐点 junction の水頭時系列が記録されている", () => {
+    assert.ok(r.nodes["junction"]!.H.length > 0);
+  });
+});
+
+describe("§8.4.3 複合シナリオ — ポンプ起動 → バルブ部分閉", () => {
+  // 起動中のポンプ系統で下流バルブを徐々に閉めるシナリオ
+  const network: MocNetwork = {
+    pipes: [
+      { id: "pipe_0", pipe: PIPE_DI_300, waveSpeed: a, nReaches: 10, upstreamNodeId: "pump", downstreamNodeId: "valve" },
+    ],
+    nodes: {
+      pump: {
+        type: "pump",
+        Q0, H0: 50, Hs: 60,
+        shutdownTime: 0,
+        mode: "start",
+        startupTime: 3.0,
+        staticHead: 10,
+      },
+      valve: { type: "valve", Q0, H0v: 30, closeTime: 5.0, operation: "close" },
+    },
+  };
+  const r = runMoc(network, { initialFlow: Q0, tMax: 6 });
+
+  test("起動 + バルブ閉の同時進行が完走する", () => {
+    assert.ok(r.pipes["pipe_0"] !== undefined);
+    assert.ok(r.nodes["pump"]!.H.length > 0);
+    assert.ok(r.nodes["valve"]!.H.length > 0);
+  });
+
+  test("結果に NaN/Infinity が含まれない", () => {
+    const Hs = r.nodes["valve"]!.H.map((p) => p.H);
+    assert.ok(Hs.every((h) => Number.isFinite(h)));
+  });
+});
+
+describe("runMoc は dt 整合化を適用する", () => {
+  const PIPE_A: Pipe = { ...PIPE_DI_300, id: "pA", length: 500 };
+  const PIPE_B: Pipe = { ...PIPE_DI_300, id: "pB", length: 173 }; // 半端な長さで再分割が起きる
+  const aA = calcWaveSpeed(PIPE_A);
+  const aB = calcWaveSpeed(PIPE_B);
+
+  test("半端な管長でも警告込みで完走する", () => {
+    const network: MocNetwork = {
+      pipes: [
+        { id: "pA", pipe: PIPE_A, waveSpeed: aA, nReaches: 10, upstreamNodeId: "res", downstreamNodeId: "j" },
+        { id: "pB", pipe: PIPE_B, waveSpeed: aB, nReaches: 10, upstreamNodeId: "j",   downstreamNodeId: "valve" },
+      ],
+      nodes: {
+        res:   { type: "reservoir", head: H0 + 5 },
+        valve: { type: "valve", Q0, H0v: H0, closeTime: 0 },
+      },
+    };
+    const r = runMoc(network, { initialFlow: Q0 });
+    assert.ok(r.pipes["pA"]!.nReaches >= 1);
+    assert.ok(r.pipes["pB"]!.nReaches >= 1);
+    // dt は両管路共通
+    const dxA_eff = r.pipes["pA"]!.dx;
+    const dxB_eff = r.pipes["pB"]!.dx;
+    const dtA = dxA_eff / aA;
+    const dtB = dxB_eff / aB;
+    assert.ok(Math.abs(dtA - r.dt) / r.dt < 0.06);
+    assert.ok(Math.abs(dtB - r.dt) / r.dt < 0.06);
   });
 });

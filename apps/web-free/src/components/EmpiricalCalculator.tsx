@@ -27,6 +27,14 @@ const SYSTEM_OPTIONS: {
     staticLabel: "静水圧 P₀",
   },
   {
+    value: "gravity_closed",
+    label: "クローズドタイプ",
+    category: "自然圧送",
+    needsOperating: false,
+    needsHydraulicGrade: false,
+    staticLabel: "静水圧 P₀",
+  },
+  {
     value: "gravity_semi_closed",
     label: "セミ・クローズドタイプ",
     category: "自然圧送",

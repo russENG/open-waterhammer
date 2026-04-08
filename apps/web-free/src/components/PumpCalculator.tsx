@@ -432,7 +432,7 @@ export function PumpCalculator({ excelData }: { excelData?: WorkbookData | null 
 
   return (
     <div className="card">
-      <h2 className="card-title">ポンプシナリオ MOC 非定常計算（§8.4）</h2>
+      <h2 className="card-title">ポンプシナリオ 非定常計算（§8.4）</h2>
 
       <div className="demo-tabs" style={{ marginBottom: 16 }}>
         <button className={`demo-tab${tab === "trip" ? " demo-tab--active" : ""}`} onClick={() => setTab("trip")}>

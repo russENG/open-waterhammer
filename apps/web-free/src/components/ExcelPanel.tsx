@@ -5,6 +5,7 @@
  */
 
 import { useRef, useState } from "react";
+import { calcLongitudinalHydraulic } from "@open-waterhammer/core";
 // xlsx は大きいため動的インポートで分離
 async function getExcelIO() {
   return import("@open-waterhammer/excel-io");
@@ -72,7 +73,6 @@ export function ExcelPanel({ onLoad, loadedData, collapsedByDefault }: ExcelPane
     if (!loadedData) return;
 
     const { generateReport } = await getExcelIO();
-    const { calcLongitudinalHydraulic } = await import("@open-waterhammer/core");
 
     // 縦断計算を実行（測点データがある場合）
     const hydraulicResults = [];

@@ -45,10 +45,10 @@ export function calcMinorLoss(
 // ─── 1測点の摩擦損失 ────────────────────────────────────────────────────────
 
 /**
- * Hazen-Williams 式で1区間の摩擦損失水頭を算定
+ * Hazen-Williams 式で1区間の摩擦損失水頭を算定（技術書 式7.2.2）
  *
- * V = 0.84935 × C × R^0.63 × I^0.54
- * → I = (V / (0.84935 × C × R^0.63))^(1/0.54)
+ * V = 0.849 × C × R^0.63 × I^0.54
+ * → I = (V / (0.849 × C × R^0.63))^(1/0.54)
  * → hf = I × SL
  *
  * @param diameter D [m]
@@ -64,7 +64,7 @@ export function calcSegmentFriction(
   pipeLength: number,
 ): { hydraulicGradient: number; frictionLoss: number } {
   const R = diameter / 4;
-  const I = Math.pow(velocity / (0.84935 * roughnessC * Math.pow(R, 0.63)), 1 / 0.54);
+  const I = Math.pow(velocity / (0.849 * roughnessC * Math.pow(R, 0.63)), 1 / 0.54);
   const hf = I * pipeLength;
   return { hydraulicGradient: I, frictionLoss: hf };
 }
