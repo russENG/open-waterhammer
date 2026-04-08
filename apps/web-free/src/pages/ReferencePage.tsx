@@ -39,9 +39,10 @@ const INITIAL_SOURCES: PdfSource[] = [
   {
     id: 'gijutsusho',
     shortLabel: '技術書',
-    fullLabel: '技術書',
-    description: '土地改良事業計画設計基準 設計「パイプライン」技術書（令和3年改定 / 通知・基準書・技術書 p1〜p273 統合版）',
-    onlineUrl: 'https://www.maff.go.jp/j/nousin/pipeline/attach/pdf/pipeline-66.pdf',
+    fullLabel: '技術書（章別）',
+    description: '土地改良事業計画設計基準 設計「パイプライン」技術書（令和3年改定）— 農林水産省は章別PDFで公開しています。トピックから該当章を選択してください。',
+    // デフォルトは第8章（非定常水理現象）— 本アプリは水撃圧計算がメインのため
+    onlineUrl: 'https://www.maff.go.jp/j/nousin/pipeline/attach/pdf/pipeline-58.pdf',
     color: '#38a169',
   },
   {
@@ -60,7 +61,22 @@ interface TopicRef {
   pdfId: string
   page?: number
   note: string
+  /** 技術書（章別PDF）の場合、章ごとに異なるURLを直接指定 */
+  chapterUrl?: string
 }
+
+/** 技術書 章別PDF（農林水産省 https://www.maff.go.jp/j/nousin/pipeline/） */
+const GIJUTSUSHO_CHAPTERS = {
+  ch1:  'https://www.maff.go.jp/j/nousin/pipeline/attach/pdf/pipeline-24.pdf', // 第1章 農業用パイプライン導入の経緯と役割
+  ch3:  'https://www.maff.go.jp/j/nousin/pipeline/attach/pdf/pipeline-6.pdf',  // 第3章 設計の標準的手順
+  ch6:  'https://www.maff.go.jp/j/nousin/pipeline/attach/pdf/pipeline-8.pdf',  // 第6章 パイプラインシステムの設計
+  ch7:  'https://www.maff.go.jp/j/nousin/pipeline/attach/pdf/pipeline-49.pdf', // 第7章 定常的な水理現象の解析
+  ch8:  'https://www.maff.go.jp/j/nousin/pipeline/attach/pdf/pipeline-58.pdf', // 第8章 非定常的な水理現象の解析（水撃圧）
+  ch9:  'https://www.maff.go.jp/j/nousin/pipeline/attach/pdf/pipeline-61.pdf', // 第9章 管路の構造設計
+  ch10: 'https://www.maff.go.jp/j/nousin/pipeline/attach/pdf/pipeline-16.pdf', // 第10章 附帯施設の設計
+  ch13: 'https://www.maff.go.jp/j/nousin/pipeline/attach/pdf/pipeline-48.pdf', // 第13章 施工
+  ch14: 'https://www.maff.go.jp/j/nousin/pipeline/attach/pdf/pipeline-68.pdf', // 第14章 既製管の管体及び継手
+} as const
 
 interface Topic {
   id: string
@@ -76,7 +92,8 @@ const TOPICS: Topic[] = [
     title: 'パイプラインの設計フロー',
     refs: [
       { pdfId: 'kijun', note: '第1章 総論・設計の基本' },
-      { pdfId: 'gijutsusho', page: 1, note: '第1章 設計の基本' },
+      { pdfId: 'gijutsusho', chapterUrl: GIJUTSUSHO_CHAPTERS.ch3, note: '第3章 設計の標準的手順' },
+      { pdfId: 'gijutsusho', chapterUrl: GIJUTSUSHO_CHAPTERS.ch1, note: '第1章 導入の経緯と役割' },
       { pdfId: 'seikahinyoshiki', page: 9, note: '目次・章構成' },
     ],
   },
@@ -86,7 +103,7 @@ const TOPICS: Topic[] = [
     title: '管種・管径の決定',
     refs: [
       { pdfId: 'kijun', note: '第3章 管種の選定' },
-      { pdfId: 'gijutsusho', note: '第3章 管種の選定・管材の特性' },
+      { pdfId: 'gijutsusho', chapterUrl: GIJUTSUSHO_CHAPTERS.ch14, note: '第14章 既製管の管体及び継手' },
       { pdfId: 'seikahinyoshiki', page: 35, note: '4.2 管種管径（管種の決定・管径の決定）' },
     ],
   },
@@ -96,7 +113,7 @@ const TOPICS: Topic[] = [
     title: '定常時の水理計算',
     refs: [
       { pdfId: 'kijun', note: '第4章 管路の水理' },
-      { pdfId: 'gijutsusho', note: '§5 摩擦損失 / §6 局部損失' },
+      { pdfId: 'gijutsusho', chapterUrl: GIJUTSUSHO_CHAPTERS.ch7, note: '第7章 定常的な水理現象の解析（摩擦・局部損失）' },
       { pdfId: 'seikahinyoshiki', page: 44, note: '5.1 定常時の水理計算（手法・式・条件）' },
     ],
   },
@@ -115,7 +132,7 @@ const TOPICS: Topic[] = [
     title: '伝播速度の算定',
     refs: [
       { pdfId: 'kijun', note: '§8.2 圧力波の伝播' },
-      { pdfId: 'gijutsusho', note: '§8.2 圧力波の伝播速度・§8.3.1 波速算定' },
+      { pdfId: 'gijutsusho', chapterUrl: GIJUTSUSHO_CHAPTERS.ch8, note: '第8章 §8.2 圧力波の伝播速度・§8.3.1 波速算定' },
     ],
   },
   {
@@ -124,7 +141,7 @@ const TOPICS: Topic[] = [
     title: '水撃圧の推定（計算法・経験則）',
     refs: [
       { pdfId: 'kijun', note: '§8.3 水撃圧の推定' },
-      { pdfId: 'gijutsusho', note: '§8.3 ジューコフスキー式・アリエビ式・経験則' },
+      { pdfId: 'gijutsusho', chapterUrl: GIJUTSUSHO_CHAPTERS.ch8, note: '第8章 §8.3 ジューコフスキー式・アリエビ式・経験則' },
       { pdfId: 'seikahinyoshiki', page: 47, note: '5.2.1 検討必要区間と推定方法' },
     ],
   },
@@ -133,7 +150,7 @@ const TOPICS: Topic[] = [
     category: '水撃圧',
     title: '水撃圧の推定結果と対策',
     refs: [
-      { pdfId: 'gijutsusho', note: '§8.3.5 経験則 / §8.4.6 防護工' },
+      { pdfId: 'gijutsusho', chapterUrl: GIJUTSUSHO_CHAPTERS.ch8, note: '第8章 §8.3.5 経験則 / §8.4.6 防護工' },
       { pdfId: 'seikahinyoshiki', page: 48, note: '5.2.2 推定結果と対策（許容内圧判定）' },
     ],
   },
@@ -143,7 +160,7 @@ const TOPICS: Topic[] = [
     title: '特性曲線法（MOC）',
     refs: [
       { pdfId: 'kijun', note: '§8.4 水撃圧の数値解析' },
-      { pdfId: 'gijutsusho', note: '§8.4 特性曲線法の基礎理論・境界条件' },
+      { pdfId: 'gijutsusho', chapterUrl: GIJUTSUSHO_CHAPTERS.ch8, note: '第8章 §8.4 特性曲線法の基礎理論・境界条件' },
       { pdfId: 'seikahinyoshiki', page: 13, note: '添付資料: 水撃圧計算' },
     ],
   },
@@ -153,7 +170,7 @@ const TOPICS: Topic[] = [
     title: 'ポンプ過渡解析',
     refs: [
       { pdfId: 'kijun', note: '§8.4 ポンプ急停止・起動' },
-      { pdfId: 'gijutsusho', note: '§8.4.4 ポンプ急停止 / §8.4.5 ポンプ起動' },
+      { pdfId: 'gijutsusho', chapterUrl: GIJUTSUSHO_CHAPTERS.ch8, note: '第8章 §8.4.4 ポンプ急停止 / §8.4.5 ポンプ起動' },
       { pdfId: 'seikahinyoshiki', page: 49, note: '5.4 その他の非定常時の検討' },
     ],
   },
@@ -163,7 +180,7 @@ const TOPICS: Topic[] = [
     title: 'サージングの検討',
     refs: [
       { pdfId: 'kijun', note: '§9 サージング' },
-      { pdfId: 'gijutsusho', note: '§9 サージングの基礎・解析' },
+      { pdfId: 'gijutsusho', chapterUrl: GIJUTSUSHO_CHAPTERS.ch8, note: '第8章 サージングの基礎・解析' },
       { pdfId: 'seikahinyoshiki', page: 49, note: '5.3 サージングの検討' },
     ],
   },
@@ -173,7 +190,7 @@ const TOPICS: Topic[] = [
     title: '管体の構造計算',
     refs: [
       { pdfId: 'kijun', note: '第5章 管体の構造計算' },
-      { pdfId: 'gijutsusho', note: '第6章 管体の構造計算' },
+      { pdfId: 'gijutsusho', chapterUrl: GIJUTSUSHO_CHAPTERS.ch9, note: '第9章 管路の構造設計' },
       { pdfId: 'seikahinyoshiki', page: 50, note: '第6章 管体の構造計算' },
     ],
   },
@@ -196,6 +213,8 @@ export function ReferencePage({ initialTopicId }: { initialTopicId?: string } = 
   const [activeSourceId, setActiveSourceId] = useState('seikahinyoshiki')
   const [pdfPage, setPdfPage] = useState<number | undefined>(undefined)
   const [activeRefKey, setActiveRefKey] = useState('')
+  /** 技術書の章別PDF URL を直接指定する場合の上書き */
+  const [chapterOverrideUrl, setChapterOverrideUrl] = useState<string | null>(null)
   const fileInputRefs = useRef<Record<string, HTMLInputElement | null>>({})
   const topicRefs = useRef<Record<string, HTMLDivElement | null>>({})
 
@@ -207,8 +226,9 @@ export function ReferencePage({ initialTopicId }: { initialTopicId?: string } = 
     const firstRef = topic.refs[0]!
     const src = INITIAL_SOURCES.find(s => s.id === firstRef.pdfId)
     if (!src) return
-    if (src.onlineUrl || src.localUrl) {
+    if (src.onlineUrl || src.localUrl || firstRef.chapterUrl) {
       setActiveSourceId(firstRef.pdfId)
+      setChapterOverrideUrl(firstRef.chapterUrl ?? null)
       setPdfPage(firstRef.page)
       setActiveRefKey(topic.id + ':' + firstRef.pdfId + ':' + firstRef.page)
     }
@@ -236,19 +256,21 @@ export function ReferencePage({ initialTopicId }: { initialTopicId?: string } = 
   function handleRefClick(ref: TopicRef, topicId: string) {
     const src = sources.find(s => s.id === ref.pdfId)
     if (!src) return
-    const url = getSourceUrl(src)
+    // 章別URLが指定されていればそれを優先（技術書は章ごとに別ファイル）
+    const url = ref.chapterUrl ?? getSourceUrl(src)
     if (!url) {
       // PDFが未登録 → ファイル選択を促す
       fileInputRefs.current[ref.pdfId]?.click()
       return
     }
     setActiveSourceId(ref.pdfId)
+    setChapterOverrideUrl(ref.chapterUrl ?? null)
     setPdfPage(ref.page)
     setActiveRefKey(topicId + ':' + ref.pdfId + ':' + ref.page)
   }
 
   const pdfViewUrl = (() => {
-    const url = getSourceUrl(activeSource)
+    const url = chapterOverrideUrl ?? getSourceUrl(activeSource)
     if (!url) return null
     if (pdfPage) return `${url}#page=${pdfPage}`
     return url
@@ -278,6 +300,7 @@ export function ReferencePage({ initialTopicId }: { initialTopicId?: string } = 
                   onClick={() => {
                     if (loaded) {
                       setActiveSourceId(src.id)
+                      setChapterOverrideUrl(null)
                       setPdfPage(undefined)
                     } else {
                       fileInputRefs.current[src.id]?.click()
@@ -326,7 +349,7 @@ export function ReferencePage({ initialTopicId }: { initialTopicId?: string } = 
                     {topic.refs.map((ref, i) => {
                       const src = sources.find(s => s.id === ref.pdfId)
                       if (!src) return null
-                      const loaded = !!getSourceUrl(src)
+                      const loaded = !!ref.chapterUrl || !!getSourceUrl(src)
                       const refKey = topic.id + ':' + ref.pdfId + ':' + ref.page
                       return (
                         <button
