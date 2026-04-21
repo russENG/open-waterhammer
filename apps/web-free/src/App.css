@@ -328,6 +328,47 @@
   background: #fff;
 }
 
+.input--error {
+  border-color: #e53e3e;
+  background: #fff5f5;
+}
+
+.input--error:focus {
+  border-color: #c53030;
+  background: #fff;
+}
+
+.input--warn {
+  border-color: #dd6b20;
+  background: #fffaf0;
+}
+
+.input--warn:focus {
+  border-color: #c05621;
+  background: #fff;
+}
+
+.input-msg {
+  display: flex;
+  align-items: flex-start;
+  gap: 4px;
+  font-size: 0.72rem;
+  line-height: 1.3;
+  margin-top: 2px;
+}
+
+.input-msg--error {
+  color: #c53030;
+}
+
+.input-msg--warn {
+  color: #c05621;
+}
+
+.input-msg-icon {
+  flex-shrink: 0;
+}
+
 .input-unit {
   font-size: 0.75rem;
   color: #718096;
@@ -2958,6 +2999,75 @@ select.input--narrow {
   opacity: 0.7;
 }
 
+/* ─── RefTooltip: ホバープレビュー ──────────────────────────── */
+.ref-tooltip-wrap {
+  position: relative;
+  display: inline-block;
+}
+.ref-tooltip {
+  position: absolute;
+  z-index: 50;
+  left: 0;
+  top: calc(100% + 4px);
+  min-width: 280px;
+  max-width: 420px;
+  padding: 10px 12px;
+  background: #fff;
+  border: 1px solid #cbd5e0;
+  border-radius: 6px;
+  box-shadow: 0 4px 18px rgba(0, 0, 0, 0.12);
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 0.85rem;
+  line-height: 1.4;
+  color: #1a202c;
+  white-space: normal;
+}
+.ref-tooltip-title {
+  font-weight: 600;
+  color: #2d3748;
+  border-bottom: 1px solid #edf2f7;
+  padding-bottom: 4px;
+}
+.ref-tooltip-refs {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.ref-tooltip-ref {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+}
+.ref-tooltip-badge {
+  flex-shrink: 0;
+  padding: 1px 6px;
+  border-radius: 3px;
+  font-size: 0.72rem;
+  font-weight: 600;
+  color: #fff;
+}
+.ref-tooltip-badge--kijun { background: #e53e3e; }
+.ref-tooltip-badge--gijutsusho { background: #38a169; }
+.ref-tooltip-badge--seikahinyoshiki { background: #3182ce; }
+.ref-tooltip-note {
+  flex: 1;
+  color: #2d3748;
+}
+.ref-tooltip-page {
+  flex-shrink: 0;
+  color: #718096;
+  font-size: 0.78rem;
+}
+.ref-tooltip-hint {
+  font-size: 0.75rem;
+  color: #718096;
+  font-style: italic;
+  border-top: 1px dashed #edf2f7;
+  padding-top: 4px;
+}
+
 /* ─── ReferencePage: 該当トピックのハイライト ──────────────────── */
 .ref-topic--highlight {
   animation: ref-topic-flash 1.6s ease-out;
@@ -3101,4 +3211,103 @@ select.input--narrow {
   padding: 1px 8px;
   border-radius: 3px;
   margin-left: 8px;
+}
+
+/* ─── モバイル・狭幅レイアウト ─────────────────────────────────────── */
+
+@media (max-width: 640px) {
+  /* 入力フィールド: 最小幅を縮めて単列になりやすく */
+  .input-grid {
+    grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+    gap: 10px;
+  }
+
+  /* ステップヘッダ: 横並び3要素を縦積みに */
+  .wh-step-header {
+    flex-wrap: wrap;
+    gap: 6px 12px;
+    padding: 12px 14px;
+  }
+  .wh-step-desc {
+    flex-basis: 100%;
+    order: 3;
+    font-size: 0.75rem;
+  }
+  .wh-step-toggle {
+    margin-left: auto;
+  }
+  .wh-step-title {
+    white-space: normal;
+  }
+  .wh-step-body {
+    padding: 0 14px 14px;
+  }
+
+  /* デモバナー: ボタン群を折り返す */
+  .demo-banner {
+    flex-wrap: wrap;
+    font-size: 0.82rem;
+  }
+  .demo-banner-actions {
+    flex-wrap: wrap;
+    gap: 6px;
+  }
+
+  /* ページヘッダ・タイトルをコンパクトに */
+  .page-header {
+    padding: 12px 14px;
+  }
+  .page-title {
+    font-size: 1.15rem;
+  }
+  .page-desc {
+    font-size: 0.78rem;
+  }
+
+  /* カード余白を縮小 */
+  .card {
+    padding: 14px;
+  }
+
+  /* ボタンタップしやすくする（44px ガイドライン） */
+  .btn,
+  .source-tab,
+  .demo-tab {
+    min-height: 40px;
+  }
+  .btn--small {
+    min-height: 32px;
+  }
+
+  /* Excel アクション: 既存の 600px 指定と整合（単列化） */
+  .excel-actions {
+    grid-template-columns: 1fr;
+    gap: 14px;
+  }
+
+  /* 結果テーブルヘッダ（タイトル＋CSVボタン）を縦積みに */
+  .card-title {
+    font-size: 1rem;
+  }
+
+  /* テーブル文字サイズを縮小し横スクロール前提にする */
+  .hydraulic-table,
+  .pipe-table {
+    font-size: 0.72rem;
+  }
+
+  /* SessionPanel/ExcelPanelの内部入力フィールド最小幅調整 */
+  .input-field {
+    min-width: 0;
+  }
+}
+
+@media (max-width: 420px) {
+  .wh-step-title-block {
+    flex-wrap: wrap;
+    gap: 2px 8px;
+  }
+  .page-title {
+    font-size: 1.05rem;
+  }
 }

@@ -17,6 +17,8 @@ import type {
   LongitudinalHydraulicResult,
 } from "@open-waterhammer/core";
 import type { WorkbookData } from "@open-waterhammer/excel-io";
+import { InputField } from "./InputField";
+import { downloadCsv } from "../utils/csv";
 
 type Method = "hazen-williams" | "darcy-weisbach";
 type Mode = "simple" | "longitudinal";
@@ -260,21 +262,26 @@ function SimpleCalculatorPanel({
         <div className="input-group">
           <h3 className="input-group-title">管路諸元</h3>
           <div className="input-grid">
-            <InputField label="管内径 D" unit="mm" value={form.innerDiameter} onChange={(v) => handleField("innerDiameter", v)} />
-            <InputField label="管路延長 L" unit="m" value={form.length} onChange={(v) => handleField("length", v)} />
+            <InputField label="管内径 D" unit="mm" required min={10} max={5000}
+              value={form.innerDiameter} onChange={(v) => handleField("innerDiameter", v)} />
+            <InputField label="管路延長 L" unit="m" required min={0.1} max={100000}
+              value={form.length} onChange={(v) => handleField("length", v)} />
           </div>
         </div>
         <div className="input-group">
           <h3 className="input-group-title">流量</h3>
           <div className="input-grid">
-            <InputField label="設計流量 Q" unit="m3/s" value={form.flowRate} onChange={(v) => handleField("flowRate", v)} />
+            <InputField label="設計流量 Q" unit="m3/s" required min={0.0001} max={100}
+              value={form.flowRate} onChange={(v) => handleField("flowRate", v)} />
           </div>
         </div>
         <div className="input-group">
           <h3 className="input-group-title">標高</h3>
           <div className="input-grid">
-            <InputField label="上流側標高" unit="m" value={form.upstreamElevation} onChange={(v) => handleField("upstreamElevation", v)} />
-            <InputField label="下流側標高" unit="m" value={form.downstreamElevation} onChange={(v) => handleField("downstreamElevation", v)} />
+            <InputField label="上流側標高" unit="m" required min={-500} max={5000}
+              value={form.upstreamElevation} onChange={(v) => handleField("upstreamElevation", v)} />
+            <InputField label="下流側標高" unit="m" required min={-500} max={5000}
+              value={form.downstreamElevation} onChange={(v) => handleField("downstreamElevation", v)} />
           </div>
         </div>
         <div className="input-group">
@@ -283,9 +290,11 @@ function SimpleCalculatorPanel({
           </h3>
           <div className="input-grid">
             {method === "hazen-williams" ? (
-              <InputField label="Hazen-Williams C" unit="" value={form.roughnessC} onChange={(v) => handleField("roughnessC", v)} />
+              <InputField label="Hazen-Williams C" required min={50} max={200}
+                value={form.roughnessC} onChange={(v) => handleField("roughnessC", v)} />
             ) : (
-              <InputField label="摩擦損失係数 f" unit="" value={form.frictionFactor} onChange={(v) => handleField("frictionFactor", v)} />
+              <InputField label="摩擦損失係数 f" required min={0.005} max={0.1}
+                value={form.frictionFactor} onChange={(v) => handleField("frictionFactor", v)} />
             )}
           </div>
           {method === "hazen-williams" && (
@@ -369,15 +378,18 @@ function LongitudinalCalculatorPanel({
             <InputField
               label="静水位 (HWL)"
               unit="m"
+              required
+              min={-500}
+              max={5000}
               value={longForm.staticWaterLevel}
               onChange={(v) => handleLongField("staticWaterLevel", v)}
             />
             <InputField
               label="ケース名"
-              unit=""
               value={longForm.caseName}
               onChange={(v) => handleLongField("caseName", v)}
               type="text"
+              required
             />
           </div>
         </div>
@@ -401,7 +413,11 @@ function LongitudinalCalculatorPanel({
             {longForm.waterhammerMode === "ratio" ? (
               <InputField
                 label="水撃圧/静水圧 比率"
-                unit=""
+                required
+                min={0}
+                max={2}
+                warnMax={1}
+                warnMessage="1 を超えています。ポンプ直送・長大管路でも通常 0.4〜0.6 程度。値を再確認してください。"
                 value={longForm.waterhammerRatio}
                 onChange={(v) => handleLongField("waterhammerRatio", v)}
               />
@@ -409,6 +425,9 @@ function LongitudinalCalculatorPanel({
               <InputField
                 label="水撃圧"
                 unit="MPa"
+                required
+                min={0}
+                max={5}
                 value={longForm.waterhammerFixed}
                 onChange={(v) => handleLongField("waterhammerFixed", v)}
               />
@@ -427,10 +446,22 @@ function LongitudinalCalculatorPanel({
 
       {/* 結果テーブル */}
       <section className="card">
-        <h2 className="card-title">
-          水理計算書
-          {result && <span className="card-title-sub">（{result.caseName}）</span>}
-        </h2>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, flexWrap: "wrap" }}>
+          <h2 className="card-title" style={{ margin: 0 }}>
+            水理計算書
+            {result && <span className="card-title-sub">（{result.caseName}）</span>}
+          </h2>
+          {result && (
+            <button
+              type="button"
+              className="btn btn--secondary"
+              style={{ padding: "4px 10px", fontSize: "0.78rem" }}
+              onClick={() => downloadHydraulicCsv(points, result)}
+            >
+              ↓ CSV 出力
+            </button>
+          )}
+        </div>
         {result ? (
           <>
             {result.warnings.length > 0 && (
@@ -461,6 +492,36 @@ function LongitudinalCalculatorPanel({
       </section>
     </div>
   );
+}
+
+// ─── 水理計算書 CSV 出力 ────────────────────────────────────────────────────
+
+function downloadHydraulicCsv(points: MeasurementPoint[], result: LongitudinalHydraulicResult) {
+  const header = [
+    "測点", "単距離Lh(m)", "地盤高GL(m)", "管中心高FH(m)", "管長SL(m)",
+    "流量Q(m3/s)", "管径D(mm)", "流速係数CI",
+    "動水勾配(permil)", "流速V(m/s)", "速度水頭hv(m)", "摩擦損失hf(m)",
+    "湾曲fb", "バルブfv", "直角分流fβ", "係数計Σf", "損失計Σhc(m)",
+    "全損失h(m)", "EL(m)", "動水位WLm(m)", "動水頭hm(m)",
+    "静水圧Ps(MPa)", "水撃圧Pi(MPa)", "設計内圧Pp(MPa)",
+  ];
+  const rows: (string | number | null)[][] = [header];
+  points.forEach((pt, i) => {
+    const r = result.pointResults[i];
+    if (!r) return;
+    rows.push([
+      pt.id,
+      pt.horizontalDistance, pt.groundLevel, pt.pipeCenterHeight, pt.pipeLength,
+      pt.flowRate, pt.diameter * 1000, pt.roughnessC,
+      r.hydraulicGradient * 1000, r.velocity, r.velocityHead, r.frictionLoss,
+      pt.bendLossCoeff, pt.valveLossCoeff, pt.branchLossCoeff, r.totalLossCoeff, r.minorLoss,
+      r.totalLoss, r.energyLevel, r.hydraulicGradeLine, r.pressureHead,
+      r.staticPressure, r.waterhammerPressure, r.designPressure,
+    ]);
+  });
+  const stamp = new Date().toISOString().slice(0, 10);
+  const safe = (result.caseName || "hydraulic").replace(/[\\/:*?"<>|]/g, "_");
+  downloadCsv(`${safe}-${stamp}.csv`, rows);
 }
 
 // ─── 水理計算書テーブル（成果品様式準拠） ──────────────────────────────────────
@@ -545,23 +606,6 @@ function HydraulicResultTable({
 }
 
 // ─── 共通コンポーネント ─────────────────────────────────────────────────────────
-
-function InputField({
-  label, unit, value, onChange, type = "number",
-}: {
-  label: string; unit: string; value: string; onChange: (v: string) => void; type?: string;
-}) {
-  return (
-    <div className="input-field">
-      <label className="input-label">{label}</label>
-      <div className="input-control">
-        <input type={type} className="input" value={value}
-          onChange={(e) => onChange(e.target.value)} step="any" />
-        {unit && <span className="input-unit">{unit}</span>}
-      </div>
-    </div>
-  );
-}
 
 function ResultRow({
   label, value, unit, highlight,

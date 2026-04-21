@@ -10,7 +10,7 @@ import {
   joukowsky,
   headToMpa,
 } from "@open-waterhammer/core";
-import type { Pipe, MocResult } from "@open-waterhammer/core";
+import type { Pipe, MocResult, LongitudinalHydraulicResult } from "@open-waterhammer/core";
 import type { WorkbookData } from "@open-waterhammer/excel-io";
 import {
   DEMO_CASE_01_PIPE,
@@ -23,7 +23,9 @@ import {
 import { MocTimeChart } from "./MocTimeChart";
 import { MocEnvelopeChart } from "./MocEnvelopeChart";
 import { ChartFrame } from "./ChartFrame";
-import { RefLink } from "./RefLink";
+import { RefTooltip } from "./RefTooltip";
+import { InputField } from "./InputField";
+import { downloadCsv } from "../utils/csv";
 
 // ─── デモケース ───────────────────────────────────────────────────────────────
 
@@ -80,9 +82,11 @@ export interface MocCalculatorProps {
   excelData?: WorkbookData | null;
   /** 計算結果を親に通知（セッション保存用） */
   onResult?: (result: MocResult | null) => void;
+  /** Step5（定常計算）の結果 — 「定常結果から引用」ボタンで V₀/H₀ に反映する */
+  steadyResult?: LongitudinalHydraulicResult | null;
 }
 
-export function MocCalculator({ excelData, onResult }: MocCalculatorProps) {
+export function MocCalculator({ excelData, onResult, steadyResult }: MocCalculatorProps) {
   const excelPipes = excelData?.pipes ?? [];
   const excelCases = excelData?.cases ?? [];
   const hasExcel = excelPipes.length > 0;
@@ -138,6 +142,21 @@ export function MocCalculator({ excelData, onResult }: MocCalculatorProps) {
 
   function updateField(key: keyof FormState, val: string) {
     setForm((f) => ({ ...f, [key]: val }));
+    setSnapIdx(0);
+  }
+
+  // ─── Step5（定常計算）結果の引用 ─────────────────────────────────────────
+  // 最大流速を V₀、下流端の動水頭 hm を H₀ として採用
+  function importFromSteady() {
+    if (!steadyResult) return;
+    const V = steadyResult.maxVelocity;
+    const lastPoint = steadyResult.pointResults[steadyResult.pointResults.length - 1];
+    const H = lastPoint ? lastPoint.pressureHead : null;
+    setForm((f) => ({
+      ...f,
+      initialVelocity: V > 0 ? V.toFixed(3) : f.initialVelocity,
+      initialHead: H && H > 0 ? H.toFixed(2) : f.initialHead,
+    }));
     setSnapIdx(0);
   }
 
@@ -264,58 +283,46 @@ export function MocCalculator({ excelData, onResult }: MocCalculatorProps) {
           <div className="input-group">
             <p className="input-group-title">管路諸元</p>
             <div className="input-grid">
-              {(
-                [
-                  { key: "innerDiameter", label: "内径 D", unit: "mm" },
-                  { key: "wallThickness", label: "管厚 t", unit: "mm" },
-                  { key: "length",        label: "延長 L", unit: "m" },
-                ] as { key: keyof FormState; label: string; unit: string }[]
-              ).map(({ key, label, unit }) => (
-                <div className="input-field" key={key}>
-                  <span className="input-label">{label}</span>
-                  <div className="input-control">
-                    <input className="input" type="number" min="0" step="any"
-                      value={form[key]} onChange={(e) => updateField(key, e.target.value)} />
-                    <span className="input-unit">{unit}</span>
-                  </div>
-                </div>
-              ))}
+              <InputField label="内径 D" unit="mm" required min={10} max={5000}
+                value={form.innerDiameter} onChange={(v) => updateField("innerDiameter", v)} />
+              <InputField label="管厚 t" unit="mm" required min={0.5} max={200}
+                value={form.wallThickness} onChange={(v) => updateField("wallThickness", v)} />
+              <InputField label="延長 L" unit="m" required min={1} max={100000}
+                value={form.length} onChange={(v) => updateField("length", v)} />
             </div>
           </div>
 
           <div className="input-group">
-            <p className="input-group-title">初期条件・操作</p>
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, marginBottom: 6 }}>
+              <p className="input-group-title" style={{ margin: 0 }}>初期条件・操作</p>
+              {steadyResult && (
+                <button
+                  type="button"
+                  className="btn btn--secondary"
+                  style={{ padding: "3px 10px", fontSize: "0.78rem" }}
+                  onClick={importFromSteady}
+                  title={`最大流速 ${steadyResult.maxVelocity.toFixed(3)} m/s、下流端動水頭を V₀/H₀ にコピーします`}
+                >
+                  ↑ 定常計算の結果から引用
+                </button>
+              )}
+            </div>
             <div className="input-grid">
-              {(
-                [
-                  { key: "initialVelocity", label: "初期流速 V₀", unit: "m/s" },
-                  { key: "initialHead",     label: "初期水頭 H₀", unit: "m" },
-                  { key: "closeTime",       label: "閉そく時間 tν", unit: "s" },
-                ] as { key: keyof FormState; label: string; unit: string }[]
-              ).map(({ key, label, unit }) => (
-                <div className="input-field" key={key}>
-                  <span className="input-label">{label}</span>
-                  <div className="input-control">
-                    <input className="input" type="number" min="0" step="any"
-                      value={form[key]} onChange={(e) => updateField(key, e.target.value)} />
-                    <span className="input-unit">{unit}</span>
-                  </div>
-                </div>
-              ))}
+              <InputField label="初期流速 V₀" unit="m/s" required min={0} max={20}
+                warnMax={2.5} warnMessage="設計指針の推奨上限 2.5 m/s を超えています"
+                value={form.initialVelocity} onChange={(v) => updateField("initialVelocity", v)} />
+              <InputField label="初期水頭 H₀" unit="m" required min={0.1} max={1000}
+                value={form.initialHead} onChange={(v) => updateField("initialHead", v)} />
+              <InputField label="閉そく時間 tν" unit="s" required min={0} max={1000}
+                value={form.closeTime} onChange={(v) => updateField("closeTime", v)} />
             </div>
           </div>
 
           <div className="input-group">
             <p className="input-group-title">計算設定</p>
             <div className="input-grid">
-              <div className="input-field">
-                <span className="input-label">分割数 N（4〜40）</span>
-                <div className="input-control">
-                  <input className="input" type="number" min="4" max="40" step="1"
-                    value={form.nReaches} onChange={(e) => updateField("nReaches", e.target.value)} />
-                  <span className="input-unit">区間</span>
-                </div>
-              </div>
+              <InputField label="分割数 N（4〜40）" unit="区間" required min={4} max={40} step="1"
+                value={form.nReaches} onChange={(v) => updateField("nReaches", v)} />
             </div>
             <p className="demo-note" style={{ marginTop: 6 }}>
               Δt = Δx/a（クーラン条件）。シミュレーション時間: 3×T₀
@@ -397,9 +404,29 @@ export function MocCalculator({ excelData, onResult }: MocCalculatorProps) {
 
           {/* ── 管路縦断圧力包絡線図 ── */}
           <div>
-            <p className="result-section-title" style={{ marginBottom: 8 }}>
-              管路縦断圧力包絡線図
-            </p>
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, marginBottom: 8, flexWrap: "wrap" }}>
+              <p className="result-section-title" style={{ margin: 0 }}>
+                管路縦断圧力包絡線図
+              </p>
+              <button
+                type="button"
+                className="btn btn--secondary"
+                style={{ padding: "4px 10px", fontSize: "0.78rem" }}
+                onClick={() => {
+                  const rows: (string | number)[][] = [["x(m)", "Hmax(m)", "Hmin(m)", "H_steady(m)"]];
+                  const L = parsed?.pipe.length ?? 0;
+                  const N = pipe0.Hmax.length;
+                  for (let i = 0; i < N; i++) {
+                    const x = (i / Math.max(N - 1, 1)) * L;
+                    rows.push([x, pipe0.Hmax[i] ?? 0, pipe0.Hmin[i] ?? 0, H_steady[i] ?? 0]);
+                  }
+                  const stamp = new Date().toISOString().slice(0, 10);
+                  downloadCsv(`moc-envelope-${stamp}.csv`, rows);
+                }}
+              >
+                ↓ CSV 出力
+              </button>
+            </div>
 
             {/* 時刻スクロールバー */}
             <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 10 }}>
@@ -442,9 +469,24 @@ export function MocCalculator({ excelData, onResult }: MocCalculatorProps) {
 
           {/* ── 下流端 H(t) 時系列チャート ── */}
           <div>
-            <p className="result-section-title" style={{ marginBottom: 8 }}>
-              下流端（バルブ）水頭 H(t) 時系列
-            </p>
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, marginBottom: 8, flexWrap: "wrap" }}>
+              <p className="result-section-title" style={{ margin: 0 }}>
+                下流端（バルブ）水頭 H(t) 時系列
+              </p>
+              <button
+                type="button"
+                className="btn btn--secondary"
+                style={{ padding: "4px 10px", fontSize: "0.78rem" }}
+                onClick={() => {
+                  const rows: (string | number)[][] = [["t(s)", "H(m)"]];
+                  downstreamHSeries.forEach((p) => rows.push([p.t, p.H]));
+                  const stamp = new Date().toISOString().slice(0, 10);
+                  downloadCsv(`moc-downstream-${stamp}.csv`, rows);
+                }}
+              >
+                ↓ CSV 出力
+              </button>
+            </div>
             <ChartFrame filename="moc_time_history">
               <MocTimeChart
                 downstreamH={downstreamHSeries}
@@ -459,7 +501,7 @@ export function MocCalculator({ excelData, onResult }: MocCalculatorProps) {
 
       <div className="result-footer" style={{ marginTop: 16 }}>
         <p className="result-standard">
-          出典: <RefLink topicId="moc">技術書 §8.4（特性曲線法）</RefLink>　／
+          出典: <RefTooltip topicId="moc">技術書 §8.4（特性曲線法）</RefTooltip>　／
           単一管路・定水頭上流境界・線形バルブ閉操作・準定常摩擦（Darcy-Weisbach）
         </p>
       </div>

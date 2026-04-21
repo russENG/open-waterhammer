@@ -25,7 +25,8 @@ import {
 import { Formula } from "./Formula";
 import { PressureChart } from "./PressureChart";
 import { ChartFrame } from "./ChartFrame";
-import { RefLink } from "./RefLink";
+import { RefTooltip } from "./RefTooltip";
+import { InputField } from "./InputField";
 import type { WorkbookData } from "@open-waterhammer/excel-io";
 
 // ─── デモケース定義 ──────────────────────────────────────────────────────────
@@ -478,28 +479,36 @@ export function WaterhammerCalculator({ excelData }: { excelData?: WorkbookData 
           <div className="input-group">
             <h3 className="input-group-title">管路諸元</h3>
             <div className="input-grid">
-              <InputField label="管内径 D" unit="mm" value={form.innerDiameter} onChange={(v) => handleField("innerDiameter", v)} />
-              <InputField label="管厚 t" unit="mm" value={form.wallThickness} onChange={(v) => handleField("wallThickness", v)} />
-              <InputField label="管路延長 L" unit="m" value={form.length} onChange={(v) => handleField("length", v)} />
+              <InputField label="管内径 D" unit="mm" required min={10} max={5000}
+                value={form.innerDiameter} onChange={(v) => handleField("innerDiameter", v)} />
+              <InputField label="管厚 t" unit="mm" required min={0.5} max={200}
+                value={form.wallThickness} onChange={(v) => handleField("wallThickness", v)} />
+              <InputField label="管路延長 L" unit="m" required min={1} max={100000}
+                value={form.length} onChange={(v) => handleField("length", v)} />
             </div>
           </div>
           <div className="input-group">
             <h3 className="input-group-title">定常状態</h3>
             <div className="input-grid">
-              <InputField label="初期流速 V₀" unit="m/s" value={form.initialVelocity} onChange={(v) => handleField("initialVelocity", v)} />
-              <InputField label="静水頭 H₀" unit="m" value={form.initialHead} onChange={(v) => handleField("initialHead", v)} />
+              <InputField label="初期流速 V₀" unit="m/s" required min={0} max={20}
+                warnMax={2.5} warnMessage="設計指針の推奨上限 2.5 m/s を超えています（農業用パイプライン）"
+                value={form.initialVelocity} onChange={(v) => handleField("initialVelocity", v)} />
+              <InputField label="静水頭 H₀" unit="m" required min={0.1} max={1000}
+                value={form.initialHead} onChange={(v) => handleField("initialHead", v)} />
             </div>
           </div>
           <div className="input-group">
             <h3 className="input-group-title">操作条件</h3>
             <div className="input-grid">
-              <InputField label="等価閉そく時間 tν" unit="s" value={form.closeTime} onChange={(v) => handleField("closeTime", v)} />
+              <InputField label="等価閉そく時間 tν" unit="s" required min={0} max={1000}
+                value={form.closeTime} onChange={(v) => handleField("closeTime", v)} />
             </div>
           </div>
           <div className="input-group">
             <h3 className="input-group-title">耐圧判定</h3>
             <div className="input-grid">
-              <InputField label="許容圧力（呼び圧力）" unit="MPa" value={form.allowablePressure} onChange={(v) => handleField("allowablePressure", v)} />
+              <InputField label="許容圧力（呼び圧力）" unit="MPa" required min={0.1} max={10}
+                value={form.allowablePressure} onChange={(v) => handleField("allowablePressure", v)} />
             </div>
           </div>
         </section>
@@ -599,7 +608,7 @@ export function WaterhammerCalculator({ excelData }: { excelData?: WorkbookData 
 
               <div className="result-footer">
                 <span className="result-standard">
-                  準拠: <RefLink topicId="waterhammer-estimate">技術書 §8.3（水撃圧の推定）</RefLink>
+                  準拠: <RefTooltip topicId="waterhammer-estimate">技術書 §8.3（水撃圧の推定）</RefTooltip>
                 </span>
               </div>
             </>
@@ -621,32 +630,3 @@ export function WaterhammerCalculator({ excelData }: { excelData?: WorkbookData 
   );
 }
 
-// ─── 入力フィールドコンポーネント ───────────────────────────────────────────
-
-function InputField({
-  label,
-  unit,
-  value,
-  onChange,
-}: {
-  label: string;
-  unit: string;
-  value: string;
-  onChange: (v: string) => void;
-}) {
-  return (
-    <div className="input-field">
-      <label className="input-label">{label}</label>
-      <div className="input-control">
-        <input
-          type="number"
-          className="input"
-          value={value}
-          onChange={(e) => onChange(e.target.value)}
-          step="any"
-        />
-        <span className="input-unit">{unit}</span>
-      </div>
-    </div>
-  );
-}

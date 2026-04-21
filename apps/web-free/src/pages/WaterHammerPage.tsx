@@ -3,6 +3,7 @@
  * Excel入出力 → 管路諸元一覧（伝播速度自動算定） → 各ステップ（アコーディオン）の構成
  */
 import { useState, useCallback } from 'react'
+import { usePersistentState, stringSetCodec } from '../hooks/usePersistentState'
 import type {
   Pipe,
   CalculationCase,
@@ -287,12 +288,13 @@ function PrerequisiteContent({ id }: { id: string }) {
 interface StepContentProps {
   id: string
   excelData: WorkbookData | null
+  steadyResult: LongitudinalHydraulicResult | null
   onSteadyResult?: (input: LongitudinalHydraulicInput | null, result: LongitudinalHydraulicResult | null) => void
   onMocResult?: (result: MocResult | null) => void
   onNetworkMocResult?: (network: MocNetwork | null, result: MocResult | null) => void
 }
 
-function StepContent({ id, excelData, onSteadyResult, onMocResult, onNetworkMocResult }: StepContentProps) {
+function StepContent({ id, excelData, steadyResult, onSteadyResult, onMocResult, onNetworkMocResult }: StepContentProps) {
   switch (id) {
     case 'steady-flow': return (
       <>
@@ -318,7 +320,7 @@ function StepContent({ id, excelData, onSteadyResult, onMocResult, onNetworkMocR
     case 'moc': return (
       <>
         <PipeNetGuide kind="moc" />
-        <MocCalculator excelData={excelData} onResult={onMocResult} />
+        <MocCalculator excelData={excelData} onResult={onMocResult} steadyResult={steadyResult} />
         <div style={{ marginTop: 24 }}>
           <NetworkMocCalculator onResult={onNetworkMocResult} />
         </div>
@@ -454,12 +456,14 @@ function PipeTable({ pipes, cases }: { pipes: Pipe[]; cases: CalculationCase[] }
 // ─── メインページ ──────────────────────────────────────────────────────────────
 
 export function WaterHammerPage() {
-  // 起動時にデモステップ（定常／MOC／成果出力）をデフォルトで開いておく
-  const [openSteps, setOpenSteps] = useState<Set<string>>(
-    () => new Set(['steady-flow', 'moc', 'report']),
+  // 起動時にデモステップ（定常／MOC／成果出力）をデフォルトで開いておく — アコーディオン状態はlocalStorage永続化
+  const [openSteps, setOpenSteps] = usePersistentState<Set<string>>(
+    'openSteps',
+    new Set(['steady-flow', 'moc', 'report']),
+    stringSetCodec,
   )
-  const [guideOpen, setGuideOpen] = useState(false)
-  const [prereqOpen, setPrereqOpen] = useState(false)
+  const [guideOpen, setGuideOpen] = usePersistentState<boolean>('guideOpen', false)
+  const [prereqOpen, setPrereqOpen] = usePersistentState<boolean>('prereqOpen', false)
   // 起動時にデモ用ダミーデータを適用 — ユーザーは即座に MOC グラフ等を確認できる
   const [excelData, setExcelData] = useState<WorkbookData | null>(DEMO_WORKBOOK)
   const [usingDemo, setUsingDemo] = useState(true)
@@ -668,6 +672,7 @@ export function WaterHammerPage() {
                   <StepContent
                     id={step.id}
                     excelData={excelData}
+                    steadyResult={steadyResult}
                     onSteadyResult={handleSteadyResult}
                     onMocResult={handleMocResult}
                     onNetworkMocResult={handleNetworkMocResult}

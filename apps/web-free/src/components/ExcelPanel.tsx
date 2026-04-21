@@ -67,6 +67,34 @@ export function ExcelPanel({ onLoad, loadedData, collapsedByDefault }: ExcelPane
     URL.revokeObjectURL(url);
   }
 
+  // ─── 読込データの再エクスポート（入力形式のまま） ──────────────────────────
+
+  async function handleExportInput() {
+    if (!loadedData) return;
+    const { generateTemplate } = await getExcelIO();
+    const buf = generateTemplate({
+      meta: loadedData.meta,
+      pipes: loadedData.pipes,
+      nodes: loadedData.nodes,
+      cases: loadedData.cases,
+      measurementPoints: loadedData.measurementPoints,
+    });
+
+    const blob = new Blob([buf], {
+      type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    const stamp = new Date().toISOString().slice(0, 10);
+    const baseName = loadedData.meta.projectName
+      ? loadedData.meta.projectName.replace(/[\\/:*?"<>|]/g, "_")
+      : "waterhammer-input";
+    a.download = `${baseName}-${stamp}.xlsx`;
+    a.click();
+    URL.revokeObjectURL(url);
+  }
+
   // ─── レポート出力 ───────────────────────────────────────────────────────────
 
   async function handleReportDownload() {
@@ -212,6 +240,20 @@ export function ExcelPanel({ onLoad, loadedData, collapsedByDefault }: ExcelPane
             )}
           </div>
         </div>
+        {/* 入力データの再エクスポート */}
+        {loadedData && (
+          <div className="excel-action-group">
+            <div className="excel-action-label">入力データ保存</div>
+            <button className="btn btn--secondary" onClick={handleExportInput}>
+              <span className="btn-icon">↓</span>
+              読込データを入力形式で保存 (.xlsx)
+            </button>
+            <p className="excel-action-note">
+              現在読込中の管路・節点・ケース・測点データを入力テンプレート形式で保存します。
+              UI側で調整した値を反映させる場合は、出力したxlsxを直接編集して再読込してください。
+            </p>
+          </div>
+        )}
         {/* レポート出力 */}
         {loadedData && (
           <div className="excel-action-group">
