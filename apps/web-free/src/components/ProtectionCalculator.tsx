@@ -6,12 +6,15 @@
 
 import React, { useState, useMemo, useEffect } from "react";
 import {
-  runMoc,
-  runMocPumpTrip,
-  calcWaveSpeed,
   headToMpa,
 } from "@open-waterhammer/core";
-import type { Pipe, MocResult } from "@open-waterhammer/core";
+import type { Pipe } from "@open-waterhammer/core";
+import {
+  runMocPy,
+  runMocPumpTripPy,
+  type MocResultJs,
+  type NetworkSpec,
+} from "../lib/pyodide-bridge";
 import type { WorkbookData } from "@open-waterhammer/excel-io";
 import { DEMO_CASE_01_PIPE } from "@open-waterhammer/sample-data";
 import { MocEnvelopeChart } from "./MocEnvelopeChart";
@@ -149,84 +152,149 @@ export function ProtectionCalculator({ excelData }: { excelData?: WorkbookData |
     return { pipe, Q0, H0, Hs, sd, N };
   }, [base, excelPipes]);
 
+  // 共通: Pipe → PipeArg 変換（Pyodide 用）
+  const toPipeArg = (pipe: Pipe) => ({
+    id: pipe.id,
+    startNodeId: pipe.startNodeId,
+    endNodeId: pipe.endNodeId,
+    pipeType: pipe.pipeType,
+    innerDiameter: pipe.innerDiameter,
+    wallThickness: pipe.wallThickness,
+    length: pipe.length,
+    roughnessCoeff: pipe.roughnessCoeff,
+    youngsModulus: pipe.youngsModulus,
+    c1Coeff: pipe.c1Coeff,
+  });
+
   // ── 防護なし（ベースライン） ──────────────────────────────────────────────
-  const resultWithout = useMemo<MocResult | null>(() => {
-    if (!parsedBase) return null;
+  const [resultWithout, setResultWithout] = useState<MocResultJs | null>(null);
+
+  useEffect(() => {
+    if (!parsedBase) {
+      setResultWithout(null);
+      return;
+    }
     const { pipe, Q0, H0, Hs, sd, N } = parsedBase;
-    return runMocPumpTrip({
-      pipe, waveSpeed: calcWaveSpeed(pipe),
-      Q0, pumpHead: H0, Hs, shutdownTime: sd, checkValve: true, nReaches: N,
-    });
+    let cancelled = false;
+    runMocPumpTripPy({
+      pipe: toPipeArg(pipe),
+      Q0,
+      pumpHead: H0,
+      Hs,
+      shutdownTime: sd,
+      checkValve: true,
+      nReaches: N,
+    })
+      .then((r) => {
+        if (!cancelled) setResultWithout(r);
+      })
+      .catch((err) => {
+        if (!cancelled) {
+          console.error("runMocPumpTripPy failed", err);
+          setResultWithout(null);
+        }
+      });
+    return () => {
+      cancelled = true;
+    };
   }, [parsedBase]);
 
   // ── 防護あり ──────────────────────────────────────────────────────────────
-  const resultWith = useMemo<MocResult | null>(() => {
-    if (!parsedBase) return null;
+  const [resultWith, setResultWith] = useState<MocResultJs | null>(null);
+
+  useEffect(() => {
+    if (!parsedBase) {
+      setResultWith(null);
+      return;
+    }
     const { pipe, Q0, H0, Hs, sd, N } = parsedBase;
-    const a = calcWaveSpeed(pipe);
+    const pipeArg = toPipeArg(pipe);
+
+    let networkSpec: NetworkSpec | null = null;
 
     if (deviceTab === "air_chamber") {
       const V0 = parseFloat(acForm.V_air0);
       const Ha0 = parseFloat(acForm.H_air0);
       const m = parseFloat(acForm.polytropicIndex);
-      if ([V0, Ha0, m].some(isNaN) || V0 <= 0) return null;
-      return runMoc({
-        pipes: [{ id: "pipe_0", pipe, waveSpeed: a, nReaches: N,
+      if ([V0, Ha0, m].some(isNaN) || V0 <= 0) {
+        setResultWith(null);
+        return;
+      }
+      networkSpec = {
+        pipes: [{ id: "pipe_0", pipe: pipeArg, nReaches: N,
                   upstreamNodeId: "pump_node", downstreamNodeId: "device_node" }],
         nodes: {
           pump_node: { type: "pump", Q0, H0, ...(Hs ? { Hs } : {}), shutdownTime: sd, checkValve: true },
           device_node: { type: "air_chamber", V_air0: V0, H_air0: Ha0, polytropicIndex: m },
         },
-      }, { initialFlow: Q0 });
-    }
-
-    if (deviceTab === "surge_tank") {
+      };
+    } else if (deviceTab === "surge_tank") {
       const As = parseFloat(stForm.tankArea);
       const z0 = parseFloat(stForm.initialLevel);
       const dat = parseFloat(stForm.datum) || 0;
-      if ([As, z0].some(isNaN) || As <= 0) return null;
-      return runMoc({
-        pipes: [{ id: "pipe_0", pipe, waveSpeed: a, nReaches: N,
+      if ([As, z0].some(isNaN) || As <= 0) {
+        setResultWith(null);
+        return;
+      }
+      networkSpec = {
+        pipes: [{ id: "pipe_0", pipe: pipeArg, nReaches: N,
                   upstreamNodeId: "pump_node", downstreamNodeId: "device_node" }],
         nodes: {
           pump_node: { type: "pump", Q0, H0, ...(Hs ? { Hs } : {}), shutdownTime: sd, checkValve: true },
           device_node: { type: "surge_tank", tankArea: As, initialLevel: z0, datum: dat },
         },
-      }, { initialFlow: Q0 });
-    }
-
-    if (deviceTab === "air_release_valve") {
+      };
+    } else if (deviceTab === "air_release_valve") {
       const Hatm = parseFloat(avForm.atmosphericHead) || 10.33;
-      return runMoc({
-        pipes: [{ id: "pipe_0", pipe, waveSpeed: a, nReaches: N,
+      networkSpec = {
+        pipes: [{ id: "pipe_0", pipe: pipeArg, nReaches: N,
                   upstreamNodeId: "pump_node", downstreamNodeId: "device_node" }],
         nodes: {
           pump_node: { type: "pump", Q0, H0, ...(Hs ? { Hs } : {}), shutdownTime: sd, checkValve: true },
           device_node: { type: "air_release_valve", atmosphericHead: Hatm },
         },
-      }, { initialFlow: Q0 });
-    }
-
-    if (deviceTab === "prv") {
+      };
+    } else if (deviceTab === "prv") {
       const Hset = parseFloat(prvForm.setHead);
-      if (isNaN(Hset)) return null;
+      if (isNaN(Hset)) {
+        setResultWith(null);
+        return;
+      }
       // PRV: 貯水槽 → 管路 → PRV（高水頭側の上昇圧遮断シナリオ）
       const HR = H0 * 2; // 仮想高圧貯水槽
-      return runMoc({
-        pipes: [{ id: "pipe_0", pipe, waveSpeed: a, nReaches: N,
+      networkSpec = {
+        pipes: [{ id: "pipe_0", pipe: pipeArg, nReaches: N,
                   upstreamNodeId: "reservoir", downstreamNodeId: "device_node" }],
         nodes: {
           reservoir: { type: "reservoir", head: HR },
           device_node: { type: "pressure_reducing_valve", setHead: Hset, Q0 },
         },
-      }, { initialFlow: Q0 });
+      };
     }
 
-    return null;
+    if (!networkSpec) {
+      setResultWith(null);
+      return;
+    }
+
+    let cancelled = false;
+    runMocPy(networkSpec, { initialFlow: Q0 })
+      .then((r) => {
+        if (!cancelled) setResultWith(r);
+      })
+      .catch((err) => {
+        if (!cancelled) {
+          console.error("runMocPy (protection) failed", err);
+          setResultWith(null);
+        }
+      });
+    return () => {
+      cancelled = true;
+    };
   }, [parsedBase, deviceTab, acForm, stForm, avForm, prvForm]);
 
   // ── 比較値取得 ────────────────────────────────────────────────────────────
-  function getDownstreamKey(r: MocResult | null) {
+  function getDownstreamKey(r: MocResultJs | null) {
     if (!r) return null;
     return Object.keys(r.nodes).find((k) => k !== "pump_node" && k !== "reservoir") ?? null;
   }

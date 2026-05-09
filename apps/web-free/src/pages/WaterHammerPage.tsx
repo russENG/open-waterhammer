@@ -17,7 +17,6 @@ import type { WorkbookData } from '@open-waterhammer/excel-io'
 import {
   DEMO_CASE_01_PIPE,
   DEMO_CASE_01_CASE,
-  DEMO_CASE_02_PIPE,
   DEMO_CASE_02_CASE,
   DEMO_MEASUREMENT_POINTS,
 } from '@open-waterhammer/sample-data'
@@ -69,7 +68,7 @@ const DEMO_WORKBOOK: WorkbookData = {
     standardId: 'nochi_pipeline_2021',
     methodId: 'joukowsky_v1',
   },
-  pipes: [DEMO_CASE_01_PIPE, DEMO_CASE_02_PIPE],
+  pipes: [DEMO_CASE_01_PIPE],
   nodes: [],
   cases: [DEMO_CASE_01_CASE, DEMO_CASE_02_CASE],
   measurementPoints: DEMO_MEASUREMENT_POINTS,

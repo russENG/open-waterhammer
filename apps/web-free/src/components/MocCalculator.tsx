@@ -5,13 +5,16 @@
 
 import { useState, useMemo, useEffect } from "react";
 import {
-  runMocSinglePipe,
-  calcWaveSpeed,
   joukowsky,
   headToMpa,
 } from "@open-waterhammer/core";
 import type { Pipe, MocResult, LongitudinalHydraulicResult } from "@open-waterhammer/core";
 import type { WorkbookData } from "@open-waterhammer/excel-io";
+import {
+  runMocSinglePipePy,
+  calcWaveSpeedPy,
+  type MocResultJs,
+} from "../lib/pyodide-bridge";
 import {
   DEMO_CASE_01_PIPE,
   DEMO_CASE_01_CASE,
@@ -189,23 +192,63 @@ export function MocCalculator({ excelData, onResult, steadyResult }: MocCalculat
   }, [form, demoId, inputSource, excelPipes]);
 
   // ── MOC 実行 ──────────────────────────────────────────────────────────────
-  const result = useMemo(() => {
-    if (!parsed) return null;
+  const [result, setResult] = useState<MocResultJs | null>(null);
+
+  useEffect(() => {
+    if (!parsed) {
+      setResult(null);
+      return;
+    }
     const { pipe, V0, H0, tv, N } = parsed;
-    const a = calcWaveSpeed(pipe);
-    return runMocSinglePipe({
-      pipe,
-      waveSpeed: a,
-      initialVelocity: V0,
-      initialDownstreamHead: H0,
-      closeTime: tv,
-      nReaches: N,
+    let cancelled = false;
+    const run = async () => {
+      const a = await calcWaveSpeedPy({
+        id: pipe.id,
+        startNodeId: pipe.startNodeId,
+        endNodeId: pipe.endNodeId,
+        pipeType: pipe.pipeType,
+        innerDiameter: pipe.innerDiameter,
+        wallThickness: pipe.wallThickness,
+        length: pipe.length,
+        roughnessCoeff: pipe.roughnessCoeff,
+        youngsModulus: pipe.youngsModulus,
+        c1Coeff: pipe.c1Coeff,
+      });
+      const r = await runMocSinglePipePy({
+        pipe: {
+          id: pipe.id,
+          startNodeId: pipe.startNodeId,
+          endNodeId: pipe.endNodeId,
+          pipeType: pipe.pipeType,
+          innerDiameter: pipe.innerDiameter,
+          wallThickness: pipe.wallThickness,
+          length: pipe.length,
+          roughnessCoeff: pipe.roughnessCoeff,
+          youngsModulus: pipe.youngsModulus,
+          c1Coeff: pipe.c1Coeff,
+        },
+        waveSpeed: a,
+        initialVelocity: V0,
+        initialDownstreamHead: H0,
+        closeTime: tv,
+        nReaches: N,
+      });
+      if (!cancelled) setResult(r);
+    };
+    run().catch((err) => {
+      if (!cancelled) {
+        console.error("runMocSinglePipePy failed", err);
+        setResult(null);
+      }
     });
+    return () => {
+      cancelled = true;
+    };
   }, [parsed]);
 
   // 親へ通知（セッション保存用）
   useEffect(() => {
-    onResult?.(result);
+    onResult?.(result as unknown as MocResult | null);
   }, [result, onResult]);
 
   // ── 単一管路結果の取り出し ────────────────────────────────────────────────

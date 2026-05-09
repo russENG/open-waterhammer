@@ -5,18 +5,19 @@
  */
 
 import { useState, useMemo, useEffect } from "react";
-import {
-  calcDarcyWeisbach,
-  calcHazenWilliams,
-  calcLongitudinalHydraulic,
-} from "@open-waterhammer/core";
 import type {
-  SteadyFlowResult,
   MeasurementPoint,
   LongitudinalHydraulicInput,
   LongitudinalHydraulicResult,
 } from "@open-waterhammer/core";
 import type { WorkbookData } from "@open-waterhammer/excel-io";
+import {
+  calcDarcyWeisbachPy,
+  calcHazenWilliamsPy,
+  calcLongitudinalHydraulicPy,
+  type SteadyFlowResultJs,
+  type LongitudinalHydraulicResultJs,
+} from "../lib/pyodide-bridge";
 import { InputField } from "./InputField";
 import { downloadCsv } from "../utils/csv";
 
@@ -113,34 +114,55 @@ export function SteadyFlowCalculator({ excelData, onLongResult }: SteadyFlowCalc
 
   // ─── 簡易計算 ───────────────────────────────────────────────────────────
 
-  const simpleResult = useMemo<SteadyFlowResult | null>(() => {
+  const [simpleResult, setSimpleResult] = useState<SteadyFlowResultJs | null>(null);
+
+  useEffect(() => {
     const D = parseFloat(form.innerDiameter) / 1000;
     const L = parseFloat(form.length);
     const Q = parseFloat(form.flowRate);
     const upEl = parseFloat(form.upstreamElevation);
     const downEl = parseFloat(form.downstreamElevation);
 
-    if ([D, L, Q, upEl, downEl].some(isNaN) || D <= 0 || L <= 0 || Q <= 0) return null;
+    if ([D, L, Q, upEl, downEl].some(isNaN) || D <= 0 || L <= 0 || Q <= 0) {
+      setSimpleResult(null);
+      return;
+    }
 
-    try {
+    let cancelled = false;
+    const run = async () => {
       if (method === "hazen-williams") {
         const C = parseFloat(form.roughnessC);
-        if (isNaN(C) || C <= 0) return null;
-        return calcHazenWilliams({
+        if (isNaN(C) || C <= 0) {
+          if (!cancelled) setSimpleResult(null);
+          return;
+        }
+        const r = await calcHazenWilliamsPy({
           innerDiameter: D, length: L, flowRate: Q,
           upstreamElevation: upEl, downstreamElevation: downEl, roughnessC: C,
         });
+        if (!cancelled) setSimpleResult(r);
       } else {
         const f = parseFloat(form.frictionFactor);
-        if (isNaN(f) || f <= 0) return null;
-        return calcDarcyWeisbach({
+        if (isNaN(f) || f <= 0) {
+          if (!cancelled) setSimpleResult(null);
+          return;
+        }
+        const r = await calcDarcyWeisbachPy({
           innerDiameter: D, length: L, flowRate: Q,
           upstreamElevation: upEl, downstreamElevation: downEl, frictionFactor: f,
         });
+        if (!cancelled) setSimpleResult(r);
       }
-    } catch {
-      return null;
-    }
+    };
+    run().catch((err) => {
+      if (!cancelled) {
+        console.error("steady flow calc failed", err);
+        setSimpleResult(null);
+      }
+    });
+    return () => {
+      cancelled = true;
+    };
   }, [form, method]);
 
   // ─── 縦断計算 ───────────────────────────────────────────────────────────
@@ -166,18 +188,39 @@ export function SteadyFlowCalculator({ excelData, onLongResult }: SteadyFlowCalc
     return input;
   }, [excelPoints, longForm]);
 
-  const longResult = useMemo<LongitudinalHydraulicResult | null>(() => {
-    if (!longInput) return null;
-    try {
-      return calcLongitudinalHydraulic(longInput);
-    } catch {
-      return null;
+  const [longResult, setLongResult] = useState<LongitudinalHydraulicResultJs | null>(null);
+
+  useEffect(() => {
+    if (!longInput) {
+      setLongResult(null);
+      return;
     }
+    let cancelled = false;
+    calcLongitudinalHydraulicPy({
+      points: longInput.points,
+      staticWaterLevel: longInput.staticWaterLevel,
+      waterhammerPressureMpa: longInput.waterhammerPressureMpa,
+      waterhammerRatio: longInput.waterhammerRatio,
+      caseName: longInput.caseName,
+    })
+      .then((r) => {
+        if (!cancelled) setLongResult(r);
+      })
+      .catch((err) => {
+        if (!cancelled) {
+          console.error("longitudinal hydraulic calc failed", err);
+          setLongResult(null);
+        }
+      });
+    return () => {
+      cancelled = true;
+    };
   }, [longInput]);
 
   // 親へ通知（セッション保存用）
   useEffect(() => {
-    onLongResult?.(longInput, longResult);
+    // SteadyFlowResultJs / LongitudinalHydraulicResultJs を session 側の型に合わせて渡す
+    onLongResult?.(longInput, longResult as unknown as LongitudinalHydraulicResult | null);
   }, [longInput, longResult, onLongResult]);
 
   // ─── レンダリング ───────────────────────────────────────────────────────
@@ -236,7 +279,7 @@ function SimpleCalculatorPanel({
   setMethod: (m: Method) => void;
   form: FormState;
   handleField: (field: keyof FormState, value: string) => void;
-  result: SteadyFlowResult | null;
+  result: SteadyFlowResultJs | null;
 }) {
   return (
     <div className="calculator-body">
@@ -366,7 +409,7 @@ function LongitudinalCalculatorPanel({
   points: MeasurementPoint[];
   longForm: LongFormState;
   handleLongField: (field: keyof LongFormState, value: string) => void;
-  result: LongitudinalHydraulicResult | null;
+  result: LongitudinalHydraulicResultJs | null;
 }) {
   return (
     <div className="calculator-body">
@@ -496,7 +539,7 @@ function LongitudinalCalculatorPanel({
 
 // ─── 水理計算書 CSV 出力 ────────────────────────────────────────────────────
 
-function downloadHydraulicCsv(points: MeasurementPoint[], result: LongitudinalHydraulicResult) {
+function downloadHydraulicCsv(points: MeasurementPoint[], result: LongitudinalHydraulicResultJs) {
   const header = [
     "測点", "単距離Lh(m)", "地盤高GL(m)", "管中心高FH(m)", "管長SL(m)",
     "流量Q(m3/s)", "管径D(mm)", "流速係数CI",
@@ -530,7 +573,7 @@ function HydraulicResultTable({
   points, result,
 }: {
   points: MeasurementPoint[];
-  result: LongitudinalHydraulicResult;
+  result: LongitudinalHydraulicResultJs;
 }) {
   return (
     <div className="hydraulic-table-scroll">

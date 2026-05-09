@@ -10,8 +10,6 @@
 
 import { useState, useMemo, useEffect } from "react";
 import {
-  runMoc,
-  calcWaveSpeed,
   headToMpa,
 } from "@open-waterhammer/core";
 import type {
@@ -24,6 +22,13 @@ import type {
   MocPipeSegment,
   BoundaryCondition,
 } from "@open-waterhammer/core";
+import {
+  runMocPy,
+  type MocResultJs,
+  type NetworkSpec,
+  type NetworkPipeSpec,
+  type NetworkBcSpec,
+} from "../lib/pyodide-bridge";
 import { MocTimeChart } from "./MocTimeChart";
 import { MocEnvelopeChart } from "./MocEnvelopeChart";
 import { ChartFrame } from "./ChartFrame";
@@ -167,12 +172,14 @@ function buildNetwork(pipes: PipeRow[], nodes: NodeRow[]): { network: MocNetwork
       roughnessCoeff: isNaN(C) ? 130 : C,
     };
 
-    const waveSpeed = calcWaveSpeed(pipe);
-
+    // 波速は MocPipeSegment 構築時に未指定とし、Python 側 (runMocPy) で
+    // calc_wave_speed(pipe) を呼んで自動算定する。TS 側は手前の表示用に
+    // 別途計算する余地はあるが、ここでは省略する。
     mocPipes.push({
       id: row.id,
       pipe,
-      waveSpeed,
+      // waveSpeed は省略。Pyodide ブリッジで自動算定。
+      waveSpeed: 0,
       nReaches: N,
       upstreamNodeId: row.upNode.trim(),
       downstreamNodeId: row.downNode.trim(),
@@ -191,6 +198,40 @@ function buildNetwork(pipes: PipeRow[], nodes: NodeRow[]): { network: MocNetwork
   if (mocPipes.length === 0) return null;
 
   return { network: { pipes: mocPipes, nodes: bcNodes }, errors };
+}
+
+/** TS の MocNetwork を Pyodide ブリッジ用 NetworkSpec に変換. */
+function toNetworkSpec(network: MocNetwork): NetworkSpec {
+  const pipes: NetworkPipeSpec[] = network.pipes.map((seg) => ({
+    id: seg.id,
+    pipe: {
+      id: seg.pipe.id,
+      startNodeId: seg.pipe.startNodeId,
+      endNodeId: seg.pipe.endNodeId,
+      pipeType: seg.pipe.pipeType,
+      innerDiameter: seg.pipe.innerDiameter,
+      wallThickness: seg.pipe.wallThickness,
+      length: seg.pipe.length,
+      roughnessCoeff: seg.pipe.roughnessCoeff,
+      youngsModulus: seg.pipe.youngsModulus,
+      c1Coeff: seg.pipe.c1Coeff,
+    },
+    // waveSpeed はあえて渡さず、Pyodide 側で計算させる
+    nReaches: seg.nReaches,
+    upstreamNodeId: seg.upstreamNodeId,
+    downstreamNodeId: seg.downstreamNodeId,
+    ...(seg.initialFlow !== undefined ? { initialFlow: seg.initialFlow } : {}),
+  }));
+  // BoundaryCondition の型は TS 側と Pyodide ブリッジ側で同じ shape
+  // （type タグ + 各 BC のパラメータ）なので、ほぼそのまま渡せる
+  const nodesEntries = Object.entries(network.nodes).map(([nid, bc]) => [
+    nid,
+    bc as unknown as NetworkBcSpec,
+  ]);
+  return {
+    pipes,
+    nodes: Object.fromEntries(nodesEntries) as Record<string, NetworkBcSpec>,
+  };
 }
 
 function buildBC(n: NodeRow): BoundaryCondition | null {
@@ -256,11 +297,12 @@ export function NetworkMocCalculator({ onResult }: NetworkMocCalculatorProps = {
   const [nodes, setNodes] = useState<NodeRow[]>(demo.nodes);
   const [tMax, setTMax] = useState("20");
   const [network, setNetwork] = useState<MocNetwork | null>(null);
-  const [result, setResult] = useState<MocResult | null>(null);
+  const [result, setResult] = useState<MocResultJs | null>(null);
+  const [running, setRunning] = useState(false);
 
   // 親へ通知（セッション保存用）
   useEffect(() => {
-    onResult?.(network, result);
+    onResult?.(network, result as unknown as MocResult | null);
   }, [network, result, onResult]);
   const [errors, setErrors] = useState<string[]>([]);
   const [selectedPipe, setSelectedPipe] = useState("");
@@ -307,7 +349,7 @@ export function NetworkMocCalculator({ onResult }: NetworkMocCalculatorProps = {
     }
   }, [terminalIds]);
 
-  function handleRun() {
+  async function handleRun() {
     const built = buildNetwork(pipes, nodes);
     if (!built) {
       setErrors(["管路データがありません"]);
@@ -320,9 +362,11 @@ export function NetworkMocCalculator({ onResult }: NetworkMocCalculatorProps = {
     } else {
       setErrors([]);
     }
+    setRunning(true);
     try {
       const t = parseFloat(tMax);
-      const res = runMoc(built.network, { tMax: isNaN(t) ? undefined : t });
+      const spec = toNetworkSpec(built.network);
+      const res = await runMocPy(spec, { tMax: isNaN(t) ? undefined : t });
       setNetwork(built.network);
       setResult(res);
       // 最初の管路を選択
@@ -331,9 +375,11 @@ export function NetworkMocCalculator({ onResult }: NetworkMocCalculatorProps = {
       const firstNodeId = Object.keys(res.nodes)[0];
       if (firstNodeId) setSelectedNode(firstNodeId);
     } catch (e: any) {
-      setErrors(prev => [...prev, `数値解析 実行エラー: ${e.message}`]);
+      setErrors((prev) => [...prev, `数値解析 実行エラー: ${e.message ?? String(e)}`]);
       setNetwork(null);
       setResult(null);
+    } finally {
+      setRunning(false);
     }
   }
 
@@ -486,7 +532,9 @@ export function NetworkMocCalculator({ onResult }: NetworkMocCalculatorProps = {
           <div className="input-field" style={{ display: "inline-flex", gap: 12, alignItems: "center" }}>
             <label className="input-label">シミュレーション時間 [s]</label>
             <input className="input" type="number" value={tMax} onChange={e => setTMax(e.target.value)} style={{ width: 100 }} />
-            <button className="btn btn--primary" onClick={handleRun}>数値解析 実行</button>
+            <button className="btn btn--primary" onClick={handleRun} disabled={running}>
+              {running ? "計算中…" : "数値解析 実行"}
+            </button>
           </div>
         </div>
 

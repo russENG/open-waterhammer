@@ -3,17 +3,21 @@
  * デモケースを選択して計算結果・数式をリアルタイム表示
  */
 
-import { useState, useMemo } from "react";
+import { useState, useEffect, useMemo } from "react";
 import {
-  runSimpleFormula,
   headToMpa,
-  judgeDesignPressure,
   GRAVITY,
   BULK_MODULUS_WATER,
   WATER_UNIT_WEIGHT,
   PIPE_MATERIALS,
 } from "@open-waterhammer/core";
-import type { Pipe, CalculationCase, SimpleFormulaResult, JudgementResult } from "@open-waterhammer/core";
+import type { Pipe, CalculationCase } from "@open-waterhammer/core";
+import {
+  runSimpleFormulaPy,
+  judgeDesignPressurePy,
+  type SimpleFormulaResultJs,
+  type JudgementResultJs,
+} from "../lib/pyodide-bridge";
 import {
   DEMO_CASE_01_PIPE,
   DEMO_CASE_01_CASE,
@@ -129,7 +133,7 @@ function FormulaVerification({
   pipe: Pipe;
   cas: CalculationCase;
   closeTime: number;
-  result: SimpleFormulaResult;
+  result: SimpleFormulaResultJs;
 }) {
   const [open, setOpen] = useState(false);
 
@@ -186,20 +190,20 @@ function FormulaVerification({
           />
 
           {/* ③-A ジューコフスキー */}
-          {result.closureType === "rapid" && result.deltaH_joukowsky !== undefined && (
+          {result.closureType === "rapid" && result.deltaHJoukowsky != null && (
             <FormulaCard
               refLabel="③ ジューコフスキーの式（式 8.3.6）"
               formula={String.raw`\Delta H = -\frac{a}{g} \cdot \Delta V = \frac{a}{g} \cdot V_0`}
               substituted={String.raw`\Delta H = \frac{${n(a, 1)}}{${GRAVITY}} \times ${V0}`}
-              result={`\\Delta H = ${n(result.deltaH_joukowsky, 2)} \\text{ m}`}
-              note={`最大水頭 H₀ + ΔH = ${n(H0 + result.deltaH_joukowsky, 2)} m`}
+              result={`\\Delta H = ${n(result.deltaHJoukowsky, 2)} \\text{ m}`}
+              note={`最大水頭 H₀ + ΔH = ${n(H0 + result.deltaHJoukowsky, 2)} m`}
             />
           )}
 
           {/* ③-B アリエビ */}
-          {result.closureType === "slow" && result.k1 !== undefined &&
-            result.hmax_allievi_close !== undefined &&
-            result.hmax_allievi_open !== undefined && (
+          {result.closureType === "slow" && result.k1 != null &&
+            result.hmaxAllieviClose != null &&
+            result.hmaxAllieviOpen != null && (
             <>
               <FormulaCard
                 refLabel="③-1 アリエビ式 K₁ 算定"
@@ -211,22 +215,22 @@ function FormulaVerification({
                 refLabel="③-2 アリエビ式 最大水撃圧（式 8.3.7）"
                 formula={String.raw`H_{max} = \frac{H_0}{2}\!\left(K_1 + \sqrt{K_1^2 + 4}\right)`}
                 substituted={String.raw`H_{max} = \frac{${H0}}{2}\!\left(${result.k1.toFixed(4)} + \sqrt{${result.k1.toFixed(4)}^2 + 4}\right)`}
-                result={`H_{max} = ${n(result.hmax_allievi_close, 2)} \\text{ m（閉操作）}`}
+                result={`H_{max} = ${n(result.hmaxAllieviClose, 2)} \\text{ m（閉操作）}`}
               />
               <FormulaCard
                 refLabel="③-3 アリエビ式 最大圧力低下（式 8.3.8）"
                 formula={String.raw`H_{min} = \frac{H_0}{2}\!\left(K_1 - \sqrt{K_1^2 + 4}\right)`}
                 substituted={String.raw`H_{min} = \frac{${H0}}{2}\!\left(${result.k1.toFixed(4)} - \sqrt{${result.k1.toFixed(4)}^2 + 4}\right)`}
-                result={`H_{min} = ${n(result.hmax_allievi_open, 2)} \\text{ m（開操作）}`}
+                result={`H_{min} = ${n(result.hmaxAllieviOpen, 2)} \\text{ m（開操作）}`}
               />
             </>
           )}
 
           {/* ④ 設計水圧 */}
           {result.closureType !== "numerical_required" && (() => {
-            const hammerHead = result.deltaH_joukowsky !== undefined
-              ? result.deltaH_joukowsky
-              : (result.hmax_allievi_close ?? H0) - H0;
+            const hammerHead = result.deltaHJoukowsky != null
+              ? result.deltaHJoukowsky
+              : (result.hmaxAllieviClose ?? H0) - H0;
             const totalHead = H0 + hammerHead;
             const designMpa = headToMpa(totalHead);
             const staticMpa = headToMpa(H0);
@@ -281,7 +285,7 @@ function ResultRow({
   );
 }
 
-function ClosureBadge({ type }: { type: SimpleFormulaResult["closureType"] }) {
+function ClosureBadge({ type }: { type: SimpleFormulaResultJs["closureType"] }) {
   const map = {
     rapid: { label: "急閉そく", cls: "badge badge--rapid" },
     slow: { label: "緩閉そく", cls: "badge badge--slow" },
@@ -378,21 +382,58 @@ export function WaterhammerCalculator({ excelData }: { excelData?: WorkbookData 
     return { pipe, cas, closeTime, valid };
   }, [form, selectedDemo, inputSource, excelPipes, excelCases, selectedExcelCase]);
 
-  const result = useMemo<SimpleFormulaResult | null>(() => {
-    if (!parsed.valid) return null;
-    try {
-      return runSimpleFormula(parsed.pipe, parsed.cas, parsed.closeTime);
-    } catch {
-      return null;
+  const [result, setResult] = useState<SimpleFormulaResultJs | null>(null);
+
+  useEffect(() => {
+    if (!parsed.valid) {
+      setResult(null);
+      return;
     }
+    let cancelled = false;
+    runSimpleFormulaPy(
+      {
+        id: parsed.pipe.id,
+        startNodeId: parsed.pipe.startNodeId,
+        endNodeId: parsed.pipe.endNodeId,
+        pipeType: parsed.pipe.pipeType,
+        innerDiameter: parsed.pipe.innerDiameter,
+        wallThickness: parsed.pipe.wallThickness,
+        length: parsed.pipe.length,
+        roughnessCoeff: parsed.pipe.roughnessCoeff,
+        youngsModulus: parsed.pipe.youngsModulus,
+        c1Coeff: parsed.pipe.c1Coeff,
+      },
+      {
+        id: parsed.cas.id,
+        name: parsed.cas.name,
+        operationType: parsed.cas.operationType,
+        targetFacilityId: parsed.cas.targetFacilityId,
+        initialVelocity: parsed.cas.initialVelocity,
+        initialHead: parsed.cas.initialHead,
+        description: parsed.cas.description,
+      },
+      parsed.closeTime,
+    )
+      .then((r) => {
+        if (!cancelled) setResult(r);
+      })
+      .catch((err) => {
+        if (!cancelled) {
+          console.error("runSimpleFormulaPy failed", err);
+          setResult(null);
+        }
+      });
+    return () => {
+      cancelled = true;
+    };
   }, [parsed]);
 
   const designPressureMpa = useMemo(() => {
     if (!result) return null;
     const H0 = parsed.cas.initialHead;
     let hammerHead = 0;
-    if (result.deltaH_joukowsky !== undefined) hammerHead = result.deltaH_joukowsky;
-    else if (result.hmax_allievi_close !== undefined) hammerHead = result.hmax_allievi_close - H0;
+    if (result.deltaHJoukowsky != null) hammerHead = result.deltaHJoukowsky;
+    else if (result.hmaxAllieviClose != null) hammerHead = result.hmaxAllieviClose - H0;
     return headToMpa(H0 + hammerHead);
   }, [result, parsed]);
 
@@ -406,11 +447,32 @@ export function WaterhammerCalculator({ excelData }: { excelData?: WorkbookData 
     return designPressureMpa - headToMpa(parsed.cas.initialHead);
   }, [result, designPressureMpa, parsed]);
 
-  const judgement = useMemo<JudgementResult | null>(() => {
-    if (!designPressureMpa || result?.closureType === "numerical_required") return null;
+  const [judgement, setJudgement] = useState<JudgementResultJs | null>(null);
+
+  useEffect(() => {
+    if (!designPressureMpa || result?.closureType === "numerical_required") {
+      setJudgement(null);
+      return;
+    }
     const allowable = parseFloat(form.allowablePressure);
-    if (isNaN(allowable) || allowable <= 0) return null;
-    return judgeDesignPressure(designPressureMpa, allowable);
+    if (isNaN(allowable) || allowable <= 0) {
+      setJudgement(null);
+      return;
+    }
+    let cancelled = false;
+    judgeDesignPressurePy(designPressureMpa, allowable)
+      .then((j) => {
+        if (!cancelled) setJudgement(j);
+      })
+      .catch((err) => {
+        if (!cancelled) {
+          console.error("judgeDesignPressurePy failed", err);
+          setJudgement(null);
+        }
+      });
+    return () => {
+      cancelled = true;
+    };
   }, [designPressureMpa, form.allowablePressure, result]);
 
   return (
@@ -542,20 +604,20 @@ export function WaterhammerCalculator({ excelData }: { excelData?: WorkbookData 
               </div>
               <div className="result-section">
                 <h3 className="result-section-title">水撃圧</h3>
-                {result.closureType === "rapid" && result.deltaH_joukowsky !== undefined && (
+                {result.closureType === "rapid" && result.deltaHJoukowsky != null && (
                   <>
                     <ResultRow label="適用式" value="ジューコフスキーの式（式8.3.6）" />
-                    <ResultRow label="水撃圧水頭 ΔH" value={result.deltaH_joukowsky.toFixed(2)} unit="m" highlight />
-                    <ResultRow label="最大水頭 H₀ + ΔH" value={(parsed.cas.initialHead + result.deltaH_joukowsky).toFixed(2)} unit="m" />
+                    <ResultRow label="水撃圧水頭 ΔH" value={result.deltaHJoukowsky.toFixed(2)} unit="m" highlight />
+                    <ResultRow label="最大水頭 H₀ + ΔH" value={(parsed.cas.initialHead + result.deltaHJoukowsky).toFixed(2)} unit="m" />
                   </>
                 )}
-                {result.closureType === "slow" && result.hmax_allievi_close !== undefined && (
+                {result.closureType === "slow" && result.hmaxAllieviClose != null && (
                   <>
                     <ResultRow label="適用式" value="アリエビの近似式（式8.3.7/8.3.8）" />
-                    {result.k1 !== undefined && <ResultRow label="K₁値" value={result.k1.toFixed(4)} />}
-                    <ResultRow label="最大水頭 Hmax（閉）" value={result.hmax_allievi_close.toFixed(2)} unit="m" highlight />
-                    {result.hmax_allievi_open !== undefined && (
-                      <ResultRow label="最小水頭 Hmin（開）" value={result.hmax_allievi_open.toFixed(2)} unit="m" />
+                    {result.k1 != null && <ResultRow label="K₁値" value={result.k1.toFixed(4)} />}
+                    <ResultRow label="最大水頭 Hmax（閉）" value={result.hmaxAllieviClose.toFixed(2)} unit="m" highlight />
+                    {result.hmaxAllieviOpen != null && (
+                      <ResultRow label="最小水頭 Hmin（開）" value={result.hmaxAllieviOpen.toFixed(2)} unit="m" />
                     )}
                   </>
                 )}

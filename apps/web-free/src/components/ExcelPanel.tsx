@@ -14,7 +14,6 @@ import type { WorkbookData, ParseError } from "@open-waterhammer/excel-io";
 import {
   DEMO_CASE_01_PIPE,
   DEMO_CASE_01_CASE,
-  DEMO_CASE_02_PIPE,
   DEMO_CASE_02_CASE,
   DEMO_MEASUREMENT_POINTS,
 } from "@open-waterhammer/sample-data";
@@ -44,13 +43,13 @@ export function ExcelPanel({ onLoad, loadedData, collapsedByDefault }: ExcelPane
 
   async function handleDownload() {
     const { generateTemplate } = await getExcelIO();
-    const buf = generateTemplate({
+    const buf = await generateTemplate({
       meta: {
         projectName: "（案件名を入力）",
         standardId: "nochi_pipeline_2021",
         methodId: "joukowsky_v1",
       },
-      pipes: [DEMO_CASE_01_PIPE, DEMO_CASE_02_PIPE],
+      pipes: [DEMO_CASE_01_PIPE],
       nodes: [],
       cases: [DEMO_CASE_01_CASE, DEMO_CASE_02_CASE],
       measurementPoints: DEMO_MEASUREMENT_POINTS,
@@ -72,7 +71,7 @@ export function ExcelPanel({ onLoad, loadedData, collapsedByDefault }: ExcelPane
   async function handleExportInput() {
     if (!loadedData) return;
     const { generateTemplate } = await getExcelIO();
-    const buf = generateTemplate({
+    const buf = await generateTemplate({
       meta: loadedData.meta,
       pipes: loadedData.pipes,
       nodes: loadedData.nodes,
@@ -115,7 +114,7 @@ export function ExcelPanel({ onLoad, loadedData, collapsedByDefault }: ExcelPane
       hydraulicResults.push(result);
     }
 
-    const buf = generateReport({
+    const buf = await generateReport({
       meta: loadedData.meta,
       data: loadedData,
       results: [], // 水撃圧計算結果は別途
@@ -144,7 +143,7 @@ export function ExcelPanel({ onLoad, loadedData, collapsedByDefault }: ExcelPane
     try {
       const buf = await file.arrayBuffer();
       const { parseWorkbook } = await getExcelIO();
-      const result = parseWorkbook(buf);
+      const result = await parseWorkbook(buf);
 
       setErrors(result.errors);
       setWarnings(result.warnings);

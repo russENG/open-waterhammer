@@ -104,7 +104,7 @@ export function SessionPanel({ currentState }: SessionPanelProps) {
 
   async function handleExport(session: CalculationSession) {
     const { generateSessionReport } = await loadExcelIo();
-    const buf = generateSessionReport({ session });
+    const buf = await generateSessionReport({ session });
     const blob = new Blob([buf], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" });
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
@@ -119,7 +119,7 @@ export function SessionPanel({ currentState }: SessionPanelProps) {
     const b = sessions.find(s => s.id === compareB);
     if (!a || !b || !diffs) return;
     const { generateSessionReport } = await loadExcelIo();
-    const buf = generateSessionReport({ session: a, compareSession: b, diffs });
+    const buf = await generateSessionReport({ session: a, compareSession: b, diffs });
     const blob = new Blob([buf], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" });
     const url = URL.createObjectURL(blob);
     const el = document.createElement("a");

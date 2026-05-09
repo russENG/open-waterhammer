@@ -5,12 +5,14 @@
 
 import { useState, useMemo, useEffect, useRef } from "react";
 import {
-  runMocPumpTrip,
-  runMocPumpStart,
-  calcWaveSpeed,
   headToMpa,
 } from "@open-waterhammer/core";
 import type { Pipe } from "@open-waterhammer/core";
+import {
+  runMocPumpTripPy,
+  runMocPumpStartPy,
+  type MocResultJs,
+} from "../lib/pyodide-bridge";
 import type { WorkbookData } from "@open-waterhammer/excel-io";
 import { DEMO_CASE_01_PIPE } from "@open-waterhammer/sample-data";
 import { MocEnvelopeChart } from "./MocEnvelopeChart";
@@ -158,24 +160,84 @@ export function PumpCalculator({ excelData }: { excelData?: WorkbookData | null 
     return { pipe, Qr, H0, Hs, st, sh: isNaN(sh) ? 0 : sh, N };
   }, [startForm, excelPipes]);
 
+  // 共通: Pipe → PipeArg 変換
+  const toPipeArg = (pipe: Pipe) => ({
+    id: pipe.id,
+    startNodeId: pipe.startNodeId,
+    endNodeId: pipe.endNodeId,
+    pipeType: pipe.pipeType,
+    innerDiameter: pipe.innerDiameter,
+    wallThickness: pipe.wallThickness,
+    length: pipe.length,
+    roughnessCoeff: pipe.roughnessCoeff,
+    youngsModulus: pipe.youngsModulus,
+    c1Coeff: pipe.c1Coeff,
+  });
+
   // ── MOC 実行 ─────────────────────────────────────────────────────────────
-  const resultTrip = useMemo(() => {
-    if (!parsedTrip) return null;
+  const [resultTrip, setResultTrip] = useState<MocResultJs | null>(null);
+
+  useEffect(() => {
+    if (!parsedTrip) {
+      setResultTrip(null);
+      return;
+    }
     const { pipe, Q0, H0, Hs, sd, N, checkValve, gd2Params } = parsedTrip;
-    return runMocPumpTrip({
-      pipe, waveSpeed: calcWaveSpeed(pipe),
-      Q0, pumpHead: H0, Hs, shutdownTime: sd, checkValve, nReaches: N,
+    let cancelled = false;
+    runMocPumpTripPy({
+      pipe: toPipeArg(pipe),
+      Q0,
+      pumpHead: H0,
+      Hs,
+      shutdownTime: sd,
+      checkValve,
+      nReaches: N,
       ...(gd2Params ?? {}),
-    });
+    })
+      .then((r) => {
+        if (!cancelled) setResultTrip(r);
+      })
+      .catch((err) => {
+        if (!cancelled) {
+          console.error("runMocPumpTripPy failed", err);
+          setResultTrip(null);
+        }
+      });
+    return () => {
+      cancelled = true;
+    };
   }, [parsedTrip]);
 
-  const resultStart = useMemo(() => {
-    if (!parsedStart) return null;
+  const [resultStart, setResultStart] = useState<MocResultJs | null>(null);
+
+  useEffect(() => {
+    if (!parsedStart) {
+      setResultStart(null);
+      return;
+    }
     const { pipe, Qr, H0, Hs, st, sh, N } = parsedStart;
-    return runMocPumpStart({
-      pipe, waveSpeed: calcWaveSpeed(pipe),
-      Q_rated: Qr, pumpHead: H0, Hs, startupTime: st, staticHead: sh, nReaches: N,
-    });
+    let cancelled = false;
+    runMocPumpStartPy({
+      pipe: toPipeArg(pipe),
+      Q_rated: Qr,
+      pumpHead: H0,
+      Hs,
+      startupTime: st,
+      staticHead: sh,
+      nReaches: N,
+    })
+      .then((r) => {
+        if (!cancelled) setResultStart(r);
+      })
+      .catch((err) => {
+        if (!cancelled) {
+          console.error("runMocPumpStartPy failed", err);
+          setResultStart(null);
+        }
+      });
+    return () => {
+      cancelled = true;
+    };
   }, [parsedStart]);
 
   const result = tab === "trip" ? resultTrip : resultStart;

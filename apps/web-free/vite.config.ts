@@ -12,6 +12,13 @@ export default defineConfig({
       '@open-waterhammer/standards': path.resolve(__dirname, '../../packages/standards/src/index.ts'),
       '@open-waterhammer/sample-data': path.resolve(__dirname, '../../packages/sample-data/src/index.ts'),
       '@open-waterhammer/excel-io': path.resolve(__dirname, '../../packages/excel-io/src/index.ts'),
+      '@open-waterhammer-py': path.resolve(__dirname, '../../packages/core-py/open_waterhammer'),
+    },
+  },
+  server: {
+    fs: {
+      // packages/core-py の .py を ?raw で取り込めるようにする
+      allow: [path.resolve(__dirname, '../..')],
     },
   },
 })

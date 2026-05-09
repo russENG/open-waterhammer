@@ -4,12 +4,20 @@ import { DesignFlowPage } from './pages/DesignFlowPage'
 import { HydraulicOverviewPage } from './pages/HydraulicOverviewPage'
 import { WaterHammerPage } from './pages/WaterHammerPage'
 import { ReferencePage } from './pages/ReferencePage'
+import { PyodideStatusToast } from './components/PyodideStatusToast'
 import { onNavigate, type AppPage } from './lib/navigation'
+import { prefetchPyodide } from './lib/pyodide-bridge'
 import './App.css'
 
 export default function App() {
   const [page, setPage] = useState<AppPage>('water-hammer')
   const [refTopicId, setRefTopicId] = useState<string | undefined>(undefined)
+
+  // アプリ起動直後に Pyodide のロードを開始（fire-and-forget）
+  // ユーザーが計算ボタンに到達する頃には warm 状態を期待
+  useEffect(() => {
+    prefetchPyodide()
+  }, [])
 
   // 子コンポーネントからの「基準照会の特定トピックを開いて」要求を受信
   useEffect(() => {
@@ -29,6 +37,7 @@ export default function App() {
 
   return (
     <div className="app">
+      <PyodideStatusToast />
       <header className="header">
         <div className="header-inner">
           <div className="header-title">

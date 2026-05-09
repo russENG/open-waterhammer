@@ -3,9 +3,12 @@
  * 出典: 土地改良設計基準　設計「パイプライン」技術書（令和3年6月改訂）§8.3.5
  */
 
-import { useState, useMemo } from "react";
-import { calcEmpiricalWaterhammer } from "@open-waterhammer/core";
+import { useState, useEffect } from "react";
 import type { PipelineSystemType } from "@open-waterhammer/core";
+import {
+  calcEmpiricalWaterhammerPy,
+  type EmpiricalWaterhammerResultJs,
+} from "../lib/pyodide-bridge";
 import { RefLink } from "./RefLink";
 
 // ─── 方式区分定義 ─────────────────────────────────────────────────────────────
@@ -78,14 +81,38 @@ export function EmpiricalCalculator() {
 
   const selected = SYSTEM_OPTIONS.find((o) => o.value === systemType)!;
 
-  const result = useMemo(() => {
+  const [result, setResult] = useState<EmpiricalWaterhammerResultJs | null>(null);
+
+  useEffect(() => {
     const sp = parseFloat(staticPressure);
-    if (isNaN(sp) || sp <= 0) return null;
+    if (isNaN(sp) || sp <= 0) {
+      setResult(null);
+      return;
+    }
     const op = selected.needsOperating ? parseFloat(operatingPressure) : undefined;
-    if (selected.needsOperating && (op === undefined || isNaN(op!) || op! <= 0)) return null;
+    if (selected.needsOperating && (op === undefined || isNaN(op) || op <= 0)) {
+      setResult(null);
+      return;
+    }
     const hg = selected.needsHydraulicGrade ? parseFloat(hydraulicGradePressure) : undefined;
-    if (selected.needsHydraulicGrade && (hg === undefined || isNaN(hg!) || hg! <= 0)) return null;
-    return calcEmpiricalWaterhammer(systemType, sp, op, hg);
+    if (selected.needsHydraulicGrade && (hg === undefined || isNaN(hg) || hg <= 0)) {
+      setResult(null);
+      return;
+    }
+    let cancelled = false;
+    calcEmpiricalWaterhammerPy(systemType, sp, op, hg)
+      .then((r) => {
+        if (!cancelled) setResult(r);
+      })
+      .catch((err) => {
+        if (!cancelled) {
+          console.error("calcEmpiricalWaterhammerPy failed", err);
+          setResult(null);
+        }
+      });
+    return () => {
+      cancelled = true;
+    };
   }, [systemType, staticPressure, operatingPressure, hydraulicGradePressure, selected]);
 
   return (

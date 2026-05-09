@@ -6,13 +6,15 @@
  * - 水撃圧検討書（§5.2 検討結果・対策）
  */
 
-import { useState, useMemo } from "react";
-import { calcLongitudinalHydraulic } from "@open-waterhammer/core";
+import { useState, useEffect } from "react";
 import type {
-  LongitudinalHydraulicInput,
   LongitudinalHydraulicResult,
 } from "@open-waterhammer/core";
 import type { WorkbookData } from "@open-waterhammer/excel-io";
+import {
+  calcLongitudinalHydraulicPy,
+  type LongitudinalHydraulicResultJs,
+} from "../lib/pyodide-bridge";
 import { RefLink } from "./RefLink";
 
 function handlePrintPdf() {
@@ -61,28 +63,44 @@ export function ReportGenerator({ excelData }: { excelData?: WorkbookData | null
   }
 
   // 縦断計算プレビュー
-  const previewResult = useMemo<LongitudinalHydraulicResult | null>(() => {
-    if (points.length === 0) return null;
-    const swl = parseFloat(form.staticWaterLevel);
-    if (isNaN(swl)) return null;
+  const [previewResult, setPreviewResult] = useState<LongitudinalHydraulicResultJs | null>(null);
 
-    const input: LongitudinalHydraulicInput = {
+  useEffect(() => {
+    if (points.length === 0) {
+      setPreviewResult(null);
+      return;
+    }
+    const swl = parseFloat(form.staticWaterLevel);
+    if (isNaN(swl)) {
+      setPreviewResult(null);
+      return;
+    }
+    const args: Parameters<typeof calcLongitudinalHydraulicPy>[0] = {
       points,
       staticWaterLevel: swl,
       caseName: form.caseName || "計画最大流量",
     };
     if (form.waterhammerMode === "fixed") {
       const v = parseFloat(form.waterhammerFixed);
-      if (!isNaN(v)) input.waterhammerPressureMpa = v;
+      if (!isNaN(v)) args.waterhammerPressureMpa = v;
     } else {
       const r = parseFloat(form.waterhammerRatio);
-      if (!isNaN(r)) input.waterhammerRatio = r;
+      if (!isNaN(r)) args.waterhammerRatio = r;
     }
-    try {
-      return calcLongitudinalHydraulic(input);
-    } catch {
-      return null;
-    }
+    let cancelled = false;
+    calcLongitudinalHydraulicPy(args)
+      .then((r) => {
+        if (!cancelled) setPreviewResult(r);
+      })
+      .catch((err) => {
+        if (!cancelled) {
+          console.error("calcLongitudinalHydraulicPy failed", err);
+          setPreviewResult(null);
+        }
+      });
+    return () => {
+      cancelled = true;
+    };
   }, [points, form]);
 
   async function handleDownload() {
@@ -90,14 +108,16 @@ export function ReportGenerator({ excelData }: { excelData?: WorkbookData | null
     setDownloading(true);
     try {
       const { generateReport } = await import("@open-waterhammer/excel-io");
-      const buf = generateReport({
+      const buf = await generateReport({
         meta: {
           ...excelData.meta,
           projectName: form.projectName || excelData.meta.projectName,
         },
         data: excelData,
         results: [],
-        hydraulicResults: [previewResult],
+        // Pyodide 経由の結果は LongitudinalHydraulicResultJs だが、
+        // フィールド名・shape は TS 版の LongitudinalHydraulicResult と互換
+        hydraulicResults: [previewResult as unknown as LongitudinalHydraulicResult],
       });
 
       const blob = new Blob([buf], {
