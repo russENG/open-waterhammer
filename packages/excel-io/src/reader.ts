@@ -2,9 +2,12 @@
  * Excel帳票読み取りモジュール
  * 対応シート: meta / network / cases
  * スキーマ定義: docs/excel-template-spec.md
+ *
+ * exceljs ベース実装（xlsx/SheetJS から移行: 2026-05-08）
+ * 移行理由: SheetJS (npm xlsx) に Prototype Pollution / ReDoS 脆弱性があり npm 配布版に修正がないため
  */
 
-import * as XLSX from "xlsx";
+import ExcelJS from "exceljs";
 import type { Pipe, Node, CalculationCase, MeasurementPoint, PipeType, NodeType, OperationType } from "@open-waterhammer/core";
 import type { ProjectMeta, WorkbookData, ParseResult, ParseError } from "./types.js";
 
@@ -15,6 +18,7 @@ function str(v: unknown): string {
 }
 
 function num(v: unknown): number | undefined {
+  if (v === null || v === undefined || v === "") return undefined;
   const n = parseFloat(String(v));
   return isNaN(n) ? undefined : n;
 }
@@ -34,27 +38,76 @@ function normalizeKey(key: string): string {
   return idx >= 0 ? key.substring(0, idx) : key;
 }
 
-/** シートを { header行の列名 → セル値 }[] の配列に変換 */
-function sheetToRows(ws: XLSX.WorkSheet): Record<string, unknown>[] {
-  if (!ws) return [];
-  const rows = XLSX.utils.sheet_to_json<Record<string, unknown>>(ws, {
-    defval: null,
-    raw: false,
-  });
-  // 複合ヘッダー対応: キーを正規化
-  return rows.map(row => {
-    const out: Record<string, unknown> = {};
-    for (const [k, v] of Object.entries(row)) {
-      out[normalizeKey(k)] = v;
+/** exceljs の cell.value（リッチテキスト・式・日付など）をプリミティブに変換 */
+function extractCellValue(v: ExcelJS.CellValue): string | number | boolean | null {
+  if (v === null || v === undefined) return null;
+  if (typeof v === "string" || typeof v === "number" || typeof v === "boolean") return v;
+  if (v instanceof Date) return v.toISOString().slice(0, 10);
+  if (typeof v === "object") {
+    // 数式の計算結果
+    if ("result" in v && v.result !== undefined && v.result !== null) {
+      return extractCellValue(v.result as ExcelJS.CellValue);
     }
-    return out;
+    // リッチテキスト
+    if ("richText" in v && Array.isArray(v.richText)) {
+      return v.richText.map((rt) => rt.text ?? "").join("");
+    }
+    // ハイパーリンク
+    if ("text" in v && typeof v.text === "string") return v.text;
+    // エラー値（#REF! など）
+    if ("error" in v) return null;
+  }
+  return String(v);
+}
+
+/** ワークシートを ヘッダー行(1)+データ行 として { 列名 → セル値 }[] に変換 */
+function sheetToRows(ws: ExcelJS.Worksheet | undefined): Record<string, unknown>[] {
+  if (!ws || ws.rowCount === 0) return [];
+
+  const headerRow = ws.getRow(1);
+  const headers: string[] = [];
+  // 1-indexed: headers[c] = ヘッダー名
+  headerRow.eachCell({ includeEmpty: true }, (cell, colNum) => {
+    headers[colNum] = normalizeKey(String(extractCellValue(cell.value) ?? ""));
   });
+
+  const result: Record<string, unknown>[] = [];
+  for (let r = 2; r <= ws.rowCount; r++) {
+    const row = ws.getRow(r);
+    const obj: Record<string, unknown> = {};
+    let hasValue = false;
+    for (let c = 1; c < headers.length; c++) {
+      const h = headers[c];
+      if (!h) continue;
+      const v = extractCellValue(row.getCell(c).value);
+      obj[h] = v;
+      if (v !== null && v !== "") hasValue = true;
+    }
+    if (hasValue) result.push(obj);
+  }
+  return result;
+}
+
+/** ワークシートを 2D 配列として取得（ヘッダー行/コメント行を含む生の表現） */
+function sheetTo2D(ws: ExcelJS.Worksheet | undefined): unknown[][] {
+  if (!ws || ws.rowCount === 0) return [];
+  const result: unknown[][] = [];
+  const colCount = ws.columnCount;
+  for (let r = 1; r <= ws.rowCount; r++) {
+    const row = ws.getRow(r);
+    const arr: unknown[] = [];
+    for (let c = 1; c <= colCount; c++) {
+      arr.push(extractCellValue(row.getCell(c).value));
+    }
+    result.push(arr);
+  }
+  return result;
 }
 
 // ─── meta シート ──────────────────────────────────────────────────────────────
 
-function parseMeta(wb: XLSX.WorkBook, errors: ParseError[]): ProjectMeta {
-  const ws = wb.Sheets["案件情報"] ?? wb.Sheets["meta"];
+function parseMeta(wb: ExcelJS.Workbook, errors: ParseError[]): ProjectMeta {
+  const ws = wb.getWorksheet("案件情報") ?? wb.getWorksheet("meta");
   if (!ws) {
     errors.push({ sheet: "meta", message: "「案件情報」シートが見つかりません" });
     return { projectName: "", standardId: "" };
@@ -190,22 +243,21 @@ function sectionToRows(
   return result;
 }
 
-function parseNetwork(wb: XLSX.WorkBook, errors: ParseError[]): { pipes: Pipe[]; nodes: Node[] } {
-  const ws = wb.Sheets["管路・節点"] ?? wb.Sheets["network"];
+function parseNetwork(wb: ExcelJS.Workbook, errors: ParseError[]): { pipes: Pipe[]; nodes: Node[] } {
+  const ws = wb.getWorksheet("管路・節点") ?? wb.getWorksheet("network");
   if (!ws) {
     errors.push({ sheet: "network", message: "「管路・節点」シートが見つかりません" });
     return { pipes: [], nodes: [] };
   }
 
   // 生の 2D 配列で取得（コメント行・セクション見出しを含む）
-  const raw = XLSX.utils.sheet_to_json<unknown[]>(ws, { header: 1, defval: null, raw: false });
+  const raw = sheetTo2D(ws);
 
   // pipe_id 列を持つセクション → 管路、node_id 列を持つセクション → 節点
   const pipeRows = sectionToRows(raw, ["テーブル", "table", "pipe_id"]);
-  const nodeRows = sectionToRows(
-    raw.slice(raw.findIndex((r) => str(r[0]).includes("節点")) + 1 || 0),
-    ["テーブル", "table", "node_id"],
-  );
+  const nodeStartIdx = raw.findIndex((r) => str(r[0]).includes("節点"));
+  const nodeRaw = nodeStartIdx >= 0 ? raw.slice(nodeStartIdx + 1) : raw;
+  const nodeRows = sectionToRows(nodeRaw, ["テーブル", "table", "node_id"]);
 
   return {
     pipes: parsePipes(pipeRows, errors),
@@ -219,8 +271,8 @@ const VALID_OPERATION_TYPES = new Set<string>([
   "valve_close", "valve_open", "pump_stop", "pump_start", "combined",
 ]);
 
-function parseCases(wb: XLSX.WorkBook, errors: ParseError[]): CalculationCase[] {
-  const ws = wb.Sheets["ケース設定"] ?? wb.Sheets["cases"];
+function parseCases(wb: ExcelJS.Workbook, errors: ParseError[]): CalculationCase[] {
+  const ws = wb.getWorksheet("ケース設定") ?? wb.getWorksheet("cases");
   if (!ws) {
     errors.push({ sheet: "cases", message: "「ケース設定」シートが見つかりません" });
     return [];
@@ -259,8 +311,8 @@ function parseCases(wb: XLSX.WorkBook, errors: ParseError[]): CalculationCase[] 
 
 // ─── 測点シート ──────────────────────────────────────────────────────────────
 
-function parseMeasurementPoints(wb: XLSX.WorkBook, errors: ParseError[]): MeasurementPoint[] {
-  const ws = wb.Sheets["測点データ"] ?? wb.Sheets["measurement_points"];
+function parseMeasurementPoints(wb: ExcelJS.Workbook, errors: ParseError[]): MeasurementPoint[] {
+  const ws = wb.getWorksheet("測点データ") ?? wb.getWorksheet("measurement_points");
   if (!ws) {
     // 測点シートは任意（後方互換のため）
     return [];
@@ -304,16 +356,20 @@ function parseMeasurementPoints(wb: XLSX.WorkBook, errors: ParseError[]): Measur
 /**
  * Excel ワークブックを ArrayBuffer から読み取り、ドメインオブジェクトに変換する。
  *
- * ブラウザ環境: `file.arrayBuffer()` で取得した ArrayBuffer を渡す
+ * ブラウザ環境: `await file.arrayBuffer()` で取得した ArrayBuffer を渡す
  * Node.js 環境: `fs.readFileSync(path)` の Buffer を渡す
+ *
+ * exceljs ベース実装のため戻り値は Promise。
  */
-export function parseWorkbook(buffer: ArrayBuffer | Buffer): ParseResult {
+export async function parseWorkbook(buffer: ArrayBuffer | Buffer): Promise<ParseResult> {
   const errors: ParseError[] = [];
   const warnings: string[] = [];
 
-  let wb: XLSX.WorkBook;
+  const wb = new ExcelJS.Workbook();
   try {
-    wb = XLSX.read(buffer, { type: "buffer", cellDates: true });
+    // exceljs の load() は ArrayBuffer または Node Buffer を受け付ける
+    // Buffer を渡すと内部で ArrayBuffer 化される
+    await wb.xlsx.load(buffer as ArrayBuffer);
   } catch (e) {
     errors.push({ sheet: "(global)", message: `ファイルの読み取りに失敗しました: ${e}` });
     return {

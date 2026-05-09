@@ -5,15 +5,14 @@
  */
 import { describe, test } from "node:test";
 import assert from "node:assert/strict";
-import * as XLSX from "xlsx";
 import { generateSessionReport } from "../session-report.js";
 import {
   createSession,
   recordChange,
   diffSessions,
-  summarizeMocResult,
 } from "@open-waterhammer/core";
-import type { CalculationSession, MocResult } from "@open-waterhammer/core";
+import type { CalculationSession } from "@open-waterhammer/core";
+import { loadWorkbook, getSheetNames, sheetTo2D } from "./test-helpers.js";
 
 function makeTestSession(): CalculationSession {
   const s = createSession({
@@ -48,65 +47,67 @@ function makeTestMocSummary(): CalculationSession["mocSummary"] {
 }
 
 describe("generateSessionReport", () => {
-  test("基本出力: 4シートが生成される", () => {
+  test("基本出力: 4シートが生成される", async () => {
     const session = makeTestSession();
     Object.assign(session, { mocSummary: makeTestMocSummary() });
 
-    const buf = generateSessionReport({ session });
+    const buf = await generateSessionReport({ session });
     assert.ok(buf);
     assert.ok(buf.length > 0);
 
-    const wb = XLSX.read(buf, { type: "buffer" });
-    assert.ok(wb.SheetNames.includes("入力条件表"));
-    assert.ok(wb.SheetNames.includes("計算条件表"));
-    assert.ok(wb.SheetNames.includes("結果整理表"));
-    assert.ok(wb.SheetNames.includes("変更履歴"));
-    assert.equal(wb.SheetNames.length, 4);
+    const wb = await loadWorkbook(buf);
+    const names = getSheetNames(wb);
+    assert.ok(names.includes("入力条件表"));
+    assert.ok(names.includes("計算条件表"));
+    assert.ok(names.includes("結果整理表"));
+    assert.ok(names.includes("変更履歴"));
+    assert.equal(names.length, 4);
   });
 
-  test("比較セッション指定時: 5シート（ケース比較追加）", () => {
+  test("比較セッション指定時: 5シート（ケース比較追加）", async () => {
     const sessA = makeTestSession();
     Object.assign(sessA, { mocSummary: makeTestMocSummary() });
     const sessB = createSession({ name: "比較ケース" });
     Object.assign(sessB, { mocSummary: makeTestMocSummary() });
 
     const diffs = diffSessions(sessA, sessB);
-    const buf = generateSessionReport({
+    const buf = await generateSessionReport({
       session: sessA,
       compareSession: sessB,
       diffs,
     });
 
-    const wb = XLSX.read(buf, { type: "buffer" });
-    assert.equal(wb.SheetNames.length, 5);
-    assert.ok(wb.SheetNames.includes("ケース比較"));
+    const wb = await loadWorkbook(buf);
+    const names = getSheetNames(wb);
+    assert.equal(names.length, 5);
+    assert.ok(names.includes("ケース比較"));
   });
 
-  test("入力条件表に管路データが含まれる", () => {
+  test("入力条件表に管路データが含まれる", async () => {
     const session = makeTestSession();
-    const buf = generateSessionReport({ session });
-    const wb = XLSX.read(buf, { type: "buffer" });
-    const ws = wb.Sheets["入力条件表"]!;
-    const data = XLSX.utils.sheet_to_json<string[]>(ws, { header: 1 });
-    const flat = data.flat().map(String);
+    const buf = await generateSessionReport({ session });
+    const wb = await loadWorkbook(buf);
+    const ws = wb.getWorksheet("入力条件表")!;
+    const data = sheetTo2D(ws);
+    const flat = data.flat().map((v) => String(v ?? ""));
     assert.ok(flat.some(v => v.includes("p1")), "管路IDが含まれる");
     assert.ok(flat.some(v => v.includes("PT1")), "測点IDが含まれる");
   });
 
-  test("結果整理表にMOC包絡線が含まれる", () => {
+  test("結果整理表にMOC包絡線が含まれる", async () => {
     const session = makeTestSession();
     Object.assign(session, { mocSummary: makeTestMocSummary() });
 
-    const buf = generateSessionReport({ session });
-    const wb = XLSX.read(buf, { type: "buffer" });
-    const ws = wb.Sheets["結果整理表"]!;
-    const data = XLSX.utils.sheet_to_json<string[]>(ws, { header: 1 });
-    const flat = data.flat().map(String);
+    const buf = await generateSessionReport({ session });
+    const wb = await loadWorkbook(buf);
+    const ws = wb.getWorksheet("結果整理表")!;
+    const data = sheetTo2D(ws);
+    const flat = data.flat().map((v) => String(v ?? ""));
     assert.ok(flat.some(v => v.includes("seg_0")), "管路IDが含まれる");
     assert.ok(flat.some(v => v.includes("110")), "Hmaxが含まれる");
   });
 
-  test("変更履歴に記録が含まれる", () => {
+  test("変更履歴に記録が含まれる", async () => {
     let session = makeTestSession();
     session = recordChange(session, {
       category: "input",
@@ -116,11 +117,11 @@ describe("generateSessionReport", () => {
       description: "管径変更",
     });
 
-    const buf = generateSessionReport({ session });
-    const wb = XLSX.read(buf, { type: "buffer" });
-    const ws = wb.Sheets["変更履歴"]!;
-    const data = XLSX.utils.sheet_to_json<string[]>(ws, { header: 1 });
-    const flat = data.flat().map(String);
+    const buf = await generateSessionReport({ session });
+    const wb = await loadWorkbook(buf);
+    const ws = wb.getWorksheet("変更履歴")!;
+    const data = sheetTo2D(ws);
+    const flat = data.flat().map((v) => String(v ?? ""));
     assert.ok(flat.some(v => v.includes("管径変更")), "変更説明が含まれる");
     assert.ok(flat.some(v => v.includes("pipe.diameter")), "フィールドパスが含まれる");
   });

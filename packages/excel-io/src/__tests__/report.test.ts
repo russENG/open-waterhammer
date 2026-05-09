@@ -5,9 +5,9 @@
 import assert from "node:assert/strict";
 import { describe, test } from "node:test";
 import { generateReport } from "../report.js";
-import { parseWorkbook } from "../reader.js";
 import type { SimpleFormulaResult } from "@open-waterhammer/core";
 import type { WorkbookData, ProjectMeta } from "../types.js";
+import { loadWorkbook, getSheetNames, sheetTo2D, sheetToRows } from "./test-helpers.js";
 
 // ─── フィクスチャ ─────────────────────────────────────────────────────────────
 
@@ -77,35 +77,35 @@ const results: SimpleFormulaResult[] = [
 // ─── テスト ────────────────────────────────────────────────────────────────────
 
 describe("generateReport", () => {
-  const buf = generateReport({ meta, data, results, closeTimes: { "C-01": 0.5, "C-02": 10.0 } });
-
-  test("Buffer が返る", () => {
+  test("Buffer が返る", async () => {
+    const buf = await generateReport({ meta, data, results, closeTimes: { "C-01": 0.5, "C-02": 10.0 } });
     assert.ok(buf instanceof Buffer);
     assert.ok(buf.byteLength > 0);
   });
 
   test("xlsx として再読み込み可能（シート名確認）", async () => {
-    const { default: XLSX } = await import("xlsx");
-    const wb = XLSX.read(buf, { type: "buffer" });
-    assert.ok(wb.SheetNames.includes("計算結果"), `sheets: ${wb.SheetNames}`);
-    assert.ok(wb.SheetNames.includes("管路データ"), `sheets: ${wb.SheetNames}`);
-    assert.ok(wb.SheetNames.includes("案件情報"), `sheets: ${wb.SheetNames}`);
+    const buf = await generateReport({ meta, data, results, closeTimes: { "C-01": 0.5, "C-02": 10.0 } });
+    const wb = await loadWorkbook(buf);
+    const names = getSheetNames(wb);
+    assert.ok(names.includes("計算結果"), `sheets: ${names}`);
+    assert.ok(names.includes("管路データ"), `sheets: ${names}`);
+    assert.ok(names.includes("案件情報"), `sheets: ${names}`);
   });
 
   test("計算結果シートに2ケース分のデータ行がある", async () => {
-    const { default: XLSX } = await import("xlsx");
-    const wb = XLSX.read(buf, { type: "buffer" });
-    const ws = wb.Sheets["計算結果"]!;
+    const buf = await generateReport({ meta, data, results, closeTimes: { "C-01": 0.5, "C-02": 10.0 } });
+    const wb = await loadWorkbook(buf);
+    const ws = wb.getWorksheet("計算結果")!;
+    const rows = sheetTo2D(ws);
     // title=4行 + header=1行 + data=2行 → 7行
-    const rows = XLSX.utils.sheet_to_json(ws, { header: 1 }) as unknown as unknown[][];
     assert.ok(rows.length >= 7, `rows.length = ${rows.length}`);
   });
 
   test("管路データシートに P-01 が存在", async () => {
-    const { default: XLSX } = await import("xlsx");
-    const wb = XLSX.read(buf, { type: "buffer" });
-    const ws = wb.Sheets["管路データ"]!;
-    const rows = XLSX.utils.sheet_to_json<{ 管路ID?: string }>(ws);
+    const buf = await generateReport({ meta, data, results, closeTimes: { "C-01": 0.5, "C-02": 10.0 } });
+    const wb = await loadWorkbook(buf);
+    const ws = wb.getWorksheet("管路データ")!;
+    const rows = sheetToRows(ws);
     assert.ok(rows.some((r) => r["管路ID"] === "P-01"), JSON.stringify(rows[0]));
   });
 });

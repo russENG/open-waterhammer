@@ -10,10 +10,12 @@
  *   ③ 結果整理表    — 管路別包絡線・ノード別極値
  *   ④ 条件変更履歴  — セッション変更ログ
  *   ⑤ ケース比較    — 2セッション間の差分（オプション）
+ *
+ * exceljs ベース実装（xlsx/SheetJS から移行: 2026-05-08）
  */
 
-import * as XLSX from "xlsx";
-import type { CalculationSession, MocResultSummary, SessionDiffItem } from "@open-waterhammer/core";
+import ExcelJS from "exceljs";
+import type { CalculationSession, SessionDiffItem } from "@open-waterhammer/core";
 import { headToMpa } from "@open-waterhammer/core";
 
 // ─── 入力型 ──────────────────────────────────────────────────────────────────
@@ -35,7 +37,7 @@ function n(v: number | undefined, d = 3): string {
   return v !== undefined && isFinite(v) ? v.toFixed(d) : "—";
 }
 
-function autoCols(ws: XLSX.WorkSheet, rows: unknown[][]): void {
+function autoCols(ws: ExcelJS.Worksheet, rows: unknown[][]): void {
   const widths: number[] = [];
   for (const row of rows) {
     row.forEach((cell, ci) => {
@@ -43,18 +45,17 @@ function autoCols(ws: XLSX.WorkSheet, rows: unknown[][]): void {
       if (!widths[ci] || widths[ci]! < len) widths[ci] = len;
     });
   }
-  ws["!cols"] = widths.map(w => ({ wch: Math.min(w + 2, 40) }));
+  ws.columns = widths.map(w => ({ width: Math.min(w + 2, 40) }));
 }
 
-function styleHeader(ws: XLSX.WorkSheet, rowIdx: number, colCount: number): void {
-  for (let ci = 0; ci < colCount; ci++) {
-    const addr = XLSX.utils.encode_cell({ r: rowIdx, c: ci });
-    if (!ws[addr]) continue;
-    ws[addr].s = {
-      font: { bold: true },
-      fill: { fgColor: { rgb: "1A1A2E" }, patternType: "solid" },
-      alignment: { horizontal: "center" },
-    };
+/** ヘッダー行にスタイル付与（1-indexed の行番号） */
+function styleHeader(ws: ExcelJS.Worksheet, rowNum: number, colCount: number): void {
+  const row = ws.getRow(rowNum);
+  for (let c = 1; c <= colCount; c++) {
+    const cell = row.getCell(c);
+    cell.font = { bold: true, color: { argb: "FFFFFFFF" } };
+    cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FF1A1A2E" } };
+    cell.alignment = { horizontal: "center", vertical: "middle", wrapText: true };
   }
 }
 
@@ -70,7 +71,8 @@ function categoryLabel(cat: string): string {
 
 // ─── シート①: 入力条件表 ─────────────────────────────────────────────────────
 
-function makeInputSheet(session: CalculationSession): XLSX.WorkSheet {
+function addInputSheet(wb: ExcelJS.Workbook, session: CalculationSession): void {
+  const ws = wb.addWorksheet("入力条件表");
   const title = [
     [`入力条件表 — ${session.name}`],
     [`セッションID: ${session.id}　作成: ${session.createdAt}`],
@@ -100,17 +102,20 @@ function makeInputSheet(session: CalculationSession): XLSX.WorkSheet {
     ["■ 測点データ"], ptHeader, ...ptRows,
     ...materialRow,
   ];
-
-  const ws = XLSX.utils.aoa_to_sheet(allRows);
+  ws.addRows(allRows);
   autoCols(ws, allRows);
-  styleHeader(ws, title.length, pipeHeader.length);
-  styleHeader(ws, title.length + 1 + pipeRows.length + 2, ptHeader.length);
-  return ws;
+
+  // ヘッダー位置（1-indexed）
+  // pipeHeader 行: title.length(=3) + 1（"■ 管路諸元"）+ 1 = 5 行目
+  styleHeader(ws, title.length + 2, pipeHeader.length);
+  // ptHeader 行: pipeHeader 行 + 1 + pipeRows.length + 1（空行）+ 1（"■ 測点データ"）+ 1 = pipeHeader行 + pipeRows.length + 4
+  styleHeader(ws, title.length + 2 + pipeRows.length + 3, ptHeader.length);
 }
 
 // ─── シート②: 計算条件表 ─────────────────────────────────────────────────────
 
-function makeCalcCondSheet(session: CalculationSession): XLSX.WorkSheet {
+function addCalcCondSheet(wb: ExcelJS.Workbook, session: CalculationSession): void {
+  const ws = wb.addWorksheet("計算条件表");
   const title = [
     [`計算条件表 — ${session.name}`],
     [],
@@ -146,9 +151,8 @@ function makeCalcCondSheet(session: CalculationSession): XLSX.WorkSheet {
   }
 
   const allRows = [...title, ...rows];
-  const ws = XLSX.utils.aoa_to_sheet(allRows);
+  ws.addRows(allRows);
   autoCols(ws, allRows);
-  return ws;
 }
 
 function bcParamSummary(bc: any): string {
@@ -181,7 +185,8 @@ function bcTypeLabel(type: string): string {
 
 // ─── シート③: 結果整理表 ─────────────────────────────────────────────────────
 
-function makeResultSheet(session: CalculationSession): XLSX.WorkSheet {
+function addResultSheet(wb: ExcelJS.Workbook, session: CalculationSession): void {
+  const ws = wb.addWorksheet("結果整理表");
   const title = [
     [`結果整理表 — ${session.name}`],
     [],
@@ -232,14 +237,14 @@ function makeResultSheet(session: CalculationSession): XLSX.WorkSheet {
   }
 
   const allRows = [...title, ...rows];
-  const ws = XLSX.utils.aoa_to_sheet(allRows);
+  ws.addRows(allRows);
   autoCols(ws, allRows);
-  return ws;
 }
 
 // ─── シート④: 条件変更履歴 ──────────────────────────────────────────────────
 
-function makeChangeLogSheet(session: CalculationSession): XLSX.WorkSheet {
+function addChangeLogSheet(wb: ExcelJS.Workbook, session: CalculationSession): void {
+  const ws = wb.addWorksheet("変更履歴");
   const title = [
     [`条件変更履歴 — ${session.name}`],
     [],
@@ -251,15 +256,15 @@ function makeChangeLogSheet(session: CalculationSession): XLSX.WorkSheet {
   ]);
 
   const allRows = [...title, header, ...rows];
-  const ws = XLSX.utils.aoa_to_sheet(allRows);
-  styleHeader(ws, title.length, header.length);
+  ws.addRows(allRows);
+  styleHeader(ws, title.length + 1, header.length);
   autoCols(ws, allRows);
-  return ws;
 }
 
 // ─── シート⑤: ケース比較 ───────────────────────────────────────────────────
 
-function makeDiffSheet(diffs: SessionDiffItem[], nameA: string, nameB: string): XLSX.WorkSheet {
+function addDiffSheet(wb: ExcelJS.Workbook, diffs: SessionDiffItem[], nameA: string, nameB: string): void {
+  const ws = wb.addWorksheet("ケース比較");
   const title = [
     [`ケース比較: ${nameA} ⇔ ${nameB}`],
     [],
@@ -271,10 +276,9 @@ function makeDiffSheet(diffs: SessionDiffItem[], nameA: string, nameB: string): 
   ]);
 
   const allRows = [...title, header, ...rows];
-  const ws = XLSX.utils.aoa_to_sheet(allRows);
-  styleHeader(ws, title.length, header.length);
+  ws.addRows(allRows);
+  styleHeader(ws, title.length + 1, header.length);
   autoCols(ws, allRows);
-  return ws;
 }
 
 // ─── メイン ──────────────────────────────────────────────────────────────────
@@ -287,21 +291,18 @@ function makeDiffSheet(diffs: SessionDiffItem[], nameA: string, nameB: string): 
  *
  * @returns xlsx ファイルの Buffer
  */
-export function generateSessionReport(input: SessionReportInput): Buffer {
-  const wb = XLSX.utils.book_new();
+export async function generateSessionReport(input: SessionReportInput): Promise<Buffer> {
+  const wb = new ExcelJS.Workbook();
 
-  XLSX.utils.book_append_sheet(wb, makeInputSheet(input.session), "入力条件表");
-  XLSX.utils.book_append_sheet(wb, makeCalcCondSheet(input.session), "計算条件表");
-  XLSX.utils.book_append_sheet(wb, makeResultSheet(input.session), "結果整理表");
-  XLSX.utils.book_append_sheet(wb, makeChangeLogSheet(input.session), "変更履歴");
+  addInputSheet(wb, input.session);
+  addCalcCondSheet(wb, input.session);
+  addResultSheet(wb, input.session);
+  addChangeLogSheet(wb, input.session);
 
   if (input.compareSession && input.diffs) {
-    XLSX.utils.book_append_sheet(
-      wb,
-      makeDiffSheet(input.diffs, input.session.name, input.compareSession.name),
-      "ケース比較",
-    );
+    addDiffSheet(wb, input.diffs, input.session.name, input.compareSession.name);
   }
 
-  return XLSX.write(wb, { type: "buffer", bookType: "xlsx" }) as Buffer;
+  const buf = await wb.xlsx.writeBuffer();
+  return Buffer.isBuffer(buf) ? buf : Buffer.from(buf as ArrayBuffer);
 }

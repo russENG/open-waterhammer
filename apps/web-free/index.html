@@ -4,6 +4,18 @@
     <meta charset="UTF-8" />
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <!--
+      Content Security Policy (defense in depth)
+      - default-src 'self': 同一オリジン以外からの読込を遮断
+      - script-src 'self': 外部スクリプト禁止（Pyodide のみ jsdelivr 許可）
+      - style-src 'self' 'unsafe-inline': KaTeX が style 属性を生成するため inline 許可
+      - img-src 'self' data: blob:: 生成画像（Blob URL）と SVG/data URL を許可
+      - connect-src 'self' https://cdn.jsdelivr.net: Pyodide CDN への XHR
+      - object-src 'none': プラグイン/embed を禁止
+      - base-uri 'self': base タグ注入を禁止
+      - frame-ancestors 'none': クリックジャッキング防止
+    -->
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' https://cdn.jsdelivr.net 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline'; font-src 'self' data:; img-src 'self' data: blob:; connect-src 'self' https://cdn.jsdelivr.net; object-src 'none'; base-uri 'self'; frame-ancestors 'none';" />
     <title>open-waterhammer — 農業用パイプライン水撃圧計算 OSS</title>
     <meta name="description" content="土地改良事業計画設計基準 設計「パイプライン」（令和3年改定）準拠の水撃圧計算オープンソースツール。定常流・特性曲線法・成果品様式帳票出力に対応。" />
   </head>

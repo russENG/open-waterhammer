@@ -6,10 +6,13 @@
  *   ① 計算結果  – ケースごとの水撃圧計算結果サマリー
  *   ② 管路データ – 入力管路諸元（記録用）
  *   ③ 案件情報  – ProjectMeta（記録用）
+ *   ④ 水理計算書 – 成果品様式準拠（測点ベース）
+ *
+ * exceljs ベース実装（xlsx/SheetJS から移行: 2026-05-08）
  */
 
-import * as XLSX from "xlsx";
-import type { SimpleFormulaResult, MeasurementPoint, MeasurementPointResult, LongitudinalHydraulicResult } from "@open-waterhammer/core";
+import ExcelJS from "exceljs";
+import type { SimpleFormulaResult, MeasurementPoint, LongitudinalHydraulicResult } from "@open-waterhammer/core";
 import { headToMpa } from "@open-waterhammer/core";
 import type { WorkbookData, ProjectMeta } from "./types.js";
 
@@ -65,8 +68,8 @@ function operationLabel(op: string): string {
   }
 }
 
-/** 列幅を文字数ベースで自動設定 */
-function autoCols(ws: XLSX.WorkSheet, rows: unknown[][]): void {
+/** 列幅を文字数ベースで自動設定（exceljs の columns プロパティ） */
+function autoCols(ws: ExcelJS.Worksheet, rows: unknown[][]): void {
   const widths: number[] = [];
   for (const row of rows) {
     row.forEach((cell, ci) => {
@@ -74,25 +77,24 @@ function autoCols(ws: XLSX.WorkSheet, rows: unknown[][]): void {
       if (!widths[ci] || widths[ci]! < len) widths[ci] = len;
     });
   }
-  ws["!cols"] = widths.map((w) => ({ wch: Math.min(w + 2, 40) }));
+  ws.columns = widths.map((w) => ({ width: Math.min(w + 2, 40) }));
 }
 
-/** ヘッダー行にスタイル付与（xlsx の限定スタイル） */
-function styleHeader(ws: XLSX.WorkSheet, headerRowIdx: number, colCount: number): void {
-  for (let ci = 0; ci < colCount; ci++) {
-    const addr = XLSX.utils.encode_cell({ r: headerRowIdx, c: ci });
-    if (!ws[addr]) continue;
-    ws[addr].s = {
-      font: { bold: true },
-      fill: { fgColor: { rgb: "1A1A2E" }, patternType: "solid" },
-      alignment: { horizontal: "center" },
-    };
+/** ヘッダー行にスタイル付与（1-indexed の行番号） */
+function styleHeader(ws: ExcelJS.Worksheet, headerRowNum: number, colCount: number): void {
+  const row = ws.getRow(headerRowNum);
+  for (let c = 1; c <= colCount; c++) {
+    const cell = row.getCell(c);
+    cell.font = { bold: true, color: { argb: "FFFFFFFF" } };
+    cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FF1A1A2E" } };
+    cell.alignment = { horizontal: "center", vertical: "middle", wrapText: true };
   }
 }
 
 // ─── シート①: 計算結果 ───────────────────────────────────────────────────────
 
-function makeResultSheet(input: ReportInput): XLSX.WorkSheet {
+function addResultSheet(wb: ExcelJS.Workbook, input: ReportInput): void {
+  const ws = wb.addWorksheet("計算結果");
   const { data, results, closeTimes } = input;
 
   const title = [
@@ -143,26 +145,22 @@ function makeResultSheet(input: ReportInput): XLSX.WorkSheet {
   });
 
   const allRows = [...title, header, ...dataRows];
-  const ws = XLSX.utils.aoa_to_sheet(allRows);
+  ws.addRows(allRows);
 
-  // ヘッダー行インデックス = title行数 (4行)
-  styleHeader(ws, title.length, header.length);
+  // ヘッダー行は title.length + 1 行目（1-indexed）
+  styleHeader(ws, title.length + 1, header.length);
   autoCols(ws, allRows);
 
-  // セル結合 (タイトル行)
-  const lastCol = header.length - 1;
-  ws["!merges"] = [
-    { s: { r: 0, c: 0 }, e: { r: 0, c: lastCol } },
-    { s: { r: 1, c: 0 }, e: { r: 1, c: lastCol } },
-    { s: { r: 2, c: 0 }, e: { r: 2, c: lastCol } },
-  ];
-
-  return ws;
+  // タイトル行（1〜3）の結合
+  ws.mergeCells(1, 1, 1, header.length);
+  ws.mergeCells(2, 1, 2, header.length);
+  ws.mergeCells(3, 1, 3, header.length);
 }
 
 // ─── シート②: 管路データ ─────────────────────────────────────────────────────
 
-function makePipeSheet(data: WorkbookData): XLSX.WorkSheet {
+function addPipeSheet(wb: ExcelJS.Workbook, data: WorkbookData): void {
+  const ws = wb.addWorksheet("管路データ");
   const header = [
     "管路ID", "管路名", "管種", "内径 D [m]", "管厚 t [m]",
     "延長 L [m]", "粗度係数", "始点節点", "終点節点",
@@ -175,15 +173,15 @@ function makePipeSheet(data: WorkbookData): XLSX.WorkSheet {
   ]);
 
   const allRows = [header, ...rows];
-  const ws = XLSX.utils.aoa_to_sheet(allRows);
-  styleHeader(ws, 0, header.length);
+  ws.addRows(allRows);
+  styleHeader(ws, 1, header.length);
   autoCols(ws, allRows);
-  return ws;
 }
 
 // ─── シート③: 案件情報 ───────────────────────────────────────────────────────
 
-function makeMetaSheet(meta: ProjectMeta): XLSX.WorkSheet {
+function addMetaSheet(wb: ExcelJS.Workbook, meta: ProjectMeta): void {
+  const ws = wb.addWorksheet("案件情報");
   const rows = [
     ["フィールド", "値"],
     ["案件名", meta.projectName],
@@ -194,19 +192,22 @@ function makeMetaSheet(meta: ProjectMeta): XLSX.WorkSheet {
     ["計算方法", meta.methodId ?? ""],
     ["備考", meta.notes ?? ""],
   ];
-  const ws = XLSX.utils.aoa_to_sheet(rows);
-  styleHeader(ws, 0, 2);
-  ws["!cols"] = [{ wch: 20 }, { wch: 40 }];
-  return ws;
+  ws.addRows(rows);
+  styleHeader(ws, 1, 2);
+  ws.columns = [{ width: 20 }, { width: 40 }];
 }
 
-// ─── シート④: 水理計��書（成果品様式準拠） ────────────────────────────────────
+// ─── シート④: 水理計算書（成果品様式準拠） ────────────────────────────────────
 
-function makeHydraulicSheet(
+function addHydraulicSheet(
+  wb: ExcelJS.Workbook,
+  sheetName: string,
   points: MeasurementPoint[],
   result: LongitudinalHydraulicResult,
   projectName: string,
-): XLSX.WorkSheet {
+): void {
+  const ws = wb.addWorksheet(sheetName);
+
   const title = [
     [`${result.caseName}時の水理計算書`],
     [`${projectName}　　　静水位：${n(result.staticWaterLevel, 3)} m`],
@@ -273,22 +274,18 @@ function makeHydraulicSheet(
   }
 
   const allRows = [...title, header1, header2, header3, unitRow, ...dataRows];
-  const ws = XLSX.utils.aoa_to_sheet(allRows);
+  ws.addRows(allRows);
 
-  // ヘッダー行スタイル
-  const headerRowStart = title.length;
-  for (let row = headerRowStart; row < headerRowStart + 4; row++) {
-    styleHeader(ws, row, 24);
+  // ヘッダー行スタイル（1-indexed: title.length + 1〜+ 4）
+  const headerRowStart = title.length + 1;
+  for (let r = headerRowStart; r < headerRowStart + 4; r++) {
+    styleHeader(ws, r, 24);
   }
   autoCols(ws, allRows);
 
   // タイトル行結合
-  ws["!merges"] = [
-    { s: { r: 0, c: 0 }, e: { r: 0, c: 23 } },
-    { s: { r: 1, c: 0 }, e: { r: 1, c: 23 } },
-  ];
-
-  return ws;
+  ws.mergeCells(1, 1, 1, 24);
+  ws.mergeCells(2, 1, 2, 24);
 }
 
 // ─── メイン ───────────────────────────────────────────────────────────────────
@@ -298,25 +295,22 @@ function makeHydraulicSheet(
  *
  * @returns xlsx ファイルの Buffer（ブラウザでは `Blob` に変換して保存）
  */
-export function generateReport(input: ReportInput): Buffer {
-  const wb = XLSX.utils.book_new();
+export async function generateReport(input: ReportInput): Promise<Buffer> {
+  const wb = new ExcelJS.Workbook();
 
-  XLSX.utils.book_append_sheet(wb, makeResultSheet(input), "計算結果");
+  addResultSheet(wb, input);
 
   // 水理計算書シート（成果品様式準拠）
   if (input.hydraulicResults && input.data.measurementPoints.length > 0) {
     for (const hr of input.hydraulicResults) {
       const sheetName = `水理計算書_${hr.caseName}`.slice(0, 31); // Excel sheet name limit
-      XLSX.utils.book_append_sheet(
-        wb,
-        makeHydraulicSheet(input.data.measurementPoints, hr, input.meta.projectName),
-        sheetName,
-      );
+      addHydraulicSheet(wb, sheetName, input.data.measurementPoints, hr, input.meta.projectName);
     }
   }
 
-  XLSX.utils.book_append_sheet(wb, makePipeSheet(input.data), "管路データ");
-  XLSX.utils.book_append_sheet(wb, makeMetaSheet(input.meta), "案件情報");
+  addPipeSheet(wb, input.data);
+  addMetaSheet(wb, input.meta);
 
-  return XLSX.write(wb, { type: "buffer", bookType: "xlsx" }) as Buffer;
+  const buf = await wb.xlsx.writeBuffer();
+  return Buffer.isBuffer(buf) ? buf : Buffer.from(buf as ArrayBuffer);
 }
