@@ -8,11 +8,11 @@
  * 外部依存ゼロ・ProviderTreeも不要。
  */
 
-export type AppPage = "about" | "design-flow" | "hydraulic" | "water-hammer" | "reference";
+export type AppPage = "about" | "design-flow" | "hydraulic" | "water-hammer" | "reference" | "library";
 
 export interface NavigateDetail {
   page: AppPage;
-  /** ReferencePage を開く場合に指定するトピックID */
+  /** ReferencePage を開く場合に指定するトピックID、または LibraryPage の式アンカーID */
   topicId?: string;
 }
 

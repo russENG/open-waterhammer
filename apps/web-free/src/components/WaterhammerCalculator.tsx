@@ -31,7 +31,16 @@ import { PressureChart } from "./PressureChart";
 import { ChartFrame } from "./ChartFrame";
 import { RefTooltip } from "./RefTooltip";
 import { InputField } from "./InputField";
+import { InlineFormulaRef } from "./FormulaCard";
+import { getFormulaById } from "../data/formulaCatalog";
 import type { WorkbookData } from "@open-waterhammer/excel-io";
+
+// 計算ライブラリのエントリ（Stage 7）— ID 不一致時は空でフォールバック
+const F_WAVE = getFormulaById("wave-speed");
+const F_CLOSURE = getFormulaById("closure-type");
+const F_JOUKOWSKY = getFormulaById("joukowsky");
+const F_ALLIEVI_CLOSE = getFormulaById("allievi-close");
+const F_ALLIEVI_OPEN = getFormulaById("allievi-open");
 
 // ─── デモケース定義 ──────────────────────────────────────────────────────────
 
@@ -174,6 +183,11 @@ function FormulaVerification({
             substituted={String.raw`a = \frac{1}{\sqrt{\dfrac{${WATER_UNIT_WEIGHT}}{${GRAVITY}}\!\left(\dfrac{1}{${(BULK_MODULUS_WATER / 1e6).toFixed(2)} \times 10^6} + \dfrac{${D} \times ${c1}}{${EsDisp} \times ${t}}\right)}}`}
             result={`a = ${n(a, 1)} \\text{ m/s}`}
           />
+          {F_WAVE && (
+            <div className="formula-content-libref">
+              <InlineFormulaRef entry={F_WAVE} />
+            </div>
+          )}
 
           {/* ② 閉そく判定 */}
           <FormulaCard
@@ -188,16 +202,28 @@ function FormulaVerification({
                 : String.raw`\Rightarrow \text{数値解析が必要な領域}`
             }
           />
+          {F_CLOSURE && (
+            <div className="formula-content-libref">
+              <InlineFormulaRef entry={F_CLOSURE} />
+            </div>
+          )}
 
           {/* ③-A ジューコフスキー */}
           {result.closureType === "rapid" && result.deltaHJoukowsky != null && (
-            <FormulaCard
-              refLabel="③ ジューコフスキーの式（式 8.3.6）"
-              formula={String.raw`\Delta H = -\frac{a}{g} \cdot \Delta V = \frac{a}{g} \cdot V_0`}
-              substituted={String.raw`\Delta H = \frac{${n(a, 1)}}{${GRAVITY}} \times ${V0}`}
-              result={`\\Delta H = ${n(result.deltaHJoukowsky, 2)} \\text{ m}`}
-              note={`最大水頭 H₀ + ΔH = ${n(H0 + result.deltaHJoukowsky, 2)} m`}
-            />
+            <>
+              <FormulaCard
+                refLabel="③ ジューコフスキーの式（式 8.3.6）"
+                formula={String.raw`\Delta H = -\frac{a}{g} \cdot \Delta V = \frac{a}{g} \cdot V_0`}
+                substituted={String.raw`\Delta H = \frac{${n(a, 1)}}{${GRAVITY}} \times ${V0}`}
+                result={`\\Delta H = ${n(result.deltaHJoukowsky, 2)} \\text{ m}`}
+                note={`最大水頭 H₀ + ΔH = ${n(H0 + result.deltaHJoukowsky, 2)} m`}
+              />
+              {F_JOUKOWSKY && (
+                <div className="formula-content-libref">
+                  <InlineFormulaRef entry={F_JOUKOWSKY} />
+                </div>
+              )}
+            </>
           )}
 
           {/* ③-B アリエビ */}
@@ -217,12 +243,22 @@ function FormulaVerification({
                 substituted={String.raw`H_{max} = \frac{${H0}}{2}\!\left(${result.k1.toFixed(4)} + \sqrt{${result.k1.toFixed(4)}^2 + 4}\right)`}
                 result={`H_{max} = ${n(result.hmaxAllieviClose, 2)} \\text{ m（閉操作）}`}
               />
+              {F_ALLIEVI_CLOSE && (
+                <div className="formula-content-libref">
+                  <InlineFormulaRef entry={F_ALLIEVI_CLOSE} />
+                </div>
+              )}
               <FormulaCard
                 refLabel="③-3 アリエビ式 最大圧力低下（式 8.3.8）"
                 formula={String.raw`H_{min} = \frac{H_0}{2}\!\left(K_1 - \sqrt{K_1^2 + 4}\right)`}
                 substituted={String.raw`H_{min} = \frac{${H0}}{2}\!\left(${result.k1.toFixed(4)} - \sqrt{${result.k1.toFixed(4)}^2 + 4}\right)`}
                 result={`H_{min} = ${n(result.hmaxAllieviOpen, 2)} \\text{ m（開操作）}`}
               />
+              {F_ALLIEVI_OPEN && (
+                <div className="formula-content-libref">
+                  <InlineFormulaRef entry={F_ALLIEVI_OPEN} />
+                </div>
+              )}
             </>
           )}
 

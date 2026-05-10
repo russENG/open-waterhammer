@@ -15,6 +15,10 @@ import type {
   NetworkNodeDef,
   SteadyNetworkResult,
 } from "@open-waterhammer/core";
+import { InlineFormulaRef } from "./FormulaCard";
+import { getFormulaById } from "../data/formulaCatalog";
+
+const F_HAZEN_WILLIAMS = getFormulaById("hazen-williams");
 
 // epanet-adapter は WASM バイナリ込みで重い（約 460KB）ため動的 import で初期ロードから分離
 async function loadEpanetAdapter() {
@@ -259,9 +263,14 @@ export function SteadyNetworkCalculator() {
             <span>自前実装 (TS) — 樹枝状 BFS、検算用</span>
           </label>
         </div>
-        <p style={{ fontSize: "0.85em", color: "#666", margin: "0 0 12px 0" }}>
+        <p style={{ fontSize: "0.85em", color: "#666", margin: "0 0 8px 0" }}>
           EPANET は米国環境保護庁 (EPA) のオープンソース水理ソルバ。Hazen-Williams 式の同等性により、樹枝状網では両者は近似一致する。
         </p>
+        {F_HAZEN_WILLIAMS && (
+          <div style={{ marginBottom: 12 }}>
+            <InlineFormulaRef entry={F_HAZEN_WILLIAMS} />
+          </div>
+        )}
 
         {/* 計算実行 */}
         <div style={{ marginTop: 16 }}>

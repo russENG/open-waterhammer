@@ -10,6 +10,10 @@ import {
   type EmpiricalWaterhammerResultJs,
 } from "../lib/pyodide-bridge";
 import { RefLink } from "./RefLink";
+import { InlineFormulaRef } from "./FormulaCard";
+import { getFormulaById } from "../data/formulaCatalog";
+
+const F_EMPIRICAL = getFormulaById("empirical-waterhammer");
 
 // ─── 方式区分定義 ─────────────────────────────────────────────────────────────
 
@@ -237,6 +241,11 @@ export function EmpiricalCalculator() {
                 <p className="result-standard">
                   出典: <RefLink topicId="waterhammer-estimate">技術書 §8.3.5（経験則）</RefLink>
                 </p>
+                {F_EMPIRICAL && (
+                  <div style={{ marginTop: 6 }}>
+                    <InlineFormulaRef entry={F_EMPIRICAL} />
+                  </div>
+                )}
               </div>
             </>
           ) : (

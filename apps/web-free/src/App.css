@@ -3348,3 +3348,393 @@ select.input--narrow {
     font-size: 1.05rem;
   }
 }
+
+/* ─── 計算ライブラリ（LibraryPage） ─────────────────────────────────────── */
+
+.library-page {
+  max-width: 1100px;
+  margin: 0 auto;
+  padding: 24px 20px 48px;
+}
+
+.library-hero {
+  margin-bottom: 24px;
+  padding: 20px 24px;
+  background: linear-gradient(135deg, #f8f9fb 0%, #eef2f6 100%);
+  border-left: 4px solid #1a1a2e;
+  border-radius: 4px;
+}
+
+.library-title {
+  margin: 0 0 8px 0;
+  font-size: 1.6rem;
+  color: #1a1a2e;
+}
+
+.library-lead {
+  margin: 0 0 6px 0;
+  font-size: 0.95rem;
+  line-height: 1.6;
+  color: #333;
+}
+
+.library-lead-sub {
+  margin: 0;
+  font-size: 0.85rem;
+  color: #666;
+}
+
+.library-lead-sub code {
+  background: #fff;
+  padding: 1px 6px;
+  border: 1px solid #ddd;
+  border-radius: 3px;
+  font-size: 0.85em;
+}
+
+/* フィルタ */
+.library-filters {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin-bottom: 24px;
+  padding: 14px 16px;
+  background: #fff;
+  border: 1px solid #e0e4ec;
+  border-radius: 6px;
+  position: sticky;
+  top: 0;
+  z-index: 10;
+}
+
+.library-search input {
+  width: 100%;
+  max-width: 480px;
+}
+
+.library-cat-filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.library-cat-btn {
+  padding: 6px 12px;
+  font-size: 0.85rem;
+  background: #f3f5f9;
+  color: #333;
+  border: 1px solid #d4d9e2;
+  border-radius: 16px;
+  cursor: pointer;
+  transition: all 0.12s;
+}
+
+.library-cat-btn:hover {
+  background: #e7eaf1;
+}
+
+.library-cat-btn--active {
+  background: #1a1a2e;
+  color: #fff;
+  border-color: #1a1a2e;
+}
+
+/* カテゴリグループ */
+.library-cat-group {
+  margin-bottom: 36px;
+}
+
+.library-cat-title {
+  margin: 0 0 4px 0;
+  padding: 8px 12px;
+  font-size: 1.15rem;
+  background: #f0f3f8;
+  border-left: 4px solid #1a1a2e;
+  border-radius: 2px;
+}
+
+.library-cat-desc {
+  margin: 0 0 16px 12px;
+  font-size: 0.85rem;
+  color: #666;
+}
+
+.library-cards {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+
+.library-empty {
+  padding: 40px 20px;
+  text-align: center;
+  color: #888;
+  background: #fafafa;
+  border-radius: 6px;
+}
+
+/* フッター注記 */
+.library-footnote {
+  margin-top: 32px;
+  padding: 16px 20px;
+  background: #fafbfd;
+  border: 1px solid #e6e9ef;
+  border-radius: 6px;
+  font-size: 0.85rem;
+  color: #555;
+  line-height: 1.6;
+}
+
+.library-footnote p {
+  margin: 0 0 6px 0;
+}
+
+.library-footnote code {
+  background: #fff;
+  padding: 1px 6px;
+  border: 1px solid #ddd;
+  border-radius: 3px;
+  font-size: 0.85em;
+}
+
+/* ─── 数式カード（FormulaCard） ───────────────────────────────────────── */
+
+.formula-card {
+  padding: 18px 22px;
+  background: #fff;
+  border: 1px solid #d8dde7;
+  border-radius: 6px;
+  scroll-margin-top: 100px;
+  transition: box-shadow 0.15s, border-color 0.15s;
+}
+
+.formula-card:target {
+  border-color: #1a1a2e;
+  box-shadow: 0 0 0 3px rgba(26, 26, 46, 0.12);
+}
+
+.formula-card--summary {
+  padding: 12px 16px;
+}
+
+.formula-card-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 12px;
+  margin-bottom: 10px;
+  flex-wrap: wrap;
+}
+
+.formula-card-title {
+  margin: 0;
+  font-size: 1.1rem;
+  color: #1a1a2e;
+}
+
+.formula-card-anchor {
+  margin-left: 8px;
+  color: #aaa;
+  text-decoration: none;
+  font-weight: normal;
+  opacity: 0.5;
+  transition: opacity 0.1s;
+}
+
+.formula-card-title:hover .formula-card-anchor,
+.formula-card-anchor:hover {
+  opacity: 1;
+  color: #1a1a2e;
+}
+
+.formula-card-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.formula-card-source {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 10px;
+  font-size: 0.78rem;
+  font-family: monospace;
+  color: #555;
+  background: #f4f6fa;
+  border: 1px solid #d4d9e2;
+  border-radius: 4px;
+  text-decoration: none;
+  transition: all 0.12s;
+}
+
+.formula-card-source:hover {
+  background: #e8edf5;
+  color: #1a1a2e;
+  border-color: #1a1a2e;
+}
+
+.formula-card-summary {
+  margin: 0 0 14px 0;
+  font-size: 0.92rem;
+  line-height: 1.6;
+  color: #444;
+}
+
+.formula-card-tex {
+  margin: 16px 0;
+  padding: 14px 18px;
+  background: #fafbfd;
+  border-radius: 4px;
+  text-align: center;
+  overflow-x: auto;
+}
+
+.formula-card-section {
+  margin-top: 14px;
+}
+
+.formula-card-section--notes {
+  padding: 10px 14px;
+  background: #fff8e1;
+  border-left: 3px solid #f0b830;
+  border-radius: 2px;
+}
+
+.formula-card-section-title {
+  margin: 0 0 6px 0;
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: #1a1a2e;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.formula-card-text {
+  margin: 0;
+  font-size: 0.9rem;
+  line-height: 1.65;
+  color: #444;
+}
+
+.formula-card-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.88rem;
+}
+
+.formula-card-table th {
+  padding: 6px 10px;
+  text-align: left;
+  font-weight: 600;
+  background: #f4f6fa;
+  border-bottom: 1px solid #d4d9e2;
+  color: #1a1a2e;
+}
+
+.formula-card-table td {
+  padding: 6px 10px;
+  border-bottom: 1px solid #eaedf2;
+  vertical-align: top;
+}
+
+.formula-card-sym {
+  width: 14%;
+  min-width: 60px;
+  white-space: nowrap;
+}
+
+.formula-card-unit {
+  width: 18%;
+  min-width: 80px;
+  font-family: monospace;
+  font-size: 0.85em;
+  color: #555;
+}
+
+.formula-card-num {
+  font-family: monospace;
+  font-weight: 600;
+  color: #1a1a2e;
+  white-space: nowrap;
+}
+
+.formula-card-refs {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.formula-card-refs li {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 14px;
+  padding: 4px 0;
+  font-size: 0.88rem;
+}
+
+.formula-card-ref-link {
+  padding: 2px 10px;
+  font-size: 0.8rem;
+  color: #1a1a2e;
+  background: transparent;
+  border: 1px solid #1a1a2e;
+  border-radius: 3px;
+  cursor: pointer;
+  transition: all 0.12s;
+}
+
+.formula-card-ref-link:hover {
+  background: #1a1a2e;
+  color: #fff;
+}
+
+/* ─── インライン参照（Calculator から） ─────────────────────────────────── */
+
+.inline-formula-ref {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  font-size: 0.85rem;
+  color: #1a1a2e;
+  background: #f4f6fa;
+  border: 1px solid #d4d9e2;
+  border-radius: 14px;
+  cursor: pointer;
+  transition: all 0.12s;
+}
+
+.inline-formula-ref:hover {
+  background: #1a1a2e;
+  color: #fff;
+  border-color: #1a1a2e;
+}
+
+.inline-formula-ref-id {
+  font-family: monospace;
+  font-size: 0.78em;
+  opacity: 0.7;
+}
+
+@media (max-width: 720px) {
+  .library-page {
+    padding: 16px 14px 32px;
+  }
+  .library-hero {
+    padding: 14px 16px;
+  }
+  .library-title {
+    font-size: 1.3rem;
+  }
+  .formula-card {
+    padding: 14px 16px;
+  }
+  .formula-card-table {
+    font-size: 0.78rem;
+  }
+  .formula-card-tex {
+    padding: 10px 12px;
+    font-size: 0.9em;
+  }
+}

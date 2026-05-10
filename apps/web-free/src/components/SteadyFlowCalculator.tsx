@@ -20,6 +20,11 @@ import {
 } from "../lib/pyodide-bridge";
 import { InputField } from "./InputField";
 import { downloadCsv } from "../utils/csv";
+import { InlineFormulaRef } from "./FormulaCard";
+import { getFormulaById } from "../data/formulaCatalog";
+
+const F_HAZEN_WILLIAMS = getFormulaById("hazen-williams");
+const F_DARCY_WEISBACH = getFormulaById("darcy-weisbach");
 
 type Method = "hazen-williams" | "darcy-weisbach";
 type Mode = "simple" | "longitudinal";
@@ -391,6 +396,14 @@ function SimpleCalculatorPanel({
               <span className="result-standard">
                 計算式: {result.method === "hazen-williams" ? "Hazen-Williams 式" : "Darcy-Weisbach 式"}
               </span>
+              {(() => {
+                const f = result.method === "hazen-williams" ? F_HAZEN_WILLIAMS : F_DARCY_WEISBACH;
+                return f ? (
+                  <div style={{ marginTop: 6 }}>
+                    <InlineFormulaRef entry={f} />
+                  </div>
+                ) : null;
+              })()}
             </div>
           </>
         ) : (

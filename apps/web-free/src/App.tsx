@@ -4,6 +4,7 @@ import { DesignFlowPage } from './pages/DesignFlowPage'
 import { HydraulicOverviewPage } from './pages/HydraulicOverviewPage'
 import { WaterHammerPage } from './pages/WaterHammerPage'
 import { ReferencePage } from './pages/ReferencePage'
+import { LibraryPage } from './pages/LibraryPage'
 import { PyodideStatusToast } from './components/PyodideStatusToast'
 import { onNavigate, type AppPage } from './lib/navigation'
 import { prefetchPyodide } from './lib/pyodide-bridge'
@@ -12,6 +13,7 @@ import './App.css'
 export default function App() {
   const [page, setPage] = useState<AppPage>('water-hammer')
   const [refTopicId, setRefTopicId] = useState<string | undefined>(undefined)
+  const [libraryAnchor, setLibraryAnchor] = useState<string | undefined>(undefined)
 
   // アプリ起動直後に Pyodide のロードを開始（fire-and-forget）
   // ユーザーが計算ボタンに到達する頃には warm 状態を期待
@@ -19,12 +21,14 @@ export default function App() {
     prefetchPyodide()
   }, [])
 
-  // 子コンポーネントからの「基準照会の特定トピックを開いて」要求を受信
+  // 子コンポーネントからの「基準照会／計算ライブラリの特定トピックを開いて」要求を受信
   useEffect(() => {
     return onNavigate((detail) => {
       setPage(detail.page)
       if (detail.page === 'reference') {
         setRefTopicId(detail.topicId)
+      } else if (detail.page === 'library') {
+        setLibraryAnchor(detail.topicId)
       }
       window.scrollTo({ top: 0, behavior: 'smooth' })
     })
@@ -33,6 +37,7 @@ export default function App() {
   function navigate(target: AppPage) {
     setPage(target)
     if (target !== 'reference') setRefTopicId(undefined)
+    if (target !== 'library') setLibraryAnchor(undefined)
   }
 
   return (
@@ -59,6 +64,12 @@ export default function App() {
               基準照会
             </button>
             <button
+              className={`header-nav-btn${page === 'library' ? ' header-nav-btn--active' : ''}`}
+              onClick={() => navigate('library')}
+            >
+              計算ライブラリ
+            </button>
+            <button
               className={`header-nav-btn${page === 'design-flow' ? ' header-nav-btn--active' : ''}`}
               onClick={() => navigate('design-flow')}
             >
@@ -79,12 +90,13 @@ export default function App() {
           </div>
         </div>
       </header>
-      <main className={page === 'reference' ? 'main main--fullwidth' : 'main'}>
+      <main className={page === 'reference' || page === 'library' ? 'main main--fullwidth' : 'main'}>
         {page === 'about' && <AboutPage />}
         {page === 'design-flow' && <DesignFlowPage />}
         {page === 'hydraulic' && <HydraulicOverviewPage />}
         {page === 'water-hammer' && <WaterHammerPage />}
         {page === 'reference' && <ReferencePage initialTopicId={refTopicId} />}
+        {page === 'library' && <LibraryPage initialAnchor={libraryAnchor} />}
       </main>
       <footer className="footer">
         <p>計算ロジックはオープンソース（AGPL-3.0）。結果には採用基準・手法・前提条件を明示。</p>
@@ -95,6 +107,10 @@ export default function App() {
           <span className="footer-sep">|</span>
           <button className="footer-link" onClick={() => navigate('reference')}>
             基準照会
+          </button>
+          <span className="footer-sep">|</span>
+          <button className="footer-link" onClick={() => navigate('library')}>
+            計算ライブラリ
           </button>
           <span className="footer-sep">|</span>
           <button className="footer-link" onClick={() => navigate('design-flow')}>

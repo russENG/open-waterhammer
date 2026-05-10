@@ -28,6 +28,10 @@ import { MocEnvelopeChart } from "./MocEnvelopeChart";
 import { ChartFrame } from "./ChartFrame";
 import { RefTooltip } from "./RefTooltip";
 import { InputField } from "./InputField";
+import { InlineFormulaRef } from "./FormulaCard";
+import { getFormulaById } from "../data/formulaCatalog";
+
+const F_MOC = getFormulaById("moc-internal");
 import { downloadCsv } from "../utils/csv";
 
 // ─── デモケース ───────────────────────────────────────────────────────────────
@@ -547,6 +551,11 @@ export function MocCalculator({ excelData, onResult, steadyResult }: MocCalculat
           出典: <RefTooltip topicId="moc">技術書 §8.4（特性曲線法）</RefTooltip>　／
           単一管路・定水頭上流境界・線形バルブ閉操作・準定常摩擦（Darcy-Weisbach）
         </p>
+        {F_MOC && (
+          <div style={{ marginTop: 6 }}>
+            <InlineFormulaRef entry={F_MOC} />
+          </div>
+        )}
       </div>
     </div>
   );
