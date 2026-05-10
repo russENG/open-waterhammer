@@ -7,5 +7,16 @@ dist/
 .DS_Store
 coverage/
 
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache/
+.venv/
+venv/
+
 # 学会発表関連（非公開）
 docs/jsidre2026/
+
+# Claude Code 内部
+.claude/launch.json
