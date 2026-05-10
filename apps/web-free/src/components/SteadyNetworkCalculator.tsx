@@ -16,6 +16,14 @@ import type {
   SteadyNetworkResult,
 } from "@open-waterhammer/core";
 
+// epanet-adapter は WASM バイナリ込みで重い（約 460KB）ため動的 import で初期ロードから分離
+async function loadEpanetAdapter() {
+  return import("@open-waterhammer/epanet-adapter");
+}
+
+/** 計算エンジン選択 */
+type Engine = "epanet" | "self";
+
 // ─── フォーム型 ──────────────────────────────────────────────────────────────
 
 interface PipeFormRow {
@@ -105,6 +113,9 @@ export function SteadyNetworkCalculator() {
   const [pipes, setPipes] = useState<PipeFormRow[]>(demo.pipes);
   const [nodes, setNodes] = useState<NodeFormRow[]>(demo.nodes);
   const [result, setResult] = useState<SteadyNetworkResult | null>(null);
+  const [engine, setEngine] = useState<Engine>("epanet");
+  const [calcStatus, setCalcStatus] = useState<"idle" | "loading" | "error">("idle");
+  const [calcError, setCalcError] = useState<string | null>(null);
 
   function updatePipe(idx: number, field: keyof PipeFormRow, value: string) {
     setPipes(prev => prev.map((p, i) => i === idx ? { ...p, [field]: value } : p));
@@ -123,13 +134,30 @@ export function SteadyNetworkCalculator() {
   function removePipe(idx: number) { setPipes(prev => prev.filter((_, i) => i !== idx)); }
   function removeNode(idx: number) { setNodes(prev => prev.filter((_, i) => i !== idx)); }
 
-  function handleCalc() {
+  async function handleCalc() {
     const input = buildInput(pipes, nodes);
     if (!input) {
       setResult(null);
+      setCalcError("入力値に不備があります");
+      setCalcStatus("error");
       return;
     }
-    setResult(calcSteadyNetwork(input));
+    setCalcStatus("loading");
+    setCalcError(null);
+    try {
+      if (engine === "epanet") {
+        const { calcSteadyNetworkEpanet } = await loadEpanetAdapter();
+        const r = await calcSteadyNetworkEpanet(input);
+        setResult(r);
+      } else {
+        setResult(calcSteadyNetwork(input));
+      }
+      setCalcStatus("idle");
+    } catch (e) {
+      setCalcError(`計算エラー: ${e instanceof Error ? e.message : String(e)}`);
+      setCalcStatus("error");
+      setResult(null);
+    }
   }
 
   function loadDemo() {
@@ -219,9 +247,36 @@ export function SteadyNetworkCalculator() {
         </div>
         <button className="btn btn--secondary" onClick={addPipe} style={{ marginTop: 8 }}>管路追加</button>
 
+        {/* エンジン選択 */}
+        <h3 className="input-group-title" style={{ marginTop: 16 }}>計算エンジン</h3>
+        <div style={{ display: "flex", gap: 16, alignItems: "center", marginBottom: 8, flexWrap: "wrap" }}>
+          <label style={{ display: "flex", gap: 6, alignItems: "center" }}>
+            <input type="radio" name="engine" checked={engine === "epanet"} onChange={() => setEngine("epanet")} />
+            <span><strong>EPANET (epanet-js, WASM)</strong> — 業界標準・Newton-Raphson 反復による全体収束</span>
+          </label>
+          <label style={{ display: "flex", gap: 6, alignItems: "center" }}>
+            <input type="radio" name="engine" checked={engine === "self"} onChange={() => setEngine("self")} />
+            <span>自前実装 (TS) — 樹枝状 BFS、検算用</span>
+          </label>
+        </div>
+        <p style={{ fontSize: "0.85em", color: "#666", margin: "0 0 12px 0" }}>
+          EPANET は米国環境保護庁 (EPA) のオープンソース水理ソルバ。Hazen-Williams 式の同等性により、樹枝状網では両者は近似一致する。
+        </p>
+
         {/* 計算実行 */}
         <div style={{ marginTop: 16 }}>
-          <button className="btn btn--primary" onClick={handleCalc}>定常水理計算 実行</button>
+          <button
+            className="btn btn--primary"
+            onClick={handleCalc}
+            disabled={calcStatus === "loading"}
+          >
+            {calcStatus === "loading" ? "計算中…" : "定常水理計算 実行"}
+          </button>
+          {calcError && (
+            <div className="warning-item" style={{ marginTop: 8, color: "#c00" }}>
+              <span className="warning-icon">!</span>{calcError}
+            </div>
+          )}
         </div>
       </section>
 
