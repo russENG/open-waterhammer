@@ -29,6 +29,14 @@ jobs:
           node-version: 24
           cache: npm
 
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      - name: Install Python dependencies (Marimo)
+        run: pip install marimo
+
       - name: Install dependencies
         run: npm ci
 
@@ -37,6 +45,10 @@ jobs:
           npm run build --workspace=packages/core
           npm run build --workspace=packages/excel-io
           npm run build --workspace=packages/sample-data
+          npm run build --workspace=packages/epanet-adapter
+
+      - name: Build Marimo notebooks
+        run: node scripts/build-notebooks.mjs
 
       - name: Build web-free
         run: npm run build --workspace=apps/web-free

@@ -113,6 +113,10 @@ export default function App() {
             計算ライブラリ
           </button>
           <span className="footer-sep">|</span>
+          <a className="footer-link" href="./notebooks/" target="_blank" rel="noreferrer">
+            計算ノートブック ↗
+          </a>
+          <span className="footer-sep">|</span>
           <button className="footer-link" onClick={() => navigate('design-flow')}>
             パイプライン設計フロー
           </button>

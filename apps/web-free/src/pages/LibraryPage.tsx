@@ -77,6 +77,10 @@ export function LibraryPage({ initialAnchor }: LibraryPageProps) {
           外部から特定の式を引用する場合は <code>#{"{式ID}"}</code> アンカーをご利用ください
           （例: <code>{"#joukowsky"}</code>）。
         </p>
+        <p className="library-lead-sub" style={{ marginTop: 8 }}>
+          📓 対話的に挙動を探索する <a href="./notebooks/" target="_blank" rel="noreferrer"><strong>計算ノートブック</strong></a>
+          （Marimo, ブラウザ上で実行可能）も用意しています。
+        </p>
       </section>
 
       {/* フィルタ＆検索 */}
@@ -140,6 +144,10 @@ export function LibraryPage({ initialAnchor }: LibraryPageProps) {
         <p>
           定常流網計算は <code>epanet-js</code>（米国 EPA EPANET の WASM 移植、MIT）に委譲。
           自前実装と数値一致を検証済み。
+        </p>
+        <p>
+          🎓 学習用の対話的ノートブック（Marimo）も併設:{" "}
+          <a href="./notebooks/" target="_blank" rel="noreferrer">/notebooks/</a>
         </p>
       </section>
     </div>
