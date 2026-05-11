@@ -91,8 +91,10 @@ export function AboutPage() {
             <div className="about-principle-icon">再現性</div>
             <h4>独立検証可能</h4>
             <p>
-              計算ロジックはコアパッケージ（<code>@open-waterhammer/core</code>）として分離し、
-              Node.js・ブラウザ・CI テストで独立検証できます。
+              計算ロジックは Python パッケージ（<code>packages/core-py/</code>）に単一の真理源を置き、
+              ブラウザでも Pyodide 経由で同じコードを実行します。
+              「<a href="#" onClick={(e) => { e.preventDefault(); window.dispatchEvent(new CustomEvent("ocd:navigate", { detail: { page: "library" } })); }}>計算ライブラリ</a>」ページから
+              各計算式の数式・入出力・適用条件・ソースコード位置を一望できます。
             </p>
           </div>
           <div className="about-principle-card">
@@ -101,7 +103,8 @@ export function AboutPage() {
             <p>
               計算手法（特性曲線法・中心差分法など）の理解を助けるため、
               中間値・時系列・チャートを可視化します。
-              大学・研究機関での活用を歓迎します。
+              対話的に挙動を探索できる <a href="./notebooks/" target="_blank" rel="noreferrer">計算ノートブック</a>
+              （Marimo, ブラウザ上で実行可能）も併設。大学・研究機関での活用を歓迎します。
             </p>
           </div>
         </div>
@@ -143,7 +146,7 @@ export function AboutPage() {
           </p>
           <div className="about-links">
             <a
-              href="https://github.com/OpenCivilDesign/open-waterhammer"
+              href="https://github.com/russENG/open-waterhammer"
               target="_blank"
               rel="noopener noreferrer"
               className="about-link"
@@ -151,12 +154,12 @@ export function AboutPage() {
               GitHub リポジトリ
             </a>
             <a
-              href="https://github.com/OpenCivilDesign/open-waterhammer/blob/main/docs/contributing.md"
+              href="https://github.com/russENG/open-waterhammer/issues"
               target="_blank"
               rel="noopener noreferrer"
               className="about-link"
             >
-              コントリビューションガイド
+              Issues / 機能提案
             </a>
           </div>
         </div>
