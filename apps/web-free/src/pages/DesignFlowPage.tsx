@@ -1,3 +1,4 @@
+/* eslint-disable no-irregular-whitespace -- preserved Japanese documentation contains intentional full-width spacing */
 /**
  * 農業用パイプライン設計フロー説明ページ
  * 土地改良設計基準　設計「パイプライン」技術書（令和3年6月改訂）に基づく設計手順の俯瞰

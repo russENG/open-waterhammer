@@ -108,7 +108,7 @@ export const CATEGORY_META: Record<FormulaCategory, { label: string; description
   },
   "moc": {
     label: "非定常解析（特性曲線法）",
-    description: "MOC（Method of Characteristics）— 水路網の時系列水撃圧解析（基準 §8.4）",
+    description: "特性曲線法 — 水路網の時系列水撃圧解析（基準 §8.4）",
     order: 5,
   },
   "design": {
@@ -326,7 +326,7 @@ export const FORMULA_CATALOG: FormulaEntry[] = [
   {
     id: "moc-internal",
     category: "moc",
-    title: "MOC 内部点の更新（C+ / C- 特性線）",
+    title: "特性曲線法の内部点更新（C+ / C- 特性線）",
     summary: "管路内部点の水頭・流量を、上流からの C+ 不変量と下流からの C- 不変量の連立で時系列に更新する。",
     tex: String.raw`\begin{aligned}
 C^+ : \quad& H_P = H_A - \dfrac{a}{gA}(Q_P - Q_A) - R\,Q_A|Q_A| \\

@@ -1,3 +1,4 @@
+/* eslint-disable no-irregular-whitespace -- preserved Japanese documentation contains intentional full-width spacing */
 /**
  * 公共設計コモンズ（Open Civil Design）説明ページ
  */

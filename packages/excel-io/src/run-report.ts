@@ -28,6 +28,10 @@ export async function generateRunReport(run: Run): Promise<Buffer> {
     ["Created at", run.createdAt],
     ["Updated at", run.updatedAt],
     ["Error", run.error === null ? "" : JSON.stringify(run.error)],
+    ["Release label", "alpha"],
+    ["Purpose", "設計比較支援"],
+    ["Applicability limitations", "適用限界：本ツールの自動評価は設計比較支援のための参考情報です。入力条件、適用基準、数値解法の妥当性は設計者が個別に確認してください。"],
+    ["Rule ids", [...new Set(run.assessment.findings.map(({ ruleId }) => ruleId))].join(", ")],
   ]);
   addRows(workbook, "Manifest", [
     ["Field", "Value"],

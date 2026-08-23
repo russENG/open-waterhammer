@@ -1,5 +1,6 @@
 import {
   applyFinalRun,
+  archiveCase as archiveContractCase,
   deriveScenarioState,
   forkCase as forkContractCase,
   validateCase,
@@ -86,6 +87,17 @@ export class WorkspaceRepositoryBase implements WorkspaceRepository {
       assertValid("Case", validateCase(child));
       draft.cases.push(structuredClone(child));
       return structuredClone(child);
+    });
+  }
+
+  async archiveCase(caseId: string, timestamp: string): Promise<Case> {
+    return this.storage.transaction((draft) => {
+      const index = draft.cases.findIndex((candidate) => candidate.id === caseId);
+      if (index < 0) throw new Error(`Case not found: ${caseId}`);
+      const archived = archiveContractCase(draft.cases[index]!, timestamp);
+      assertValid("Case", validateCase(archived));
+      draft.cases[index] = structuredClone(archived);
+      return structuredClone(archived);
     });
   }
 

@@ -1,3 +1,4 @@
+/* eslint-disable react-hooks/set-state-in-effect -- initial anchor synchronizes the preserved documentation filter */
 /**
  * 計算ライブラリページ — 全計算式のカタログを一覧表示する。
  *

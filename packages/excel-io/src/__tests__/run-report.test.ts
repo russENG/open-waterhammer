@@ -25,6 +25,10 @@ describe("generateRunReport", () => {
     const runSheet = workbook.getWorksheet("Run")!;
     assert.equal(runSheet.getCell("B2").value, runFixture.id);
     assert.equal(runSheet.getCell("B6").value, "succeeded");
+    assert.equal(runSheet.getCell("B10").value, "alpha");
+    assert.equal(runSheet.getCell("B11").value, "設計比較支援");
+    assert.match(String(runSheet.getCell("B12").value), /適用限界/);
+    assert.equal(runSheet.getCell("A13").value, "Rule ids");
     assert.match(String(workbook.getWorksheet("Manifest")!.getCell("B2").value), /open-waterhammer-core/);
     assert.match(String(workbook.getWorksheet("Summary")!.getCell("A2").value), /peakPressureMpa/);
     assert.match(String(workbook.getWorksheet("Assessment")!.getCell("B2").value), /pass/);

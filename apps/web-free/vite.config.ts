@@ -8,17 +8,18 @@ export default defineConfig({
   base: process.env.VITE_BASE_PATH ?? "/",
   resolve: {
     alias: {
-      '@open-waterhammer/core': path.resolve(__dirname, '../../packages/core/src/index.ts'),
-      '@open-waterhammer/standards': path.resolve(__dirname, '../../packages/standards/src/index.ts'),
-      '@open-waterhammer/sample-data': path.resolve(__dirname, '../../packages/sample-data/src/index.ts'),
-      '@open-waterhammer/excel-io': path.resolve(__dirname, '../../packages/excel-io/src/index.ts'),
-      '@open-waterhammer-py': path.resolve(__dirname, '../../packages/core-py/open_waterhammer'),
+      '@open-waterhammer/excel-io': path.resolve(import.meta.dirname, '../../packages/excel-io/src/index.ts'),
+      '@open-waterhammer/runner/browser': path.resolve(import.meta.dirname, '../../packages/runner/src/browser.ts'),
+      '@open-waterhammer/runner': path.resolve(import.meta.dirname, '../../packages/runner/src/index.ts'),
+      '@open-waterhammer/contracts': path.resolve(import.meta.dirname, '../../packages/contracts/src/index.ts'),
+      '@open-waterhammer/workspace': path.resolve(import.meta.dirname, '../../packages/workspace/src/index.ts'),
+      '@open-waterhammer-py': path.resolve(import.meta.dirname, '../../packages/core-py/open_waterhammer'),
     },
   },
   server: {
     fs: {
       // packages/core-py の .py を ?raw で取り込めるようにする
-      allow: [path.resolve(__dirname, '../..')],
+      allow: [path.resolve(import.meta.dirname, '../..')],
     },
   },
 })

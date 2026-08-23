@@ -73,6 +73,18 @@ describe("in-memory WorkspaceRepository", () => {
     });
   });
 
+  test("archives only a draft Case through the contract lifecycle helper", async () => {
+    const repository = createRepository();
+
+    const archived = await repository.archiveCase(caseFixture.id, "2026-08-23T03:02:03.000Z");
+    assert.equal(archived.state, "archived");
+    assert.equal((await repository.snapshot()).cases[0]?.state, "archived");
+    await assert.rejects(
+      repository.archiveCase(caseFixture.id, "2026-08-23T04:02:03.000Z"),
+      /not editable/i,
+    );
+  });
+
   test("atomically persists a successful Run and locks its draft Case", async () => {
     const repository = createRepository();
 

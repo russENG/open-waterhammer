@@ -42,10 +42,13 @@ jobs:
 
       - name: Build packages
         run: |
+          npm run build --workspace=packages/contracts
+          npm run build --workspace=packages/workspace
           npm run build --workspace=packages/core
           npm run build --workspace=packages/excel-io
           npm run build --workspace=packages/sample-data
           npm run build --workspace=packages/epanet-adapter
+          npm run build --workspace=packages/runner
 
       - name: Build Marimo notebooks
         run: node scripts/build-notebooks.mjs

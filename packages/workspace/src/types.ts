@@ -47,6 +47,7 @@ export interface BundleInspection {
 export interface WorkspaceRepository {
   saveDraftCase(caseRecord: Case, scenarios?: Scenario[]): Promise<void>;
   forkCase(caseId: string, input: ForkCaseInput): Promise<Case>;
+  archiveCase(caseId: string, timestamp: string): Promise<Case>;
   appendRun(run: Run): Promise<void>;
   exportBundle(projectId: string): Promise<Uint8Array>;
   importBundle(bytes: Uint8Array): Promise<Project>;
