@@ -91,8 +91,29 @@ test('create, edit, execute, lock, fork, compare, reload, export, and import', a
   await page.getByRole('link', { name: 'Model＋GIS' }).click()
   await expect(page.getByText('N-E2E')).toBeVisible()
 
-  // Disambiguated by label: the blank Case (from the wave_speed Run earlier in this test) is
-  // also locked by now, so 'locked' alone would match two rows.
+  // Task 4b-4: this fork inherited 基準案's SAMPLE_RUN_INPUTS (fork preserves modelSnapshot
+  // verbatim), so joukowsky_allievi's input — pipe/calculationCase/allowablePressureMpa — is
+  // already saved; selecting the kind starts non-dirty and "Run calculation" is enabled
+  // immediately, same as the untouched Steady network / EPANET run above needed no fresh Save.
+  await page.getByRole('link', { name: 'Analysis' }).click()
+  await page.getByRole('radio', { name: /Joukowsky \/ Allievi/ }).check()
+  await page.getByRole('button', { name: 'Run calculation' }).click()
+  await expect(page.getByRole('status')).toHaveText('Run succeeded', { timeout: 60_000 })
+
+  // The deliverable 水理計算書・検討書 button (Part (b)) only enables once a succeeded
+  // joukowsky_allievi or longitudinal_hydraulics Run exists for the Case; verify it end-to-end
+  // (buildReportInput -> generateDeliverableExcel, no recalculation) with a real download.
+  await page.getByRole('link', { name: 'Reports' }).click()
+  const deliverableButton = page.getByRole('button', { name: /水理計算書・検討書/ })
+  await expect(deliverableButton).toBeEnabled()
+  const deliverableDownload = page.waitForEvent('download')
+  await deliverableButton.click()
+  await expect((await deliverableDownload).suggestedFilename()).toMatch(/^waterhammer-report-.+\.xlsx$/)
+  await expect(page.getByRole('status')).toHaveText(/水理計算書・検討書を出力しました/)
+
+  // Disambiguated by label: the blank Case (from the wave_speed Run earlier in this test) and
+  // this fork (from the joukowsky_allievi Run just above) are also locked by now, so 'locked'
+  // alone would match three rows.
   await page.locator('.case-row').filter({ hasText: 'locked' }).filter({ hasText: '基準案' }).getByRole('button').click()
   await expect(page.locator('.state-pill')).toHaveText('locked')
   await page.getByRole('link', { name: 'Reports' }).click()

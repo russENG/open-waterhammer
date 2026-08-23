@@ -36,6 +36,7 @@ interface WorkspaceContextValue {
   saveModel(caseId: string, kind: RunKind, input: JsonValue, scenario?: Scenario): Promise<void>
   saveGeoDrafts(caseId: string, drafts: JsonValue, sourceCrs: string, localTransform?: LocalTransformDefinition): Promise<void>
   saveScenario(scenario: Scenario): Promise<void>
+  importExcelInputs(caseId: string, mapped: Partial<Record<RunKind, JsonValue>>, raw: JsonValue): Promise<void>
 }
 
 const WorkspaceContext = createContext<WorkspaceContextValue | null>(null)
@@ -186,6 +187,25 @@ export function WorkspaceProvider({
     await refresh()
   }), [data.cases, data.scenarios, guarded, refresh, repository])
 
+  const importExcelInputs = useCallback((caseId: string, mapped: Partial<Record<RunKind, JsonValue>>, raw: JsonValue) => guarded(async () => {
+    const current = data.cases.find(({ id }) => id === caseId)
+    if (!current) throw new Error('Case not found')
+    const root = current.modelSnapshot && typeof current.modelSnapshot === 'object' && !Array.isArray(current.modelSnapshot)
+      ? structuredClone(current.modelSnapshot) : {}
+    const edited: Case = {
+      ...current,
+      // One save, atomic: merged runInputs (Excel-mapped kinds win over any prior value for
+      // the same kind) plus the full parsed workbook retained verbatim as excelImport — raw
+      // provenance for deliverable reports (src/reports/deliverable-reports.ts) and
+      // traceability. Calculation never runs here; this only ever writes a draft (saveDraftCase
+      // itself rejects a locked/archived Case, same rule as every other edit path).
+      modelSnapshot: { ...root, runInputs: { ...modelsFrom(current), ...mapped }, excelImport: raw },
+      updatedAt: now(),
+    }
+    await repository.saveDraftCase(edited, data.scenarios.filter(({ caseId: owner }) => owner === caseId))
+    await refresh()
+  }), [data.cases, data.scenarios, guarded, refresh, repository])
+
   const saveGeoDrafts = useCallback((caseId: string, drafts: JsonValue, sourceCrs: string, localTransform?: LocalTransformDefinition) => guarded(async () => {
     const current = data.cases.find(({ id }) => id === caseId)
     if (!current) throw new Error('Case not found')
@@ -208,8 +228,8 @@ export function WorkspaceProvider({
   }), [data.cases, guarded, refresh, repository])
 
   const value = useMemo<WorkspaceContextValue>(() => ({
-    data, repository, busy, lastError, refresh, run, createFrom, fork, archive, saveModel, saveGeoDrafts, saveScenario,
-  }), [archive, busy, createFrom, data, fork, lastError, refresh, repository, run, saveGeoDrafts, saveModel, saveScenario])
+    data, repository, busy, lastError, refresh, run, createFrom, fork, archive, saveModel, saveGeoDrafts, saveScenario, importExcelInputs,
+  }), [archive, busy, createFrom, data, fork, importExcelInputs, lastError, refresh, repository, run, saveGeoDrafts, saveModel, saveScenario])
 
   return <WorkspaceContext value={value}>{children}</WorkspaceContext>
 }

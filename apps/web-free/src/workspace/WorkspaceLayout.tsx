@@ -14,6 +14,7 @@ import { OverviewPanel } from './tabs/OverviewPanel'
 import { ScenarioPanel } from './tabs/ScenarioPanel'
 
 const GisPanel = lazy(() => import('../gis/GisPanel').then((module) => ({ default: module.GisPanel })))
+const ExcelIoCard = lazy(() => import('./tabs/ExcelIoCard').then((module) => ({ default: module.ExcelIoCard })))
 const ResultsPanel = lazy(() => import('../results/ResultsPanel').then((module) => ({ default: module.ResultsPanel })))
 const ReportsPanel = lazy(() => import('./tabs/ReportsPanel').then((module) => ({ default: module.ReportsPanel })))
 
@@ -96,7 +97,7 @@ export function WorkspaceLayout() {
 
   let panel
   if (selection.tab === 'overview') panel = <OverviewPanel project={project} caseRecord={caseRecord} scenario={scenario} runs={caseRuns} />
-  if (selection.tab === 'model-gis') panel = <Suspense fallback={<PanelLoading label="GIS" />}><GisPanel key={caseRecord.id} caseRecord={caseRecord} projectCrs={project.crs} locked={caseRecord.state !== 'draft'} focus={focus} /></Suspense>
+  if (selection.tab === 'model-gis') panel = <Suspense fallback={<PanelLoading label="GIS" />}><ExcelIoCard key={`excel-${caseRecord.id}`} caseRecord={caseRecord} /><GisPanel key={caseRecord.id} caseRecord={caseRecord} projectCrs={project.crs} locked={caseRecord.state !== 'draft'} focus={focus} /></Suspense>
   if (selection.tab === 'scenario') panel = <ScenarioPanel key={scenario?.id} scenario={scenario} locked={caseRecord.state !== 'draft'} />
   if (selection.tab === 'analysis') panel = <AnalysisPanel key={caseRecord.id} caseRecord={caseRecord} onRunSelected={(run) => setSelectedRunId(run.id)} />
   if (selection.tab === 'results') panel = <Suspense fallback={<PanelLoading label="results visualization" />}><ResultsPanel runs={caseRuns} selectedRun={selectedRun} focus={focus} onSelectRun={(run: Run) => setSelectedRunId(run.id)} onFocus={setFocus} /></Suspense>

@@ -1,5 +1,7 @@
 import type { Run } from '@open-waterhammer/contracts'
 
+import { ensureBrowserBuffer } from './browser-buffer'
+
 export const APPLICABILITY_LIMITATIONS = '適用限界：本ツールの自動評価は設計比較支援のための参考情報です。入力条件、適用基準、数値解法の妥当性は設計者が個別に確認してください。'
 
 type RunReportGenerator = (run: Run) => Promise<Uint8Array>
@@ -28,11 +30,7 @@ export async function generatePersistedRunExcel(
   run: Run,
   generator?: RunReportGenerator,
 ): Promise<Uint8Array> {
-  if (!generator) {
-    const { Buffer } = await import('buffer')
-    const browserGlobal = globalThis as typeof globalThis & { Buffer?: typeof Buffer }
-    browserGlobal.Buffer ??= Buffer
-  }
+  if (!generator) await ensureBrowserBuffer()
   const create = generator ?? (await import('@open-waterhammer/excel-io')).generateRunReport
   return create(run)
 }
