@@ -345,9 +345,13 @@ export async function inspectProjectBundle(bytes: Uint8Array): Promise<BundleIns
     }
     return record;
   });
+  const legacyArtifactWrapperKeys = ["artifact", "caseId", "id", "sourceId"];
   const legacyArtifacts = manifest.legacyArtifactIds.map((id) => {
     const value = parseJsonMember(files, `legacy/${id}.json`);
     assertObject(value, "LegacyArtifact record schema");
+    if (canonicalJson(Object.keys(value).sort()) !== canonicalJson(legacyArtifactWrapperKeys)) {
+      throw new Error("Invalid LegacyArtifact record schema");
+    }
     const record = value as unknown as LegacyArtifactRecord;
     if (record.id !== id || typeof record.caseId !== "string" || typeof record.sourceId !== "string" || !record.sourceId.trim()) {
       throw new Error("Invalid LegacyArtifact record schema");

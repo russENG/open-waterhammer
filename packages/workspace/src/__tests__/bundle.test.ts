@@ -247,6 +247,18 @@ describe("deterministic .owhproj bundles", () => {
     await assert.rejects(validateProjectBundle(invalid), /legacy_import Case.*exactly one LegacyArtifact/i);
   });
 
+  test("rejects a LegacyArtifact wrapper carrying an unexpected property", async () => {
+    const valid = await new InMemoryWorkspaceRepository(workspace).exportBundle(projectFixture.id);
+    const invalid = repack(valid, (files) => {
+      const name = "legacy/99999999-9999-4999-8999-999999999999.json";
+      const record = JSON.parse(strFromU8(files[name]!));
+      record.unexpectedField = "not part of LegacyArtifactRecord";
+      files[name] = strToU8(JSON.stringify(record));
+    }, true);
+
+    await assert.rejects(validateProjectBundle(invalid), /Invalid LegacyArtifact record schema/i);
+  });
+
   test("rejects multiple LegacyArtifacts that reference the same legacy_import Case", async () => {
     const valid = await new InMemoryWorkspaceRepository(workspace).exportBundle(projectFixture.id);
     const invalid = repack(valid, (files) => {

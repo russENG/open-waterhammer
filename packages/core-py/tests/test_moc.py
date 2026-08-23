@@ -96,7 +96,8 @@ class TestSinglePipeJoukowskyConsistency:
     """単一管路バルブ閉 — ジューコフスキー整合性."""
 
     @pytest.fixture(scope="class")
-    def result(self):
+    @classmethod
+    def result(cls):
         return run_moc(single_pipe_network(0))  # 瞬時閉
 
     def test_dh_joukowsky_positive(self):
@@ -136,7 +137,8 @@ class TestSlowClosureReducesPressure:
 
 class TestOutputStructure:
     @pytest.fixture(scope="class")
-    def result(self):
+    @classmethod
+    def result(cls):
         return run_moc(single_pipe_network(0))
 
     def test_pipe_0_exists(self, result):
@@ -166,7 +168,8 @@ class TestSinglePipeConvenience:
     """run_moc_single_pipe 便利 API."""
 
     @pytest.fixture(scope="class")
-    def result(self):
+    @classmethod
+    def result(cls):
         return run_moc_single_pipe(
             SinglePipeMocInput(
                 pipe=PIPE_DI_300,
@@ -190,7 +193,8 @@ class TestPumpTrip:
     """ポンプ急停止 — run_moc_pump_trip."""
 
     @pytest.fixture(scope="class")
-    def result(self):
+    @classmethod
+    def result(cls):
         return run_moc_pump_trip(
             PumpTripInput(
                 pipe=PIPE_DI_300,
@@ -279,7 +283,8 @@ class TestZeroVelocity:
 
 class TestGD2PumpModel:
     @pytest.fixture(scope="class")
-    def result(self):
+    @classmethod
+    def result(cls):
         return run_moc_pump_trip(
             PumpTripInput(
                 pipe=PIPE_DI_300,
@@ -366,7 +371,8 @@ class TestAirChamber:
 
 class TestSurgeTank:
     @pytest.fixture(scope="class")
-    def result(self):
+    @classmethod
+    def result(cls):
         f_hw = 0.02
         hf = f_hw * 500 * V0 * V0 / (2 * GRAVITY * 0.3)
         h_r = H0 + hf
@@ -675,7 +681,8 @@ class TestPumpAndValveCompound:
     """§8.4.3 複合シナリオ — ポンプ→管路→バルブ."""
 
     @pytest.fixture(scope="class")
-    def result(self):
+    @classmethod
+    def result(cls):
         return run_moc(
             MocNetwork(
                 pipes=[
