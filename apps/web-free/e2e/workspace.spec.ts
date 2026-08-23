@@ -127,9 +127,29 @@ test('all exact RunKinds execute and persist through the production browser regi
   expect(csp).toContain("script-src 'self' 'wasm-unsafe-eval'")
   expect(csp).not.toContain("'unsafe-eval'")
   expect(csp).not.toContain('cdn.jsdelivr.net')
+
+  await page.getByRole('button', { name: 'New Case' }).click()
+  await page.getByRole('link', { name: 'Model＋GIS' }).click()
+  await page.getByRole('button', { name: 'Import GeoJSON' }).click()
+  const importDialog = page.getByRole('dialog', { name: 'GeoJSON import wizard' })
+  await importDialog.getByLabel('GeoJSON').fill(JSON.stringify({
+    type: 'FeatureCollection',
+    features: [
+      { type: 'Feature', properties: { id: 'R-01', elevation: 100 }, geometry: { type: 'Point', coordinates: [139.7, 35.68] } },
+      { type: 'Feature', properties: { id: 'J-01', elevation: 88 }, geometry: { type: 'Point', coordinates: [139.708, 35.684] } },
+      { type: 'Feature', properties: { id: 'P-01', startNodeId: 'R-01', endNodeId: 'J-01', innerDiameter: 0.3 }, geometry: { type: 'LineString', coordinates: [[139.7, 35.68], [139.708, 35.684]] } },
+    ],
+  }))
+  await importDialog.getByRole('button', { name: 'Import as drafts' }).click()
+  await expect(page.getByText('HYDRAULICS VALID', { exact: true })).toBeVisible()
   await page.getByRole('link', { name: 'Analysis' }).click()
   for (const [index, kind] of runKinds.entries()) {
     await page.locator(`input[type="radio"][value="${kind}"]`).check()
+    await expect(page.getByRole('button', { name: 'Run calculation' })).toContainText('Save before Run')
+    await expect(page.getByRole('button', { name: 'Run calculation' })).toBeDisabled()
+    await expect(page.locator('details.advanced-json')).not.toHaveAttribute('open', '')
+    await page.getByRole('button', { name: 'Save input' }).click()
+    await expect(page.getByRole('status')).toHaveText('Input saved')
     await expect(page.getByRole('button', { name: 'Run calculation' })).toBeEnabled()
     await page.getByRole('button', { name: 'Run calculation' }).click()
     await expect(page.getByRole('status')).toHaveText('Run succeeded', { timeout: 120_000 })

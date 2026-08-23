@@ -27,7 +27,9 @@ export interface EngineeringCollection {
   target: EngineeringTarget
   path: string
   label: string
+  kind: 'array' | 'record'
   itemTemplate: JsonValue
+  keyTemplate?: string
   minimumItems: number
 }
 
@@ -148,7 +150,9 @@ const LABELS: Record<string, string> = {
   operationType: '操作種別', targetFacilityId: '対象施設 ID', initialVelocity: '初期流速', initialHead: '初期水頭',
   closeTime: '閉鎖時間', waveSpeed: '波速', initialDownstreamHead: '下流初期水頭', nReaches: '計算区間数', tMax: '解析時間', operation: '操作',
   initialFlow: '初期流量', mode: 'ポンプ操作', Q0: '定格流量', pumpHead: 'ポンプ揚程', shutdownTime: '停止時間', checkValve: '逆止弁',
-  tankArea: 'タンク面積', initialLevel: '初期水位', datum: '基準標高', enabled: '有効',
+  H0: '定格水頭', H0v: '初期水頭', Hs: '締切水頭', GD2: 'GD²', N0: '定格回転速度', eta0: '定格効率',
+  startupTime: '起動時間', staticHead: '静水頭', V_air0: '初期空気容積', H_air0: '初期空気水頭', polytropicIndex: 'ポリトロープ指数',
+  atmosphericHead: '大気圧水頭', setHead: '設定水頭', tankArea: 'タンク面積', initialLevel: '初期水位', datum: '基準標高', enabled: '有効',
 }
 
 const UNITS: Record<string, string> = {
@@ -157,14 +161,61 @@ const UNITS: Record<string, string> = {
   staticWaterLevel: 'm', initialHead: 'm', initialDownstreamHead: 'm', pumpHead: 'm', initialLevel: 'm', datum: 'm',
   initialVelocity: 'm/s', waveSpeed: 'm/s', initialFlow: 'm³/s', Q0: 'm³/s', tankArea: 'm²',
   closeTime: 's', tMax: 's', shutdownTime: 's', staticPressureMpa: 'MPa', operatingPressureMpa: 'MPa', hydraulicGradePressureMpa: 'MPa',
+  H0: 'm', H0v: 'm', Hs: 'm', startupTime: 's', staticHead: 'm', V_air0: 'm³', H_air0: 'm', atmosphericHead: 'm', setHead: 'm',
+  GD2: 'N·m²', N0: 'min⁻¹', eta0: '—', polytropicIndex: '—',
   roughnessCoeff: '—', roughnessC: '—', minorLossCoeff: '—', bendLossCoeff: '—', valveLossCoeff: '—', branchLossCoeff: '—', waterhammerRatio: '—', nReaches: '区間',
 }
 
-const OPTIONAL_KEYS = new Set([
-  'name', 'caseName', 'startNodeId', 'endNodeId', 'minorLossCoeff', 'head', 'demand',
-  'waterhammerRatio', 'operatingPressureMpa', 'hydraulicGradePressureMpa', 'initialFlow',
-  'closeTime', 'tMax', 'shutdownTime', 'checkValve', 'datum',
-])
+const OPTIONAL_PATHS: Record<RunKind, Set<string>> = {
+  wave_speed: new Set(['model.pipe.name', 'model.pipe.startNodeId', 'model.pipe.endNodeId', 'event.closeTime']),
+  joukowsky_allievi: new Set(['model.pipe.name', 'model.pipe.startNodeId', 'model.pipe.endNodeId']),
+  empirical_pressure: new Set(['model.operatingPressureMpa', 'model.hydraulicGradePressureMpa']),
+  steady_single_pipe: new Set(['model.method']),
+  steady_network_python: new Set(['model.caseName', 'model.pipes.0.minorLossCoeff', 'model.nodes.0.head', 'model.nodes.0.demand']),
+  steady_network_epanet: new Set(['model.caseName', 'model.pipes.0.minorLossCoeff', 'model.nodes.0.head', 'model.nodes.0.demand']),
+  longitudinal_hydraulics: new Set(['model.caseName', 'model.waterhammerRatio']),
+  transient_single_pipe: new Set([
+    'model.pipe.name', 'model.pipe.startNodeId', 'model.pipe.endNodeId',
+    'event.nReaches', 'event.tMax', 'event.operation',
+  ]),
+  transient_network: new Set([
+    'model.network.pipes.0.pipe.name', 'model.network.pipes.0.pipe.startNodeId', 'model.network.pipes.0.pipe.endNodeId',
+    'model.network.pipes.0.initialFlow', 'model.network.pipes.0.waveSpeed', 'model.options.tMax', 'model.options.initialFlow',
+  ]),
+  transient_pump: new Set([
+    'model.pipe.name', 'model.pipe.startNodeId', 'model.pipe.endNodeId',
+    'event.mode', 'event.waveSpeed', 'event.shutdownTime', 'event.checkValve', 'event.nReaches', 'event.tMax',
+  ]),
+  transient_protection_device: new Set([
+    'model.network.pipes.0.pipe.name', 'model.network.pipes.0.pipe.startNodeId', 'model.network.pipes.0.pipe.endNodeId',
+    'model.network.pipes.0.initialFlow', 'model.network.pipes.0.waveSpeed', 'model.options.tMax', 'model.options.initialFlow',
+  ]),
+}
+
+const MOC_BOUNDARY_REQUIRED: Record<string, Set<string>> = {
+  reservoir: new Set(['type', 'head']),
+  valve: new Set(['type', 'Q0', 'H0v', 'closeTime']),
+  pump: new Set(['type', 'Q0', 'H0', 'shutdownTime']),
+  air_chamber: new Set(['type', 'V_air0', 'H_air0']),
+  surge_tank: new Set(['type', 'tankArea', 'initialLevel']),
+  air_release_valve: new Set(['type']),
+  pressure_reducing_valve: new Set(['type', 'setHead', 'Q0']),
+  dead_end: new Set(['type']),
+}
+
+const MOC_BOUNDARY_TEMPLATES: Record<string, JsonValue> = {
+  reservoir: { type: 'reservoir', head: 80 },
+  valve: { type: 'valve', Q0: 0.07, H0v: 30, closeTime: 2, operation: 'close' },
+  pump: {
+    type: 'pump', Q0: 0.07, H0: 50, shutdownTime: 0.5, Hs: 60, GD2: 100,
+    N0: 1450, eta0: 0.8, mode: 'trip', startupTime: 0.5, staticHead: 0, checkValve: true,
+  },
+  air_chamber: { type: 'air_chamber', V_air0: 2, H_air0: 30, polytropicIndex: 1.2 },
+  surge_tank: { type: 'surge_tank', tankArea: 4, initialLevel: 30, datum: 0 },
+  air_release_valve: { type: 'air_release_valve', atmosphericHead: 10.33 },
+  pressure_reducing_valve: { type: 'pressure_reducing_valve', setHead: 30, Q0: 0.07 },
+  dead_end: { type: 'dead_end' },
+}
 
 const POSITIVE_KEYS = new Set(['innerDiameter', 'wallThickness', 'length', 'diameter', 'roughnessCoeff', 'roughnessC', 'waveSpeed', 'nReaches', 'tankArea'])
 const NONNEGATIVE_KEYS = new Set(['minorLossCoeff', 'bendLossCoeff', 'valveLossCoeff', 'branchLossCoeff', 'closeTime', 'tMax', 'shutdownTime', 'staticPressureMpa', 'operatingPressureMpa', 'hydraulicGradePressureMpa'])
@@ -219,10 +270,21 @@ function descriptorFor(kind: RunKind, target: EngineeringTarget, path: string, t
     target, path, label: contextualLabel(path, LABELS[key] ?? key), kind: fieldKind,
     ...(UNITS[key] ? { unit: UNITS[key] } : {}),
     ...(options ? { options } : {}),
-    required: !OPTIONAL_KEYS.has(key),
+    required: true,
     ...(POSITIVE_KEYS.has(key) ? { exclusiveMinimum: 0 } : {}),
     ...(NONNEGATIVE_KEYS.has(key) ? { minimum: 0 } : {}),
   }
+}
+
+function requiredFor(kind: RunKind, state: EngineeringState, field: Pick<EngineeringField, 'target' | 'path'>): boolean {
+  const boundary = field.target === 'model' && (kind === 'transient_network' || kind === 'transient_protection_device')
+    ? field.path.match(/^network\.nodes\.([^.]+)\.([^.]+)$/)
+    : null
+  if (boundary) {
+    const type = readEngineeringValue(state, { target: 'model', path: `network.nodes.${boundary[1]}.type` })
+    return typeof type === 'string' ? MOC_BOUNDARY_REQUIRED[type]?.has(boundary[2]!) ?? false : boundary[2] === 'type'
+  }
+  return !OPTIONAL_PATHS[kind].has(`${field.target}.${normalizeArrayPath(field.path)}`)
 }
 
 function collectFields(kind: RunKind, target: EngineeringTarget, template: JsonValue, current: JsonValue, path: string, fields: EngineeringField[]) {
@@ -233,6 +295,17 @@ function collectFields(kind: RunKind, target: EngineeringTarget, template: JsonV
   }
   if (template && typeof template === 'object') {
     const currentRecord = current && typeof current === 'object' && !Array.isArray(current) ? current as Record<string, JsonValue> : {}
+    if (target === 'model' && path === 'network.nodes') {
+      const templates = Object.values(template)
+      for (const [key, row] of Object.entries(currentRecord)) {
+        const rowType = row && typeof row === 'object' && !Array.isArray(row) ? row.type : undefined
+        const matching = (typeof rowType === 'string' ? MOC_BOUNDARY_TEMPLATES[rowType] : undefined)
+          ?? templates.find((candidate) => candidate && typeof candidate === 'object' && !Array.isArray(candidate) && candidate.type === rowType)
+          ?? templates[0] ?? row
+        collectFields(kind, target, matching, row, `${path}.${key}`, fields)
+      }
+      return
+    }
     for (const [key, child] of Object.entries(template)) {
       collectFields(kind, target, child, currentRecord[key] ?? child, path ? `${path}.${key}` : key, fields)
     }
@@ -249,7 +322,7 @@ export function engineeringFieldsFor(kind: RunKind, state: EngineeringState): En
   for (const field of FIELD_OVERRIDES[kind]) {
     if (!fields.some((candidate) => candidate.target === field.target && normalizeArrayPath(candidate.path) === normalizeArrayPath(field.path))) fields.push(field)
   }
-  return fields
+  return fields.map((field) => ({ ...field, required: requiredFor(kind, state, field) }))
 }
 
 function collectionLabel(path: string): string {
@@ -259,12 +332,19 @@ function collectionLabel(path: string): string {
 
 function collectCollections(target: EngineeringTarget, value: JsonValue, path: string, collections: EngineeringCollection[]) {
   if (Array.isArray(value)) {
-    if (value[0] !== undefined) collections.push({ target, path, label: collectionLabel(path), itemTemplate: structuredClone(value[0]), minimumItems: 1 })
+    if (value[0] !== undefined) collections.push({ target, path, label: collectionLabel(path), kind: 'array', itemTemplate: structuredClone(value[0]), minimumItems: 1 })
     value.forEach((child, index) => collectCollections(target, child, path ? `${path}.${index}` : String(index), collections))
     return
   }
   if (value && typeof value === 'object') {
-    for (const [key, child] of Object.entries(value)) collectCollections(target, child, path ? `${path}.${key}` : key, collections)
+    const entries = Object.entries(value)
+    if (target === 'model' && path === 'network.nodes' && entries[0]) {
+      collections.push({
+        target, path, label: collectionLabel(path), kind: 'record', keyTemplate: entries[0][0],
+        itemTemplate: structuredClone(entries[0][1]), minimumItems: 1,
+      })
+    }
+    for (const [key, child] of entries) collectCollections(target, child, path ? `${path}.${key}` : key, collections)
   }
 }
 
@@ -338,16 +418,94 @@ export function removeEngineeringValue(state: EngineeringState, field: Pick<Engi
   return next
 }
 
+function uniqueIdentifier(existing: string[], template: string): string {
+  const used = new Set(existing)
+  if (!used.has(template)) return template
+  const suffix = template.match(/^(.*?)(\d+)$/)
+  const stem = suffix?.[1] ?? `${template}-`
+  const width = suffix?.[2]?.length ?? 1
+  let sequence = suffix ? Number(suffix[2]) + 1 : 2
+  let candidate = `${stem}${String(sequence).padStart(width, '0')}`
+  while (used.has(candidate)) {
+    sequence += 1
+    candidate = `${stem}${String(sequence).padStart(width, '0')}`
+  }
+  return candidate
+}
+
 export function addEngineeringCollectionItem(state: EngineeringState, collection: EngineeringCollection): EngineeringState {
   const current = readEngineeringValue(state, collection)
+  if (collection.kind === 'record') {
+    const next = current && typeof current === 'object' && !Array.isArray(current)
+      ? structuredClone(current) as Record<string, JsonValue> : {}
+    const key = uniqueIdentifier(Object.keys(next), collection.keyTemplate ?? 'N-01')
+    next[key] = structuredClone(collection.itemTemplate)
+    return updateEngineeringValue(state, collection, next)
+  }
   const next = Array.isArray(current) ? structuredClone(current) : []
-  next.push(structuredClone(collection.itemTemplate))
+  const item = structuredClone(collection.itemTemplate)
+  if (item && typeof item === 'object' && !Array.isArray(item) && typeof item.id === 'string') {
+    const existingIds = next.flatMap((row) => row && typeof row === 'object' && !Array.isArray(row) && typeof row.id === 'string' ? [row.id] : [])
+    const originalId = item.id
+    item.id = uniqueIdentifier(existingIds, originalId)
+    if (item.pipe && typeof item.pipe === 'object' && !Array.isArray(item.pipe) && item.pipe.id === originalId) item.pipe.id = item.id
+  }
+  next.push(item)
   return updateEngineeringValue(state, collection, next)
 }
 
-export function removeEngineeringCollectionItem(state: EngineeringState, collection: EngineeringCollection, index: number): EngineeringState {
+const NODE_REFERENCE_KEYS = new Set(['upstreamNodeId', 'downstreamNodeId', 'startNodeId', 'endNodeId', 'nodeId', 'targetFacilityId'])
+
+function containsReference(value: JsonValue, id: string): boolean {
+  if (Array.isArray(value)) return value.some((child) => containsReference(child, id))
+  if (!value || typeof value !== 'object') return false
+  return Object.entries(value).some(([key, child]) => NODE_REFERENCE_KEYS.has(key) && child === id || containsReference(child, id))
+}
+
+function repairReferences(value: JsonValue, from: string, to: string): JsonValue {
+  if (Array.isArray(value)) return value.map((child) => repairReferences(child, from, to))
+  if (!value || typeof value !== 'object') return value
+  return Object.fromEntries(Object.entries(value).map(([key, child]) => [
+    key, NODE_REFERENCE_KEYS.has(key) && child === from ? to : repairReferences(child, from, to),
+  ]))
+}
+
+export function renameEngineeringRecordKey(
+  state: EngineeringState,
+  collection: EngineeringCollection,
+  from: string,
+  to: string,
+): EngineeringState {
+  if (collection.kind !== 'record') throw new Error('Only object-keyed collections can be renamed')
+  const trimmed = to.trim()
+  if (!trimmed) throw new Error('A non-blank identifier is required')
   const current = readEngineeringValue(state, collection)
+  if (!current || typeof current !== 'object' || Array.isArray(current) || !(from in current)) throw new Error(`Record key does not exist: ${from}`)
+  if (trimmed !== from && trimmed in current) throw new Error(`Identifier already exists: ${trimmed}`)
+  const renamed = Object.fromEntries(Object.entries(current).map(([key, value]) => [key === from ? trimmed : key, value])) as JsonValue
+  const next = updateEngineeringValue(state, collection, renamed)
+  return collection.target === 'model' && collection.path === 'network.nodes'
+    ? { ...next, model: repairReferences(next.model, from, trimmed) }
+    : next
+}
+
+export function removeEngineeringCollectionItem(state: EngineeringState, collection: EngineeringCollection, index: number | string): EngineeringState {
+  const current = readEngineeringValue(state, collection)
+  if (collection.kind === 'record') {
+    if (!current || typeof current !== 'object' || Array.isArray(current) || typeof index !== 'string' || !(index in current)) return state
+    if (collection.target === 'model' && collection.path === 'network.nodes' && containsReference(state.model, index)) {
+      throw new Error(`${index} is referenced by a pipe and cannot be removed`)
+    }
+    const next = structuredClone(current) as Record<string, JsonValue>
+    delete next[index]
+    return updateEngineeringValue(state, collection, next)
+  }
   if (!Array.isArray(current)) return state
+  if (typeof index !== 'number') return state
+  const row = current[index]
+  if (collection.target === 'model' && collection.path === 'nodes' && row && typeof row === 'object' && !Array.isArray(row) && typeof row.id === 'string' && containsReference(state.model, row.id)) {
+    throw new Error(`${row.id} is referenced by a pipe and cannot be removed`)
+  }
   const next = structuredClone(current)
   next.splice(index, 1)
   return updateEngineeringValue(state, collection, next)
@@ -361,11 +519,60 @@ export function updateEngineeringFieldFromInput(state: EngineeringState, field: 
   return updateEngineeringValue(state, field, raw)
 }
 
+function duplicateIdErrors(collection: EngineeringCollection, value: JsonValue | undefined): Array<{ path: string; message: string }> {
+  if (collection.kind !== 'array' || !Array.isArray(value)) return []
+  const seen = new Set<string>()
+  return value.flatMap((row, index) => {
+    if (!row || typeof row !== 'object' || Array.isArray(row) || typeof row.id !== 'string') return []
+    if (seen.has(row.id)) return [{ path: `${collection.path}.${index}.id`, message: `${collection.label} ID ${row.id} が重複しています。` }]
+    seen.add(row.id)
+    return []
+  })
+}
+
+function nestedPipeIdErrors(kind: RunKind, state: EngineeringState): Array<{ path: string; message: string }> {
+  if (kind !== 'transient_network' && kind !== 'transient_protection_device') return []
+  const model = state.model && typeof state.model === 'object' && !Array.isArray(state.model) ? state.model : {}
+  const network = model.network && typeof model.network === 'object' && !Array.isArray(model.network) ? model.network : undefined
+  if (!Array.isArray(network?.pipes)) return []
+  const seen = new Set<string>()
+  return network.pipes.flatMap((row, index) => {
+    if (!row || typeof row !== 'object' || Array.isArray(row) || !row.pipe || typeof row.pipe !== 'object' || Array.isArray(row.pipe) || typeof row.pipe.id !== 'string') return []
+    if (seen.has(row.pipe.id)) return [{ path: `network.pipes.${index}.pipe.id`, message: `管路詳細 ID ${row.pipe.id} が重複しています。` }]
+    seen.add(row.pipe.id)
+    return []
+  })
+}
+
+function endpointReferenceErrors(kind: RunKind, state: EngineeringState): Array<{ path: string; message: string }> {
+  const model = state.model && typeof state.model === 'object' && !Array.isArray(state.model) ? state.model : {}
+  const moc = kind === 'transient_network' || kind === 'transient_protection_device'
+  const network = moc && model.network && typeof model.network === 'object' && !Array.isArray(model.network) ? model.network : undefined
+  const pipes = moc ? network?.pipes : model.pipes
+  const nodes = moc ? network?.nodes : model.nodes
+  const nodeIds = new Set(moc
+    ? nodes && typeof nodes === 'object' && !Array.isArray(nodes) ? Object.keys(nodes) : []
+    : Array.isArray(nodes) ? nodes.flatMap((node) => node && typeof node === 'object' && !Array.isArray(node) && typeof node.id === 'string' ? [node.id] : []) : [])
+  if (!Array.isArray(pipes) || nodeIds.size === 0 && !moc && kind !== 'steady_network_python' && kind !== 'steady_network_epanet') return []
+  const prefix = moc ? 'network.pipes' : 'pipes'
+  return pipes.flatMap((pipe, index) => {
+    if (!pipe || typeof pipe !== 'object' || Array.isArray(pipe)) return []
+    return (['upstreamNodeId', 'downstreamNodeId'] as const).flatMap((key) =>
+      typeof pipe[key] !== 'string' || !nodeIds.has(pipe[key])
+        ? [{ path: `${prefix}.${index}.${key}`, message: `${String(pipe[key] ?? '')} に対応する節点がありません。` }]
+        : [],
+    )
+  })
+}
+
 export function validateEngineeringState(kind: RunKind, state: EngineeringState): Array<{ path: string; message: string }> {
   const fieldErrors = engineeringFieldsFor(kind, state).flatMap((field) => {
     const value = readEngineeringValue(state, field)
     if (field.required && (value === undefined || value === null || (typeof value === 'string' && value.trim() === ''))) return [{ path: field.path, message: `${field.label}は必須です。` }]
-    if (value === undefined || value === null || value === '') return []
+    if (value === undefined || value === null) return []
+    if (typeof value === 'string' && value.trim() === '') {
+      return field.kind === 'number' ? [{ path: field.path, message: `${field.label}は有限の数値が必要です。` }] : []
+    }
     if (field.kind === 'select' && !field.options?.some((option) => option.value === value)) {
       return [{ path: field.path, message: `${field.label}は一覧から選択してください。` }]
     }
@@ -380,9 +587,21 @@ export function validateEngineeringState(kind: RunKind, state: EngineeringState)
   })
   const collectionErrors = ENGINEERING_COLLECTIONS[kind].flatMap((collection) => {
     const value = readEngineeringValue(state, collection)
-    return !Array.isArray(value) || value.length < collection.minimumItems
+    const count = collection.kind === 'array'
+      ? Array.isArray(value) ? value.length : 0
+      : value && typeof value === 'object' && !Array.isArray(value) ? Object.keys(value).length : 0
+    const hasBlankRecordKey = collection.kind === 'record'
+      && value && typeof value === 'object' && !Array.isArray(value)
+      && Object.keys(value).some((key) => key.trim() === '')
+    return [
+      ...(count < collection.minimumItems
       ? [{ path: collection.path, message: `${collection.label}は${collection.minimumItems}件以上必要です。` }]
-      : []
+      : []),
+      ...(hasBlankRecordKey
+        ? [{ path: collection.path, message: `${collection.label} ID は空にできません。` }]
+        : []),
+      ...duplicateIdErrors(collection, value),
+    ]
   })
-  return [...fieldErrors, ...collectionErrors]
+  return [...fieldErrors, ...collectionErrors, ...nestedPipeIdErrors(kind, state), ...endpointReferenceErrors(kind, state)]
 }

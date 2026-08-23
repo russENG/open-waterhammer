@@ -129,6 +129,70 @@ describe('full workspace application', () => {
     expect(input.nodes).toHaveLength(2)
   })
 
+  test('adds, renames, and safely removes object-keyed MOC nodes without Advanced JSON', async () => {
+    const user = userEvent.setup()
+    const { data, repository } = setup()
+    const tabs = screen.getByRole('navigation', { name: 'Workspace tabs' })
+    await user.click(within(tabs).getByRole('link', { name: 'Analysis' }))
+    await user.click(await screen.findByRole('radio', { name: /Transient network/ }))
+
+    const rename = screen.getByLabelText('New ID for 節点 V-01')
+    await user.clear(rename)
+    await user.type(rename, 'V-02')
+    await user.click(screen.getByRole('button', { name: 'Rename 節点 V-01' }))
+    expect(screen.getByLabelText(/管路 1 · 下流節点 ID/)).toHaveValue('V-02')
+    expect(screen.getByLabelText('New ID for 節点 V-02')).toBeVisible()
+
+    await user.click(screen.getByRole('button', { name: 'Remove 節点 V-02' }))
+    expect(await screen.findByRole('status')).toHaveTextContent(/referenced by a pipe/)
+    expect(screen.getByLabelText('New ID for 節点 V-02')).toBeVisible()
+
+    await user.click(screen.getByRole('button', { name: 'Add 節点' }))
+    expect(screen.getByLabelText('New ID for 節点 R-02')).toBeVisible()
+    await user.click(screen.getByRole('button', { name: 'Remove 節点 R-02' }))
+    expect(screen.queryByLabelText('New ID for 節点 R-02')).not.toBeInTheDocument()
+
+    await user.click(screen.getByRole('button', { name: 'Save input' }))
+    expect(await screen.findByRole('status')).toHaveTextContent('Input saved')
+    let selected = (await repository.snapshot()).cases.find(({ id }) => id === data.cases.at(-1)!.id)!
+    let network = (selected.modelSnapshot as { runInputs: Record<string, { network: { nodes: Record<string, unknown>; pipes: Array<{ downstreamNodeId: string }> } }> }).runInputs.transient_network!.network
+    expect(Object.keys(network.nodes).sort()).toEqual(['R-01', 'V-02'])
+    expect(network.pipes[0]!.downstreamNodeId).toBe('V-02')
+
+    const downstream = screen.getByLabelText(/管路 1 · 下流節点 ID/)
+    await user.clear(downstream)
+    await user.type(downstream, 'MISSING')
+    await user.click(screen.getByRole('button', { name: 'Save input' }))
+    expect(await screen.findByRole('status')).toHaveTextContent('MISSING に対応する節点がありません。')
+    selected = (await repository.snapshot()).cases.find(({ id }) => id === data.cases.at(-1)!.id)!
+    network = (selected.modelSnapshot as { runInputs: Record<string, { network: { nodes: Record<string, unknown>; pipes: Array<{ downstreamNodeId: string }> } }> }).runInputs.transient_network!.network
+    expect(network.pipes[0]!.downstreamNodeId).toBe('V-02')
+  })
+
+  test('initializes and saves every exact RunKind from one blank Case using only closed form controls', async () => {
+    const user = userEvent.setup()
+    const { data, repository } = setup()
+    const tabs = screen.getByRole('navigation', { name: 'Workspace tabs' })
+    await user.click(screen.getByRole('button', { name: 'New Case' }))
+    await user.click(within(tabs).getByRole('link', { name: 'Analysis' }))
+
+    for (const kind of RUN_KINDS) {
+      await user.click(document.querySelector<HTMLInputElement>(`input[type="radio"][value="${kind}"]`)!)
+      const runButton = screen.getByRole('button', { name: 'Run calculation' })
+      expect(runButton).toHaveTextContent('Save before Run')
+      expect(screen.getByText('Advanced · canonical JSON').closest('details')).not.toHaveAttribute('open')
+      await user.click(screen.getByRole('button', { name: 'Save input' }))
+      expect(await screen.findByRole('status')).toHaveTextContent('Input saved')
+      expect(runButton).toHaveTextContent('Run calculation')
+    }
+
+    const snapshot = await repository.snapshot()
+    const created = snapshot.cases.find(({ id }) => !data.cases.some((record) => record.id === id))!
+    const inputs = (created.modelSnapshot as { runInputs: Record<string, unknown> }).runInputs
+    expect(Object.keys(inputs).sort()).toEqual([...RUN_KINDS].sort())
+    expect(Object.values(inputs).every((input) => input && typeof input === 'object')).toBe(true)
+  })
+
   test('executes through the common runner, locks the Case, and requires a reason to fork', async () => {
     const user = userEvent.setup()
     const { repository } = setup()

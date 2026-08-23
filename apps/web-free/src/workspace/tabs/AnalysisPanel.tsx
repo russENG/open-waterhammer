@@ -9,6 +9,7 @@ import {
   engineeringFieldsFor,
   readEngineeringValue,
   removeEngineeringCollectionItem,
+  renameEngineeringRecordKey,
   updateEngineeringFieldFromInput,
   validateEngineeringState,
   type EngineeringField,
@@ -47,6 +48,7 @@ export function AnalysisPanel({ caseRecord, onRunSelected }: { caseRecord: Case;
   const [modelText, setModelText] = useState(() => JSON.stringify(engineering.model, null, 2))
   const [status, setStatus] = useState<string | null>(null)
   const [dirty, setDirty] = useState(inputs[kind] === undefined)
+  const [recordKeyDrafts, setRecordKeyDrafts] = useState<Record<string, string>>({})
   const hasHydraulicDrafts = Array.isArray(modelRoot.geoDrafts) && modelRoot.geoDrafts.length > 0
   const validation = useMemo(() => validateHydraulicDrafts(
     Array.isArray(modelRoot.geoDrafts) ? modelRoot.geoDrafts as unknown as HydraulicDraft[] : [],
@@ -60,6 +62,7 @@ export function AnalysisPanel({ caseRecord, onRunSelected }: { caseRecord: Case;
     setEngineering(nextEngineering)
     setModelText(JSON.stringify(nextEngineering.model, null, 2))
     setDirty(inputs[next] === undefined)
+    setRecordKeyDrafts({})
     setStatus(null)
   }
 
@@ -75,13 +78,33 @@ export function AnalysisPanel({ caseRecord, onRunSelected }: { caseRecord: Case;
     setEngineering(next)
     setModelText(JSON.stringify(next.model, null, 2))
     setDirty(true)
+    setStatus(null)
   }
 
-  function removeCollection(collection: typeof collections[number], index: number) {
-    const next = removeEngineeringCollectionItem(engineering, collection, index)
-    setEngineering(next)
-    setModelText(JSON.stringify(next.model, null, 2))
-    setDirty(true)
+  function removeCollection(collection: typeof collections[number], index: number | string) {
+    try {
+      const next = removeEngineeringCollectionItem(engineering, collection, index)
+      setEngineering(next)
+      setModelText(JSON.stringify(next.model, null, 2))
+      setDirty(true)
+      setStatus(null)
+    } catch (error) {
+      setStatus(error instanceof Error ? error.message : String(error))
+    }
+  }
+
+  function renameCollectionKey(collection: typeof collections[number], from: string) {
+    try {
+      const draftKey = `${collection.target}.${collection.path}.${from}`
+      const next = renameEngineeringRecordKey(engineering, collection, from, recordKeyDrafts[draftKey] ?? from)
+      setEngineering(next)
+      setModelText(JSON.stringify(next.model, null, 2))
+      setDirty(true)
+      setRecordKeyDrafts((current) => Object.fromEntries(Object.entries(current).filter(([key]) => key !== draftKey)))
+      setStatus(null)
+    } catch (error) {
+      setStatus(error instanceof Error ? error.message : String(error))
+    }
   }
 
   async function saveInput() {
@@ -141,8 +164,14 @@ export function AnalysisPanel({ caseRecord, onRunSelected }: { caseRecord: Case;
         <p className="field-help">方式別の主要設計値を単位付きで編集します。Scenario に属する操作条件も同じ保存操作で記録されます。</p>
         {collections.length > 0 && <div className="engineering-collections">{collections.map((collection) => {
           const rows = readEngineeringValue(engineering, collection)
-          const count = Array.isArray(rows) ? rows.length : 0
-          return <section key={`${collection.target}.${collection.path}`} className="engineering-collection"><div><strong>{collection.label}</strong><span>{count} entries</span><button type="button" onClick={() => addCollection(collection)} disabled={caseRecord.state !== 'draft'} aria-label={`Add ${collection.label}`}>＋ Add</button></div><ol>{Array.from({ length: count }, (_, index) => <li key={index}><span>{collection.label} {index + 1}</span><button type="button" onClick={() => removeCollection(collection, index)} disabled={caseRecord.state !== 'draft' || count <= collection.minimumItems} aria-label={`Remove ${collection.label} ${index + 1}`}>Remove</button></li>)}</ol></section>
+          const recordKeys = collection.kind === 'record' && rows && typeof rows === 'object' && !Array.isArray(rows) ? Object.keys(rows) : []
+          const count = collection.kind === 'array' ? Array.isArray(rows) ? rows.length : 0 : recordKeys.length
+          return <section key={`${collection.target}.${collection.path}`} className="engineering-collection"><div><strong>{collection.label}</strong><span>{count} entries</span><button type="button" onClick={() => addCollection(collection)} disabled={caseRecord.state !== 'draft'} aria-label={`Add ${collection.label}`}>＋ Add</button></div><ol>{collection.kind === 'array'
+            ? Array.from({ length: count }, (_, index) => <li key={index}><span>{collection.label} {index + 1}</span><button type="button" onClick={() => removeCollection(collection, index)} disabled={caseRecord.state !== 'draft' || count <= collection.minimumItems} aria-label={`Remove ${collection.label} ${index + 1}`}>Remove</button></li>)
+            : recordKeys.map((key) => {
+                const draftKey = `${collection.target}.${collection.path}.${key}`
+                return <li key={key} className="engineering-record-row"><label className="engineering-record-id"><span>{collection.label} ID</span><input aria-label={`New ID for ${collection.label} ${key}`} value={recordKeyDrafts[draftKey] ?? key} onChange={(event) => setRecordKeyDrafts((current) => ({ ...current, [draftKey]: event.target.value }))} disabled={caseRecord.state !== 'draft'} /></label><button type="button" onClick={() => renameCollectionKey(collection, key)} disabled={caseRecord.state !== 'draft' || (recordKeyDrafts[draftKey] ?? key) === key} aria-label={`Rename ${collection.label} ${key}`}>Rename</button><button type="button" onClick={() => removeCollection(collection, key)} disabled={caseRecord.state !== 'draft' || count <= collection.minimumItems} aria-label={`Remove ${collection.label} ${key}`}>Remove</button></li>
+              })}</ol></section>
         })}</div>}
         <div className="engineering-field-grid">{fields.map((field) => {
           const value = readEngineeringValue(engineering, field)

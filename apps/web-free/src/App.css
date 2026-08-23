@@ -3241,6 +3241,10 @@ select.input--narrow {
 .engineering-collection button { min-height: 30px; padding: 5px 8px; font-size: .53rem; }
 .engineering-collection ol { display: flex; flex-wrap: wrap; gap: 5px; margin: 8px 0 0; padding: 0; list-style: none; }
 .engineering-collection li { display: flex; align-items: center; gap: 6px; padding: 4px 5px 4px 8px; border: 1px solid var(--line); background: var(--paper); }
+.engineering-collection .engineering-record-row { flex: 1 1 100%; display: grid; grid-template-columns: minmax(0, 1fr) auto auto; }
+.engineering-record-id { display: grid; grid-template-columns: auto minmax(90px, 1fr); align-items: center; gap: 6px; }
+.engineering-record-id input { width: 100%; min-height: 30px; padding: 5px 7px; color: var(--ink); background: #fffdf6; border: 1px solid var(--line-dark); font: 650 .58rem var(--mono); }
+.engineering-record-id input:focus { outline: 2px solid var(--orange); outline-offset: 1px; }
 .advanced-json { margin-top: 16px; border-top: 1px dashed var(--line-dark); }
 .advanced-json summary { padding: 12px 0; color: var(--ink-soft); cursor: pointer; font: 700 .56rem var(--mono); letter-spacing: .04em; }
 .advanced-json .model-editor textarea { min-height: 250px; }
