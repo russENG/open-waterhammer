@@ -32,7 +32,7 @@
 import { strict as assert } from "node:assert";
 import { execFileSync } from "node:child_process";
 import { randomUUID } from "node:crypto";
-import { existsSync } from "node:fs";
+import { existsSync, rmSync } from "node:fs";
 import { mkdtemp, readFile, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
@@ -280,6 +280,21 @@ function bytesEqual(a, b) {
 console.log("=== Task 5d acceptance ===");
 const startedAt = Date.now();
 const workDir = await mkdtemp(join(tmpdir(), "owh-acceptance-"));
+// Cleanup must run on every exit path, not just the happy one: fail() below calls
+// process.exit(1) directly on the first failure (steps 3-7 never get a chance to run their own
+// cleanup code), so a plain try/finally around the step sequence would miss it. `process.on
+// ("exit", ...)` fires for every way this process ends — normal completion, an explicit
+// process.exit() (from fail() or the prerequisite check above), or an uncaught exception — so
+// registering it here, right after workDir exists, is the one place that covers all of them.
+// The handler must be synchronous (Node ignores async work queued from an "exit" listener),
+// hence rmSync rather than the promise-based fs/promises rm used everywhere else in this file.
+process.on("exit", () => {
+  try {
+    rmSync(workDir, { recursive: true, force: true });
+  } catch {
+    // Best-effort: never let cleanup itself change the process's exit code.
+  }
+});
 
 // ─── Step 1: golden workspace ───────────────────────────────────────────────────────────────
 
