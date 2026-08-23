@@ -161,8 +161,11 @@ const TRANSIENT_PUMP_EVENT_BRANCHES: Record<string, JsonValue> = {
   },
 }
 
+// Targets J-01, the junction node in sample-workspace.ts's protectionNetwork — not V-01 (the
+// closing valve): a device may not replace an event-carrying valve/pump node (Task 4b-2 fix
+// round 1). initialLevel matches J-01's natural steady head in that network.
 const PROTECTION_TEMPLATES: Record<RunKind, JsonValue> = Object.fromEntries(RUN_KINDS.map((kind) => [kind, kind === 'transient_protection_device'
-  ? { devices: [{ id: 'V-01', type: 'surge_tank', enabled: true, tankArea: 4, initialLevel: 30 }] }
+  ? { devices: [{ id: 'J-01', type: 'surge_tank', enabled: true, tankArea: 4, initialLevel: 78.7 }] }
   : {}])) as Record<RunKind, JsonValue>
 
 // allowablePressureMpa is demo-only seasoning on SAMPLE_RUN_INPUTS (sample-workspace.ts) so
@@ -261,6 +264,11 @@ const MOC_BOUNDARY_REQUIRED: Record<string, Set<string>> = {
   air_release_valve: new Set(['type']),
   pressure_reducing_valve: new Set(['type', 'setHead', 'Q0']),
   dead_end: new Set(['type']),
+  // No boundary condition at all — protocol.py's _network() treats it as an internal MOC
+  // continuity junction. A first-class node type (rather than just omitting the node) so the
+  // UI's pipe-endpoint validation accepts it and a protection device can target it
+  // (Task 4b-2 fix round 1).
+  junction: new Set(['type']),
 }
 
 const MOC_PUMP_BRANCHES: Record<string, JsonValue> = {
@@ -283,6 +291,7 @@ const MOC_BOUNDARY_TEMPLATES: Record<string, JsonValue> = {
   air_release_valve: { type: 'air_release_valve', atmosphericHead: 10.33 },
   pressure_reducing_valve: { type: 'pressure_reducing_valve', setHead: 30, Q0: 0.07 },
   dead_end: { type: 'dead_end' },
+  junction: { type: 'junction' },
 }
 
 const STEADY_NODE_BRANCHES: Record<string, JsonValue> = {
@@ -340,6 +349,7 @@ function selectOptions(path: string): EngineeringField['options'] | undefined {
     { value: 'reservoir', label: '貯水槽' }, { value: 'valve', label: '弁' }, { value: 'pump', label: 'ポンプ' },
     { value: 'surge_tank', label: 'サージタンク' }, { value: 'air_chamber', label: '空気室' },
     { value: 'air_release_valve', label: '吸気弁' }, { value: 'pressure_reducing_valve', label: '減圧弁' }, { value: 'dead_end', label: '閉端' },
+    { value: 'junction', label: '接合点' },
   ]
   if (key === 'type' && path.includes('devices.')) return [{ value: 'surge_tank', label: 'サージタンク' }, { value: 'air_chamber', label: '空気室' }]
   if (key === 'type') return [{ value: 'reservoir', label: '貯水槽' }, { value: 'junction', label: '接合点' }, { value: 'demand', label: '需要点' }]

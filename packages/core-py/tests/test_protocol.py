@@ -66,6 +66,43 @@ def transient_network_model():
     }
 
 
+def transient_network_with_junction_model():
+    """R --segment-1-- J --segment-2-- D: a junction node sits between the reservoir and
+    the closing valve, so a protection device at J mitigates the valve's own transient
+    instead of replacing it (Task 4b-2 fix round 1 — devices may not target event-carrying
+    valve/pump nodes). Pipe lengths/closeTime/tMax are chosen (not the tiny transient_network_model
+    scale) so the junction device has enough time to meaningfully decouple the reservoir side
+    from the valve side — verified to produce a robust, unambiguous reduction."""
+    return {
+        "network": {
+            "pipes": [
+                {
+                    "id": "segment-1",
+                    "pipe": {**PIPE, "id": "segment-1", "length": 400.0},
+                    "nReaches": 8,
+                    "upstreamNodeId": "R",
+                    "downstreamNodeId": "J",
+                    "initialFlow": 0.01,
+                },
+                {
+                    "id": "segment-2",
+                    "pipe": {**PIPE, "id": "segment-2", "length": 100.0},
+                    "nReaches": 2,
+                    "upstreamNodeId": "J",
+                    "downstreamNodeId": "D",
+                    "initialFlow": 0.01,
+                },
+            ],
+            "nodes": {
+                "R": {"type": "reservoir", "head": 120.0},
+                "J": {"type": "junction"},
+                "D": {"type": "valve", "Q0": 0.01, "H0v": 119.0, "closeTime": 2.0},
+            },
+        },
+        "options": {"tMax": 8.0, "initialFlow": 0.01},
+    }
+
+
 def requests_by_kind():
     point = {
         "id": "IP.1",
@@ -265,6 +302,41 @@ def _worst_hmax(pipes_summary):
 
 
 def test_transient_protection_device_runs_baseline_and_protected_networks_and_reports_reduction():
+    # Device targets J, the junction between the reservoir and the closing valve D — not the
+    # valve itself, per the fix-round-1 ruling: replacing D would delete the transient event
+    # (valve closure) the run is meant to analyze.
+    protection_request = request(
+        "transient_protection_device",
+        transient_network_with_junction_model(),
+        scenario(protection_settings={
+            "devices": [
+                {"id": "J", "type": "surge_tank", "enabled": True, "tankArea": 4.0, "initialLevel": 119.5},
+            ],
+        }),
+    )
+
+    result = execute_request(protection_request)["result"]
+    protection = result["summary"]["protection"]
+
+    worst_baseline = _worst_hmax(protection["baseline"]["pipes"])
+    worst_protected = _worst_hmax(protection["protected"]["pipes"])
+
+    # Proves the metric measures mitigation of a real event, not "no event": the baseline
+    # (plain junction, no device) must itself show a genuine transient rise above the
+    # reservoir's steady head (120.0) from the valve closing at D.
+    assert worst_baseline > 120.0
+    assert worst_protected < worst_baseline
+    assert protection["reductionRate"] > 0
+    assert math.isclose(
+        protection["reductionRate"],
+        (worst_baseline - worst_protected) / worst_baseline,
+        rel_tol=1e-12,
+    )
+
+
+def test_transient_protection_device_rejects_a_device_targeting_an_event_carrying_valve_node():
+    # D is a valve (carries the closure event) in the plain transient_network fixture — a
+    # device may not replace it, per the fix-round-1 controller ruling.
     network_request = requests_by_kind()["transient_network"]
     protection_request = request(
         "transient_protection_device",
@@ -276,19 +348,9 @@ def test_transient_protection_device_runs_baseline_and_protected_networks_and_re
         }),
     )
 
-    result = execute_request(protection_request)["result"]
-    protection = result["summary"]["protection"]
-
-    worst_baseline = _worst_hmax(protection["baseline"]["pipes"])
-    worst_protected = _worst_hmax(protection["protected"]["pipes"])
-
-    assert worst_protected < worst_baseline
-    assert protection["reductionRate"] > 0
-    assert math.isclose(
-        protection["reductionRate"],
-        (worst_baseline - worst_protected) / worst_baseline,
-        rel_tol=1e-12,
-    )
+    with pytest.raises(ProtocolError, match=r"event-carrying node \(valve/pump\): D") as invalid:
+        execute_request(protection_request)
+    assert invalid.value.code == "INVALID_INPUT"
 
 
 def test_transient_protection_device_rejects_a_device_targeting_an_unknown_node():

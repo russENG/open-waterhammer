@@ -37,6 +37,41 @@ const transientNetwork = {
   },
 }
 
+// Dedicated network for transient_protection_device (does NOT share transientNetwork):
+// R-01 --P-01-- J-01 --P-02-- V-01. V-01 keeps the same closing-valve event as
+// transientNetwork; J-01 is a plain junction (type: 'junction' — no explicit boundary
+// condition, protocol.py's _network() treats it as an internal MOC continuity node) that a
+// protectionSettings device can target. A device may NOT target V-01 itself: replacing an
+// event-carrying valve/pump node would delete the transient the run analyzes rather than
+// mitigate it (Task 4b-2 fix round 1 controller ruling).
+const protectionNetwork = {
+  pipes: [
+    {
+      id: 'P-01',
+      pipe: {
+        id: 'P-01', name: '第1号幹線', startNodeId: 'R-01', endNodeId: 'J-01',
+        pipeType: 'ductile_iron', innerDiameter: 0.3, wallThickness: 0.007,
+        length: 400, roughnessCoeff: 130,
+      },
+      nReaches: 8, upstreamNodeId: 'R-01', downstreamNodeId: 'J-01', initialFlow: 0.07,
+    },
+    {
+      id: 'P-02',
+      pipe: {
+        id: 'P-02', name: '第2号幹線', startNodeId: 'J-01', endNodeId: 'V-01',
+        pipeType: 'ductile_iron', innerDiameter: 0.3, wallThickness: 0.007,
+        length: 100, roughnessCoeff: 130,
+      },
+      nReaches: 2, upstreamNodeId: 'J-01', downstreamNodeId: 'V-01', initialFlow: 0.07,
+    },
+  ],
+  nodes: {
+    'R-01': { type: 'reservoir', head: 80 },
+    'J-01': { type: 'junction' },
+    'V-01': { type: 'valve', Q0: 0.07, H0v: 30, closeTime: 2, operation: 'close' },
+  },
+}
+
 export const SAMPLE_RUN_INPUTS: Record<RunKind, JsonValue> = {
   wave_speed: { pipe },
   joukowsky_allievi: {
@@ -65,12 +100,13 @@ export const SAMPLE_RUN_INPUTS: Record<RunKind, JsonValue> = {
   transient_single_pipe: { pipe },
   transient_network: { network: transientNetwork, options: { tMax: 8, initialFlow: 0.07 } },
   transient_pump: { pipe },
-  // V-01 stays the same closing valve as the transient_network sample (network topology
-  // is unchanged by adding protection) — the surge tank is expressed as an enabled
-  // protectionSettings device instead of being baked into the node's boundary condition,
-  // so packages/core-py's _transient_protection handler actually swaps it in at run time
-  // (Task 4b-2). Parameters (tankArea/initialLevel) match the device this replaced.
-  transient_protection_device: { network: transientNetwork, options: { tMax: 8, initialFlow: 0.07 } },
+  // Own network (protectionNetwork, not shared with transient_network): V-01's closing-valve
+  // event is unchanged, but a junction node J-01 now sits between it and the reservoir so a
+  // protectionSettings device (surge_tank at J-01, see buildSampleWorkspace below) can target
+  // that junction instead of the event-carrying valve — packages/core-py's
+  // _transient_protection handler swaps it in at run time and forbids targeting V-01 itself
+  // (Task 4b-2, fix round 1).
+  transient_protection_device: { network: protectionNetwork, options: { tMax: 8, initialFlow: 0.07 } },
 }
 
 const geoDrafts: JsonValue = [
@@ -105,7 +141,14 @@ export function buildSampleWorkspace(timestamp = new Date().toISOString()): Work
     updatedAt: new Date(new Date(timestamp).getTime() + index * 1000).toISOString(),
   }))
   const scenarios = cases.map((record, index) => {
-    const protectionSettings: JsonValue = index === 2 ? { surgeTank: { enabled: true, area: 4 } } : {}
+    // index 2 ("空気室追加") is the only seeded scenario with an enabled protection device —
+    // targets J-01, the junction protectionNetwork adds between the reservoir and the closing
+    // valve V-01 (a device may not target V-01 itself; see protectionNetwork's comment above).
+    // Matches PROTECTION_TEMPLATES.transient_protection_device in engineering-fields.ts so a
+    // freshly-created Case and this seeded one demonstrate the same device (Task 4b-2 fix round 1).
+    const protectionSettings: JsonValue = index === 2
+      ? { devices: [{ id: 'J-01', type: 'surge_tank', enabled: true, tankArea: 4, initialLevel: 78.7 }] }
+      : {}
     return {
       ...scenarioFixture,
       id: `44444444-4444-4444-8444-${String(index + 1).padStart(12, '0')}`,

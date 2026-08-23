@@ -484,10 +484,19 @@ def _network(value: dict[str, Any]) -> MocNetwork:
                 initial_flow=spec.get("initialFlow"),
             )
         )
-    return MocNetwork(
-        pipes=pipes,
-        nodes={node_id: _boundary_condition(boundary) for node_id, boundary in _required(value, "nodes").items()},
-    )
+    nodes: dict[str, Any] = {}
+    for node_id, boundary in _required(value, "nodes").items():
+        # "junction" is a pseudo boundary condition meaning "no explicit BC": run_moc()'s
+        # internal-junction continuity solver already applies to any node absent from this
+        # dict (moc.py: `bc = nodes.get(node_id)`; `if bc is None: <solve as junction>`).
+        # Representing it as a real {"type": "junction"} entry — rather than simply omitting
+        # the node — makes it a first-class, form-editable node: the pipe-endpoint validation
+        # in the UI requires every node id to be a key here, and a protection device can then
+        # target this node like any other (Task 4b-2 fix round 1).
+        if isinstance(boundary, dict) and boundary.get("type") == "junction":
+            continue
+        nodes[node_id] = _boundary_condition(boundary)
+    return MocNetwork(pipes=pipes, nodes=nodes)
 
 
 def _transient_single(model: dict[str, Any], scenario: dict[str, Any]) -> dict[str, Any]:
@@ -555,6 +564,14 @@ def _protection_summary(baseline_output: Any, protected_output: Any) -> dict[str
     }
 
 
+# Node BC types that carry the transient event itself (valve closure / pump trip-or-start).
+# A protection device may not replace one of these: doing so deletes the very event the run
+# is meant to analyze, so "protected" would measure "no event" rather than "event, mitigated"
+# (Task 4b-2 fix round 1 — review evidence: a device on the closing valve produced a flat
+# protected envelope, because there was no longer any closure to protect against).
+_EVENT_CARRYING_NODE_TYPES = frozenset({"valve", "pump"})
+
+
 def _transient_protection(model: dict[str, Any], scenario: dict[str, Any]) -> dict[str, Any]:
     enabled_devices = _enabled_protection_devices(scenario)
     if not enabled_devices:
@@ -568,6 +585,13 @@ def _transient_protection(model: dict[str, Any], scenario: dict[str, Any]) -> di
         node_id = _required(device, "id")
         if node_id not in nodes_value:
             raise ProtocolError("INVALID_INPUT", f"Unknown protection device target node: {node_id}")
+        original_bc = nodes_value[node_id]
+        original_type = original_bc.get("type") if isinstance(original_bc, dict) else None
+        if original_type in _EVENT_CARRYING_NODE_TYPES:
+            raise ProtocolError(
+                "INVALID_INPUT",
+                f"Protection devices cannot replace an event-carrying node (valve/pump): {node_id}",
+            )
 
     options = model.get("options", {})
     moc_options = MocOptions(t_max=options.get("tMax"), initial_flow=options.get("initialFlow"))
@@ -579,7 +603,10 @@ def _transient_protection(model: dict[str, Any], scenario: dict[str, Any]) -> di
         # plain network handler already uses: a device dict of type surge_tank/air_chamber
         # (plus the id/enabled keys _boundary_condition simply ignores) is structurally the
         # same as a network node's boundary condition, so it can replace one outright.
-        protected_network_value["nodes"][device["id"]] = device
+        # The device itself is deep-copied too — it's a live reference into
+        # scenario["protectionSettings"], and protected_network_value (built off a copy of
+        # model["network"]) must not end up aliasing a piece of the scenario input.
+        protected_network_value["nodes"][device["id"]] = copy.deepcopy(device)
     protected_output = run_moc(_network(protected_network_value), moc_options)
 
     result = _moc_output("moc-network", model, scenario, protected_output)

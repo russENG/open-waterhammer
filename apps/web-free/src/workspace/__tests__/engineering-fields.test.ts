@@ -44,8 +44,15 @@ const OPTIONAL_CANONICAL_PATHS: Record<(typeof RUN_KINDS)[number], string[]> = {
     'event.mode', 'event.waveSpeed', 'event.shutdownTime', 'event.checkValve', 'event.nReaches', 'event.tMax',
   ],
   transient_protection_device: [
+    // Own 2-pipe network (R-01 --P-01-- J-01 --P-02-- V-01, Task 4b-2 fix round 1) — the
+    // generic per-field optional-ness (name/startNodeId/endNodeId/initialFlow) applies to
+    // both pipes[0] and pipes[1] identically (engineering-fields.ts normalizes array indices
+    // to 0 before consulting OPTIONAL_PATHS), so both indices are listed here.
     'model.network.pipes.0.pipe.name', 'model.network.pipes.0.pipe.startNodeId', 'model.network.pipes.0.pipe.endNodeId',
-    'model.network.pipes.0.initialFlow', 'model.network.nodes.V-01.operation',
+    'model.network.pipes.0.initialFlow',
+    'model.network.pipes.1.pipe.name', 'model.network.pipes.1.pipe.startNodeId', 'model.network.pipes.1.pipe.endNodeId',
+    'model.network.pipes.1.initialFlow',
+    'model.network.nodes.V-01.operation',
     'model.options.tMax', 'model.options.initialFlow',
   ],
 }
@@ -199,7 +206,7 @@ describe('RunKind engineering field catalog', () => {
     const protection = structuredClone(ENGINEERING_TEMPLATES.transient_protection_device) as EngineeringState
     const devices = ENGINEERING_COLLECTIONS.transient_protection_device.find(({ target, path }) => target === 'protection' && path === 'devices')!
     const withDevice = addEngineeringCollectionItem(protection, devices)
-    expect(readEngineeringValue(withDevice, { target: 'protection', path: 'devices.1.id' })).toBe('V-02')
+    expect(readEngineeringValue(withDevice, { target: 'protection', path: 'devices.1.id' })).toBe('J-02')
   })
 
   test('renames object-keyed nodes with repaired pipe references and rejects referenced removal', () => {
