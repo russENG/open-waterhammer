@@ -1,4 +1,5 @@
 import { constants } from "node:fs";
+import type { BigIntStats } from "node:fs";
 import { access, realpath, stat } from "node:fs/promises";
 import { basename, dirname, join, resolve } from "node:path";
 
@@ -15,6 +16,13 @@ async function exists(path: string): Promise<boolean> {
   }
 }
 
+export function sameFileIdentity(
+  input: Pick<BigIntStats, "dev" | "ino">,
+  output: Pick<BigIntStats, "dev" | "ino">,
+): boolean {
+  return input.dev === output.dev && input.ino === output.ino;
+}
+
 export async function assertNewOutputPath(inputPath: string, outputPath: string): Promise<void> {
   const inputAbsolute = resolve(inputPath);
   const outputAbsolute = resolve(outputPath);
@@ -23,12 +31,12 @@ export async function assertNewOutputPath(inputPath: string, outputPath: string)
   if (await exists(outputAbsolute)) {
     const [outputReal, inputStat, outputStat] = await Promise.all([
       realpath(outputAbsolute),
-      stat(inputAbsolute),
-      stat(outputAbsolute),
+      stat(inputAbsolute, { bigint: true }),
+      stat(outputAbsolute, { bigint: true }),
     ]);
     if (
       comparable(inputReal) === comparable(outputReal)
-      || (inputStat.dev === outputStat.dev && inputStat.ino === outputStat.ino)
+      || sameFileIdentity(inputStat, outputStat)
     ) {
       throw new Error("Refusing to overwrite input bundle");
     }

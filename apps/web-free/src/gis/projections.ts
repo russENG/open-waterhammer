@@ -6,6 +6,10 @@ import proj4 from 'proj4'
 
 type Coordinate = [number, number]
 
+export interface LocalTransformDefinition {
+  proj4: string
+}
+
 const JGD2011_ZONES: Array<[number, number, number]> = [
   [33, 129.5, 6669], [33, 131, 6670], [36, 132.1666666667, 6671],
   [33, 133.5, 6672], [36, 134.3333333333, 6673], [36, 136, 6674],
@@ -35,6 +39,28 @@ export function transformCoordinate(coordinate: Coordinate, source: string, dest
   }
   if (!getProjection(source) || !getProjection(destination)) throw new Error(`Unsupported CRS: ${source} → ${destination}`)
   return transform(coordinate, source, destination) as Coordinate
+}
+
+export function validateLocalTransform(definition: LocalTransformDefinition): { valid: boolean; error?: string } {
+  if (!definition.proj4.trim()) return { valid: false, error: 'Local XY Proj4 definition is required' }
+  try {
+    proj4.defs('LOCAL:XY', definition.proj4)
+    register(proj4)
+    const probe = transform([0, 0], 'LOCAL:XY', 'EPSG:4326') as Coordinate
+    if (!probe.every(Number.isFinite)) throw new Error('transform returned non-finite coordinates')
+    return { valid: true }
+  } catch (error) {
+    return { valid: false, error: `Local XY transform is invalid: ${error instanceof Error ? error.message : String(error)}` }
+  }
+}
+
+export function transformLocalCoordinateToWgs84(
+  coordinate: Coordinate,
+  definition: LocalTransformDefinition,
+): Coordinate {
+  const validation = validateLocalTransform(definition)
+  if (!validation.valid) throw new Error(validation.error)
+  return transform(coordinate, 'LOCAL:XY', 'EPSG:4326') as Coordinate
 }
 
 export function createBasemapLayer(enabled: boolean): TileLayer<XYZ> | null {

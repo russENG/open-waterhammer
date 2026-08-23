@@ -3,6 +3,8 @@ import { describe, expect, test } from 'vitest'
 import {
   createBasemapLayer,
   exportFeaturesToWgs84,
+  transformLocalCoordinateToWgs84,
+  validateLocalTransform,
   registerSupportedProjections,
   transformGeometryToWgs84,
   transformCoordinate,
@@ -35,6 +37,17 @@ describe('GIS projections and offline basemap policy', () => {
     expect(() => exportFeaturesToWgs84(draft, 'LOCAL:XY')).toThrow(/explicit transform/i)
     expect(exportFeaturesToWgs84(draft, 'LOCAL:XY', ([x, y]) => [139 + x / 100000, 35 + y / 100000]))
       .toEqual([{ id: 'N-1', coordinate: [139.001, 35.002] }])
+  })
+
+  test('registers an explicit persisted Local XY Proj4 definition for rendering and export', () => {
+    const definition = { proj4: '+proj=tmerc +lat_0=35 +lon_0=139 +k=1 +x_0=0 +y_0=0 +ellps=GRS80 +units=m +no_defs +type=crs' }
+    expect(validateLocalTransform(definition)).toEqual({ valid: true })
+    expect(transformLocalCoordinateToWgs84([0, 0], definition)).toEqual([
+      expect.closeTo(139, 6),
+      expect.closeTo(35, 6),
+    ])
+    expect(validateLocalTransform({ proj4: '' }).valid).toBe(false)
+    expect(() => transformLocalCoordinateToWgs84([0, 0], { proj4: 'not-a-proj4-definition' })).toThrow(/Local XY transform/i)
   })
 
   test('exports Point and LineString GeoJSON coordinates to WGS84', () => {

@@ -12,7 +12,8 @@
     }
   },
   "scripts": {
-    "build": "tsc --build",
+    "generate:validators": "node --import tsx/esm scripts/generate-validators.ts",
+    "build": "npm run generate:validators && tsc --build",
     "typecheck": "tsc --noEmit",
     "test": "node --test --test-force-exit --import tsx/esm src/__tests__/*.test.ts"
   },

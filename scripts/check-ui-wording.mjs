@@ -34,6 +34,11 @@ const TARGET_DIRS = [
 /** @type {{ term: RegExp, reason: string, suggest: string }[]} */
 const FORBIDDEN = [
   {
+    term: /準拠/,
+    reason: '限定条件を超えた包括的な適合性の印象を与える。',
+    suggest: '「参照」「参照条文」を使い、適用限界を併記する',
+  },
+  {
     term: /\bMOC\b/,
     reason: '設計基準（技術書 §8.3.4）では「数値解法 / 数値解析」、その下位の手法として「特性曲線法」と呼称している。英略語 MOC をユーザー画面に出さない。',
     suggest: '一般カテゴリは「数値解析」、アルゴリズム参照が必要なら「特性曲線法」を使う',

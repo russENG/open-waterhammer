@@ -109,6 +109,20 @@ const succeededRun: Run = {
 };
 
 describe("canonical JSON schema validators", () => {
+  test("initializes validators when CSP blocks dynamic Function construction", async () => {
+    const NativeFunction = globalThis.Function;
+    globalThis.Function = function blockedDynamicFunction(): never {
+      throw new Error("CSP blocked dynamic code generation");
+    } as unknown as FunctionConstructor;
+    try {
+      const validators = await import(`../validators.js?no-eval=${Date.now()}`);
+      assert.equal(validators.validateProject(project), true);
+      assert.equal(validators.validateRun(succeededRun), true);
+    } finally {
+      globalThis.Function = NativeFunction;
+    }
+  });
+
   test("accept literal valid fixtures for every canonical entity", () => {
     assert.equal(validateProject(project), true);
     assert.equal(validateAlternative(alternative), true);

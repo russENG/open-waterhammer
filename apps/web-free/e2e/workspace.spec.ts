@@ -13,6 +13,11 @@ test('create, edit, execute, lock, fork, compare, reload, export, and import', a
 
   await page.getByRole('button', { name: 'New Case' }).click()
   await expect.poll(() => page.locator('.case-row').count()).toBe(5)
+  await page.getByRole('link', { name: 'Analysis' }).click()
+  await expect(page.getByText('GIS / TOPOLOGY REQUIRED')).toBeVisible()
+  await expect(page.getByRole('button', { name: 'Run calculation' })).toBeDisabled()
+
+  await page.locator('.case-row').filter({ hasText: '基準案' }).getByRole('button').click()
 
   await page.getByRole('link', { name: 'Scenario' }).click()
   await page.getByLabel('Scenario name').fill('E2E valve closure comparison')
@@ -86,12 +91,62 @@ test('desktop and narrow workspace keep semantic landmarks without serious acces
   await page.screenshot({ path: testInfo.outputPath('workspace-narrow.png'), fullPage: true })
 })
 
-test('a Python-owned RunKind crosses the real lazy Pyodide protocol boundary', async ({ page }) => {
+test('all exact RunKinds execute and persist through the production browser registry without calculation-network access', async ({ page }) => {
+  test.setTimeout(360_000)
+  const runKinds = [
+    'wave_speed',
+    'joukowsky_allievi',
+    'empirical_pressure',
+    'steady_single_pipe',
+    'steady_network_python',
+    'steady_network_epanet',
+    'longitudinal_hydraulics',
+    'transient_single_pipe',
+    'transient_network',
+    'transient_pump',
+    'transient_protection_device',
+  ] as const
+  const externalRequests = new Set<string>()
+  const pyodideRequests = new Set<string>()
+  page.on('request', (request) => {
+    const url = new URL(request.url())
+    if (url.pathname.startsWith('/pyodide/')) pyodideRequests.add(url.pathname)
+    if (url.origin !== 'http://127.0.0.1:4173') externalRequests.add(url.origin)
+  })
+
   await page.goto('/')
+  const csp = await page.locator('meta[http-equiv="Content-Security-Policy"]').getAttribute('content')
+  expect(csp).toContain("script-src 'self' 'wasm-unsafe-eval'")
+  expect(csp).not.toContain("'unsafe-eval'")
+  expect(csp).not.toContain('cdn.jsdelivr.net')
   await page.getByRole('link', { name: 'Analysis' }).click()
-  await expect(page.getByRole('radio', { name: /Wave speed/ })).toBeChecked()
-  await page.getByRole('button', { name: 'Run calculation' }).click()
-  await expect(page.getByRole('status')).toHaveText('Run succeeded', { timeout: 120_000 })
-  await expect(page.getByRole('complementary', { name: 'Run Inspector' })).toContainText('open-waterhammer-core-py')
-  await expect(page.getByRole('complementary', { name: 'Run Inspector' })).toContainText('pyodide-')
+  for (const [index, kind] of runKinds.entries()) {
+    await page.locator(`input[type="radio"][value="${kind}"]`).check()
+    await expect(page.getByRole('button', { name: 'Run calculation' })).toBeEnabled()
+    await page.getByRole('button', { name: 'Run calculation' }).click()
+    await expect(page.getByRole('status')).toHaveText('Run succeeded', { timeout: 120_000 })
+    await expect(page.locator('.state-pill')).toHaveText('locked')
+    const inspector = page.getByRole('complementary', { name: 'Run Inspector' })
+    await expect(inspector).toContainText(kind)
+    await expect(inspector).toContainText(kind === 'steady_network_epanet' ? 'epanet-js' : 'open-waterhammer-core-py')
+    await expect(inspector.getByRole('heading', { name: 'Summary fields' }).locator('..').locator('dd').first()).not.toHaveText('')
+
+    if (index < runKinds.length - 1) {
+      await page.getByRole('button', { name: 'Fork Case' }).click()
+      const fork = page.getByRole('dialog', { name: 'Fork locked Case' })
+      await fork.getByLabel('分岐理由').fill(`E2E next exact RunKind ${runKinds[index + 1]}`)
+      await fork.getByRole('button', { name: 'Create fork' }).click()
+      await expect(page.locator('.state-pill')).toHaveText('draft')
+    }
+  }
+
+  expect([...pyodideRequests]).toEqual(expect.arrayContaining([
+    '/pyodide/pyodide-lock.json',
+    '/pyodide/pyodide.asm.wasm',
+    '/pyodide/python_stdlib.zip',
+  ]))
+  expect([...externalRequests]).toEqual([])
+  await page.reload()
+  await expect(page.locator('.state-pill')).toHaveText('locked')
+  await expect(page.getByRole('complementary', { name: 'Run Inspector' })).toContainText('transient_protection_device')
 })

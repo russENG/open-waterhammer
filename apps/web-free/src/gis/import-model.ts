@@ -34,12 +34,22 @@ function mapped(properties: Record<string, unknown>, key: string | undefined): u
   return key ? properties[key] : undefined
 }
 
+function textValue(value: unknown): string {
+  return typeof value === 'string' || typeof value === 'number' ? String(value).trim() : ''
+}
+
+function isFiniteHydraulicNumber(value: unknown): boolean {
+  if (value === null || value === undefined || (typeof value === 'string' && value.trim() === '')) return false
+  return Number.isFinite(Number(value))
+}
+
 export function importGeoJsonDrafts(
   collection: GeoJsonFeatureCollection,
   mapping: AttributeMapping,
 ): HydraulicDraft[] {
   if (!mapping.sourceCrs.trim()) throw new Error('Source CRS is required')
-  if (!mapping.node.id || !mapping.node.elevation || !mapping.pipe.id || !mapping.pipe.startNodeId || !mapping.pipe.endNodeId || !mapping.pipe.innerDiameter) {
+  const mappedKeys = [mapping.node.id, mapping.node.elevation, mapping.pipe.id, mapping.pipe.startNodeId, mapping.pipe.endNodeId, mapping.pipe.innerDiameter]
+  if (mappedKeys.some((key) => typeof key !== 'string' || key.trim() === '')) {
     throw new Error('Explicit node and pipe attribute mapping is required')
   }
   return collection.features.map((feature, index) => {
@@ -49,27 +59,37 @@ export function importGeoJsonDrafts(
       return { sourceFeatureId, kind: 'invalid', id: String(mapped(properties, mapping.node.id) ?? sourceFeatureId), geometry: null, properties, errors: ['Geometry がありません。'] }
     }
     if (feature.geometry.type === 'Point') {
+      const id = textValue(mapped(properties, mapping.node.id))
+      const elevation = mapped(properties, mapping.node.elevation)
       return {
         sourceFeatureId,
         kind: 'node',
-        id: String(mapped(properties, mapping.node.id) ?? sourceFeatureId),
+        id,
         geometry: feature.geometry,
-        properties: { elevation: mapped(properties, mapping.node.elevation) },
-        errors: [],
+        properties: { elevation },
+        errors: [
+          ...(!id ? ['節点IDが未入力です。'] : []),
+          ...(!isFiniteHydraulicNumber(elevation) ? ['節点標高が数値ではありません。'] : []),
+        ],
       }
     }
     if (feature.geometry.type === 'LineString') {
+      const id = textValue(mapped(properties, mapping.pipe.id))
+      const startNodeId = textValue(mapped(properties, mapping.pipe.startNodeId))
+      const endNodeId = textValue(mapped(properties, mapping.pipe.endNodeId))
+      const innerDiameter = mapped(properties, mapping.pipe.innerDiameter)
       return {
         sourceFeatureId,
         kind: 'pipe',
-        id: String(mapped(properties, mapping.pipe.id) ?? sourceFeatureId),
+        id,
         geometry: feature.geometry,
-        properties: {
-          startNodeId: mapped(properties, mapping.pipe.startNodeId),
-          endNodeId: mapped(properties, mapping.pipe.endNodeId),
-          innerDiameter: mapped(properties, mapping.pipe.innerDiameter),
-        },
-        errors: [],
+        properties: { startNodeId, endNodeId, innerDiameter },
+        errors: [
+          ...(!id ? ['管路IDが未入力です。'] : []),
+          ...(!startNodeId ? ['接続元が未入力です。'] : []),
+          ...(!endNodeId ? ['接続先が未入力です。'] : []),
+          ...(!isFiniteHydraulicNumber(innerDiameter) || Number(innerDiameter) <= 0 ? ['内径は0より大きい数値が必要です。'] : []),
+        ],
       }
     }
     return { sourceFeatureId, kind: 'invalid', id: sourceFeatureId, geometry: feature.geometry, properties, errors: [`未対応の Geometry: ${feature.geometry.type}`] }
@@ -80,20 +100,26 @@ export function validateHydraulicDrafts(drafts: HydraulicDraft[]): {
   canRun: boolean
   errorsByFeature: Record<string, string[]>
 } {
-  const nodeIds = new Set(drafts.filter(({ kind }) => kind === 'node').map(({ id }) => id))
+  const nodeIds = new Set(drafts.filter(({ kind, id }) => kind === 'node' && Boolean(id.trim())).map(({ id }) => id))
   const hasPipe = drafts.some(({ kind }) => kind === 'pipe')
   const errorsByFeature: Record<string, string[]> = {}
   for (const draft of drafts) {
     const errors = [...draft.errors]
-    if (draft.kind === 'node' && !Number.isFinite(Number(draft.properties.elevation))) errors.push('節点標高が数値ではありません。')
-    if (draft.kind === 'pipe') {
-      const start = String(draft.properties.startNodeId ?? '')
-      const end = String(draft.properties.endNodeId ?? '')
-      if (!nodeIds.has(start)) errors.push(`接続元 ${start || '（未設定）'} が見つかりません。`)
-      if (!nodeIds.has(end)) errors.push(`接続先 ${end || '（未設定）'} が見つかりません。`)
-      if (!(Number(draft.properties.innerDiameter) > 0)) errors.push('内径は0より大きい数値が必要です。')
+    if (draft.kind === 'node') {
+      if (!draft.id.trim()) errors.push('節点IDが未入力です。')
+      if (!isFiniteHydraulicNumber(draft.properties.elevation)) errors.push('節点標高が数値ではありません。')
     }
-    if (errors.length) errorsByFeature[draft.sourceFeatureId] = errors
+    if (draft.kind === 'pipe') {
+      const start = textValue(draft.properties.startNodeId)
+      const end = textValue(draft.properties.endNodeId)
+      if (!draft.id.trim()) errors.push('管路IDが未入力です。')
+      if (!start) errors.push('接続元が未入力です。')
+      else if (!nodeIds.has(start)) errors.push(`接続元 ${start} が見つかりません。`)
+      if (!end) errors.push('接続先が未入力です。')
+      else if (!nodeIds.has(end)) errors.push(`接続先 ${end} が見つかりません。`)
+      if (!isFiniteHydraulicNumber(draft.properties.innerDiameter) || Number(draft.properties.innerDiameter) <= 0) errors.push('内径は0より大きい数値が必要です。')
+    }
+    if (errors.length) errorsByFeature[draft.sourceFeatureId] = [...new Set(errors)]
   }
   return { canRun: nodeIds.size > 0 && hasPipe && Object.keys(errorsByFeature).length === 0, errorsByFeature }
 }

@@ -78,12 +78,41 @@ describe('full workspace application', () => {
     expect(screen.getByText('2 Cases')).toBeVisible()
   })
 
+  test('New Case creates an independent empty draft instead of cloning the selected snapshot', async () => {
+    const user = userEvent.setup()
+    const { data, repository } = setup()
+    const tabs = screen.getByRole('navigation', { name: 'Workspace tabs' })
+    await user.click(screen.getByRole('button', { name: 'New Case' }))
+
+    await waitFor(async () => expect((await repository.snapshot()).cases).toHaveLength(5))
+    const snapshot = await repository.snapshot()
+    const created = snapshot.cases.find(({ id }) => !data.cases.some((record) => record.id === id))!
+    const scenario = snapshot.scenarios.find(({ caseId }) => caseId === created.id)!
+    expect(created.parentCaseId).toBeNull()
+    expect(created.revisionReason).toBeUndefined()
+    expect(created.modelSnapshot).toEqual({ runInputs: {}, geoDrafts: [], geoSourceCrs: data.projects[0]!.crs })
+    expect(scenario).toMatchObject({
+      name: '新規シナリオ', boundaryConditions: {}, eventSettings: {}, protectionSettings: {},
+    })
+
+    await user.click(within(tabs).getByRole('link', { name: 'Analysis' }))
+    expect(await screen.findByText('GIS / TOPOLOGY REQUIRED')).toBeVisible()
+    expect(screen.getByRole('button', { name: 'Run calculation' })).toBeDisabled()
+  })
+
   test('executes through the common runner, locks the Case, and requires a reason to fork', async () => {
     const user = userEvent.setup()
     const { repository } = setup()
     const tabs = screen.getByRole('navigation', { name: 'Workspace tabs' })
 
     await user.click(within(tabs).getByRole('link', { name: 'Analysis' }))
+    const diameter = await screen.findByLabelText(/管内径/)
+    await user.clear(diameter)
+    await user.type(diameter, '0.31')
+    expect(screen.getByRole('button', { name: 'Run calculation' })).toBeDisabled()
+    await user.click(screen.getByRole('button', { name: 'Save input' }))
+    expect(await screen.findByText('Input saved')).toBeVisible()
+    expect(screen.getByRole('button', { name: 'Run calculation' })).toBeEnabled()
     await user.click(await screen.findByRole('button', { name: 'Run calculation' }))
     expect(await screen.findByText('Run succeeded')).toBeVisible()
     expect((await repository.snapshot()).cases.some(({ state }) => state === 'locked')).toBe(true)
@@ -96,7 +125,7 @@ describe('full workspace application', () => {
     await user.click(within(dialog).getByRole('button', { name: 'Create fork' }))
 
     await waitFor(async () => expect((await repository.snapshot()).cases).toHaveLength(5))
-    expect(screen.getByText('空気室容量を比較するため')).toBeVisible()
+    expect(await screen.findByRole('button', { name: /空気室容量を比較するため/ })).toBeVisible()
   })
 
   test('persists explicitly mapped GeoJSON drafts into the selected Case', async () => {
@@ -105,14 +134,16 @@ describe('full workspace application', () => {
     const tabs = screen.getByRole('navigation', { name: 'Workspace tabs' })
 
     await user.click(within(tabs).getByRole('link', { name: 'Model＋GIS' }))
-    await user.click(await screen.findByRole('button', { name: 'Import GeoJSON' }))
+    await user.click(await screen.findByRole('button', { name: 'Import GeoJSON' }, { timeout: 10_000 }))
     const dialog = await screen.findByRole('dialog', { name: 'GeoJSON import wizard' })
+    await user.selectOptions(within(dialog).getByLabelText('Source CRS — never inferred'), 'LOCAL:XY')
+    await user.type(within(dialog).getByLabelText('Local XY Proj4 definition'), '+proj=tmerc +lat_0=35 +lon_0=139 +k=1 +x_0=0 +y_0=0 +datum=WGS84 +units=m +no_defs')
     fireEvent.change(within(dialog).getByLabelText('GeoJSON'), { target: { value: JSON.stringify({
       type: 'FeatureCollection',
       features: [{
         type: 'Feature', id: 'feature-new',
         properties: { id: 'N-NEW', elevation: 91 },
-        geometry: { type: 'Point', coordinates: [139.71, 35.69] },
+        geometry: { type: 'Point', coordinates: [0, 0] },
       }],
     }) } })
     await user.click(within(dialog).getByRole('button', { name: 'Import as drafts' }))
@@ -120,8 +151,41 @@ describe('full workspace application', () => {
     await waitFor(async () => {
       const latest = await repository.snapshot()
       const selected = latest.cases.at(-1)!
-      const snapshot = selected.modelSnapshot as { geoDrafts?: Array<{ id: string }> }
+      const snapshot = selected.modelSnapshot as { geoDrafts?: Array<{ id: string }>; geoSourceCrs?: string; geoLocalTransform?: { proj4?: string } }
       expect(snapshot.geoDrafts?.map(({ id }) => id)).toEqual(['N-NEW'])
+      expect(snapshot.geoSourceCrs).toBe('LOCAL:XY')
+      expect(snapshot.geoLocalTransform?.proj4).toContain('+lat_0=35')
+    })
+  })
+
+  test('persists Local XY drafts before a transform while blocking render/export until it is saved', async () => {
+    const user = userEvent.setup()
+    const { repository } = setup()
+    const tabs = screen.getByRole('navigation', { name: 'Workspace tabs' })
+    await user.click(within(tabs).getByRole('link', { name: 'Model＋GIS' }))
+    await user.click(await screen.findByRole('button', { name: 'Import GeoJSON' }, { timeout: 10_000 }))
+    const dialog = await screen.findByRole('dialog', { name: 'GeoJSON import wizard' })
+    await user.selectOptions(within(dialog).getByLabelText('Source CRS — never inferred'), 'LOCAL:XY')
+    fireEvent.change(within(dialog).getByLabelText('GeoJSON'), { target: { value: JSON.stringify({
+      type: 'FeatureCollection',
+      features: [{
+        type: 'Feature', id: 'local-node', properties: { id: 'N-LOCAL', elevation: 12 },
+        geometry: { type: 'Point', coordinates: [100, 200] },
+      }],
+    }) } })
+    await user.click(within(dialog).getByRole('button', { name: 'Import as drafts' }))
+
+    expect(await screen.findByRole('heading', { name: 'Explicit coordinate transform' })).toBeVisible()
+    await user.click(screen.getByRole('button', { name: 'Export WGS84' }))
+    expect(screen.getByRole('alert')).toHaveTextContent(/Local XY Proj4 definition is required/)
+    let selected = (await repository.snapshot()).cases.at(-1)!
+    expect(selected.modelSnapshot).toMatchObject({ geoSourceCrs: 'LOCAL:XY', geoLocalTransform: null })
+
+    await user.type(screen.getByLabelText('Local XY Proj4 definition'), '+proj=tmerc +lat_0=35 +lon_0=139 +k=1 +x_0=0 +y_0=0 +datum=WGS84 +units=m +no_defs')
+    await user.click(screen.getByRole('button', { name: 'Save transform' }))
+    await waitFor(async () => {
+      selected = (await repository.snapshot()).cases.at(-1)!
+      expect(selected.modelSnapshot).toMatchObject({ geoLocalTransform: { proj4: expect.stringContaining('+lat_0=35') } })
     })
   })
 })

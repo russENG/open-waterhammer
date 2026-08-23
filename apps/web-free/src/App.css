@@ -3226,6 +3226,15 @@ select.input--narrow {
 .validation-badge--ok { color: var(--green); }
 .validation-badge--ng { color: var(--red); }
 .field-help { margin: 16px 0; color: var(--ink-soft); font-size: .67rem; line-height: 1.7; }
+.engineering-field-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 11px; }
+.engineering-field-grid label { display: grid; gap: 6px; min-width: 0; color: var(--ink-soft); font: 700 .55rem var(--mono); letter-spacing: .035em; }
+.engineering-field-grid label > span { display: flex; justify-content: space-between; align-items: baseline; gap: 6px; }
+.engineering-field-grid label b { color: var(--orange); font-size: .49rem; font-weight: 700; }
+.engineering-field-grid input, .engineering-field-grid select { width: 100%; min-height: 38px; padding: 8px 9px; color: var(--ink); background: rgba(255,253,246,.88); border: 1px solid var(--line-dark); font: 650 .67rem var(--mono); }
+.engineering-field-grid input:focus, .engineering-field-grid select:focus { outline: 2px solid var(--orange); outline-offset: 1px; }
+.advanced-json { margin-top: 16px; border-top: 1px dashed var(--line-dark); }
+.advanced-json summary { padding: 12px 0; color: var(--ink-soft); cursor: pointer; font: 700 .56rem var(--mono); letter-spacing: .04em; }
+.advanced-json .model-editor textarea { min-height: 250px; }
 .model-editor, .scenario-fieldset label, .report-selector label, .import-wizard label, .fork-dialog label { display: grid; gap: 7px; color: var(--ink-soft); font: 700 .56rem var(--mono); letter-spacing: .04em; }
 .model-editor textarea, .json-editor-grid textarea, .import-wizard textarea, .fork-dialog textarea { width: 100%; min-height: 360px; resize: vertical; padding: 14px; color: #dce6ec; background: #101e33; border: 1px solid #56647a; font: .64rem/1.55 var(--mono); tab-size: 2; }
 .analysis-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 13px; }
@@ -3251,6 +3260,7 @@ select.input--narrow {
 .comparison-table tbody th { color: var(--ink-soft); background: #ebe6d9; text-align: left; font: .56rem var(--mono); }
 .comparison-table td strong, .comparison-table td small { display: block; }
 .comparison-table td small { margin-top: 5px; font: .53rem var(--mono); }
+.comparison-table .comparison-group th { padding: 8px 12px; color: #f6e2cd; background: #293f5c; font-size: .52rem; letter-spacing: .08em; text-transform: uppercase; }
 .delta-up { color: var(--red); }
 .delta-down { color: var(--green); }
 .case-count { margin-left: 0; background: var(--orange); border-color: var(--orange); }
@@ -3286,11 +3296,16 @@ select.input--narrow {
 .findings-card ol { list-style: none; margin: 11px 0 0; padding: 0; }
 .findings-card li button { width: 100%; display: grid; grid-template-columns: 30px 1fr auto; gap: 9px; align-items: center; padding: 10px 4px; text-align: left; color: var(--ink); background: transparent; border: 0; border-bottom: 1px solid var(--line); cursor: pointer; }
 .findings-card li button > span:last-child { color: var(--orange); font: .5rem var(--mono); }
+.findings-card li button[aria-pressed="true"] { background: #f6dfcf; box-shadow: inset 4px 0 var(--orange); }
 .findings-card strong, .findings-card small { display: block; }
 .findings-card strong { font-size: .64rem; }
 .findings-card small { margin-top: 4px; color: var(--ink-soft); font-size: .53rem; }
 .ng-marker { display: grid; place-items: center; width: 28px; height: 28px; color: white; background: var(--red); font: 700 .55rem var(--mono); }
 .profile-ruler { position: relative; display: flex; justify-content: space-between; margin: 50px 10px 20px; padding-top: 13px; border-top: 5px double var(--ink); color: var(--ink-soft); font: .53rem var(--mono); }
+.profile-plot svg { width: 100%; margin-top: 20px; overflow: visible; }
+.profile-cursor-line { stroke: var(--orange); stroke-width: 3; stroke-dasharray: 4 3; filter: drop-shadow(0 0 4px var(--orange-soft)); }
+.linked-chart-cursor { stroke: var(--orange); stroke-width: 3; stroke-dasharray: 4 3; filter: drop-shadow(0 0 4px var(--orange-soft)); }
+.profile-plot .profile-ruler { margin-top: 3px; }
 .profile-cursor { position: absolute; left: 50%; top: -26px; height: 35px; border-left: 2px solid var(--line-dark); }
 .profile-cursor--active { border-color: var(--orange); box-shadow: 0 0 12px var(--orange-soft); }
 
@@ -3301,7 +3316,13 @@ select.input--narrow {
 .basemap-toggle { display: grid; grid-template-columns: 20px auto; align-items: center; cursor: pointer; }
 .basemap-toggle input { grid-row: 1 / 3; accent-color: var(--orange); }
 .basemap-toggle span { font: 700 .58rem var(--mono); }
-.gis-toolbar .validation-badge { color: #86c7af; }
+.gis-toolbar .validation-badge--ok { color: #86c7af; }
+.gis-toolbar .validation-badge--ng { color: #f09b92; }
+.local-transform-control { display: grid; grid-template-columns: minmax(180px, .7fr) minmax(260px, 1.3fr) auto; gap: 14px; align-items: end; padding: 14px; }
+.local-transform-control h2 { margin: 4px 0; font-size: .76rem; }
+.local-transform-control p { margin: 0; color: var(--ink-soft); font-size: .58rem; line-height: 1.5; }
+.local-transform-control label { display: grid; gap: 5px; color: var(--ink-soft); font: 700 .54rem var(--mono); }
+.local-transform-control textarea { min-height: 64px; resize: vertical; padding: 8px; color: var(--ink); background: var(--white); border: 1px solid var(--line-dark); font: .58rem/1.45 var(--mono); }
 .gis-workspace { display: grid; grid-template-columns: minmax(0, 1fr) 245px; min-height: 580px; border: 1px solid var(--ink); background: #ddd8ca; }
 .map-stage { position: relative; min-width: 0; min-height: 580px; overflow: hidden; background: #d7d8ce; }
 .ol-map { position: absolute; inset: 0; }
@@ -3384,6 +3405,8 @@ select.input--narrow {
   .analysis-layout { grid-template-columns: 1fr; }
   .run-kind-list { grid-template-columns: repeat(2, 1fr); }
   .analysis-editor { position: static; }
+  .engineering-field-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .local-transform-control { grid-template-columns: 1fr; align-items: stretch; }
   .json-editor-grid { grid-template-columns: 1fr; }
   .json-editor-grid textarea { min-height: 180px; }
   .element-ledger { border-left: 0; border-top: 1px solid var(--ink); }
@@ -3402,6 +3425,7 @@ select.input--narrow {
   .workspace-tab { min-width: 84px; padding-inline: 9px; }
   .analysis-layout { display: block; }
   .run-kind-list { grid-template-columns: 1fr; max-height: 280px; overflow: auto; margin-bottom: 14px; }
+  .engineering-field-grid { grid-template-columns: 1fr; }
   .mapping-grid { grid-template-columns: 1fr; }
   .limitations-box { grid-template-columns: 1fr; }
   .run-inspector { display: block; }

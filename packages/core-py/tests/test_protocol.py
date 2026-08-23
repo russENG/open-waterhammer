@@ -186,6 +186,17 @@ def test_wave_speed_hash_and_numeric_result_are_canonical_and_hand_checkable():
     assert math.isclose(response["result"]["summary"]["vibrationPeriod"], 0.3298753309814903, rel_tol=1e-12)
 
 
+def test_empirical_protocol_rejects_an_unknown_system_type_before_formula_output():
+    calculation_request = request("empirical_pressure", {
+        "systemType": "natural",
+        "staticPressureMpa": 0.42,
+    })
+
+    with pytest.raises(ProtocolError, match="Unsupported pipeline system type") as invalid:
+        execute_request(calculation_request)
+    assert invalid.value.code == "INVALID_INPUT"
+
+
 def test_canonical_input_uses_ecmascript_number_spelling_at_exponent_boundaries():
     canonical_input = _canonical_input(
         "wave_speed",

@@ -15,6 +15,10 @@ describe('GeoJSON import wizard model', () => {
   test('requires source CRS and explicit node/pipe attribute mapping instead of guessing', () => {
     expect(() => importGeoJsonDrafts(geojson, { sourceCrs: '', node: {}, pipe: {} })).toThrow(/source CRS/i)
     expect(() => importGeoJsonDrafts(geojson, { sourceCrs: 'EPSG:4326', node: {}, pipe: {} })).toThrow(/attribute mapping/i)
+    expect(() => importGeoJsonDrafts(geojson, {
+      sourceCrs: 'EPSG:4326', node: { id: '   ', elevation: 'elev' },
+      pipe: { id: 'code', startNodeId: 'from', endNodeId: 'to', innerDiameter: 'dia' },
+    })).toThrow(/attribute mapping/i)
   })
 
   test('retains invalid and unconnected elements as drafts with element-level errors', () => {
@@ -38,5 +42,32 @@ describe('GeoJSON import wizard model', () => {
       pipe: { id: 'code', startNodeId: 'from', endNodeId: 'to', innerDiameter: 'dia' },
     })
     expect(validateHydraulicDrafts(nodeOnly).canRun).toBe(false)
+    expect(validateHydraulicDrafts([]).canRun).toBe(false)
+  })
+
+  test('retains missing ids and null hydraulics as invalid drafts without source-id fallback', () => {
+    const imported = importGeoJsonDrafts({
+      type: 'FeatureCollection',
+      features: [
+        { type: 'Feature', id: 'source-node', properties: { code: '', elev: '   ' }, geometry: { type: 'Point', coordinates: [139.7, 35.6] } },
+        { type: 'Feature', id: 'source-pipe', properties: { code: null, from: '', to: 'N-1', dia: '   ' }, geometry: { type: 'LineString', coordinates: [[139.7, 35.6], [139.71, 35.61]] } },
+      ],
+    }, {
+      sourceCrs: 'EPSG:4326',
+      node: { id: 'code', elevation: 'elev' },
+      pipe: { id: 'code', startNodeId: 'from', endNodeId: 'to', innerDiameter: 'dia' },
+    })
+
+    expect(imported.map(({ id }) => id)).toEqual(['', ''])
+    const validation = validateHydraulicDrafts(imported)
+    expect(validation.errorsByFeature['source-node']).toEqual(expect.arrayContaining([
+      '節点IDが未入力です。',
+      '節点標高が数値ではありません。',
+    ]))
+    expect(validation.errorsByFeature['source-pipe']).toEqual(expect.arrayContaining([
+      '管路IDが未入力です。',
+      '接続元が未入力です。',
+      '内径は0より大きい数値が必要です。',
+    ]))
   })
 })

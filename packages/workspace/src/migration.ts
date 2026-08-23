@@ -70,7 +70,7 @@ async function planRecord(session: JsonValue): Promise<PlannedLegacyRecord> {
     createdAt: timestamp,
     updatedAt: timestamp,
   };
-  if (validateCase(caseRecord) !== true) {
+  if (!Boolean(validateCase(caseRecord))) {
     caseRecord.createdAt = FALLBACK_TIMESTAMP;
     caseRecord.updatedAt = FALLBACK_TIMESTAMP;
   }

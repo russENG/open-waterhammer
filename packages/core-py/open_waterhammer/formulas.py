@@ -366,6 +366,9 @@ def calc_empirical_waterhammer(
                     f"{waterhammer_mpa:.3f} MPa"
                 )
 
+        case _:
+            raise ValueError(f"Unsupported pipeline system type: {system_type}")
+
     return EmpiricalWaterhammerResult(
         waterhammer_mpa=waterhammer_mpa,
         rule=rule,

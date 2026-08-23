@@ -72,7 +72,7 @@ export function LibraryPage({ initialAnchor }: LibraryPageProps) {
         <h1 className="library-title">計算ライブラリ</h1>
         <p className="library-lead">
           本 OSS が実装する計算式のカタログ。各エントリは数式・入出力・適用条件・
-          ソースコード位置・準拠基準を一覧する。
+          ソースコード位置・参照基準を一覧する。
         </p>
         <p className="library-lead-sub">
           外部から特定の式を引用する場合は <code>#{"{式ID}"}</code> アンカーをご利用ください

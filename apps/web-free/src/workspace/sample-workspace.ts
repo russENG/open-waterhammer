@@ -46,7 +46,7 @@ export const SAMPLE_RUN_INPUTS: Record<RunKind, JsonValue> = {
       targetFacilityId: 'V-01', initialVelocity: 1, initialHead: 30,
     },
   },
-  empirical_pressure: { systemType: 'natural', staticPressureMpa: 0.42 },
+  empirical_pressure: { systemType: 'gravity_open', staticPressureMpa: 0.42 },
   steady_single_pipe: {
     method: 'hazen-williams', innerDiameter: 0.3, length: 500, flowRate: 0.03,
     upstreamElevation: 100, downstreamElevation: 88, roughnessC: 130,

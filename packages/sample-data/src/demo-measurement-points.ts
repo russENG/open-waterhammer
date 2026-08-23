@@ -60,5 +60,5 @@ export const DEMO_MEASUREMENT_POINTS_DESCRIPTION = `
 静水位: 580.600 m（吐水槽 HWL）
 測点数: 31点（IP.161〜IP.189 全数収録）
 
-準拠: 土地改良設計基準パイプライン（令和3年6月改訂）第5章
+参照: 土地改良設計基準パイプライン（令和3年6月改訂）第5章
 `.trim();

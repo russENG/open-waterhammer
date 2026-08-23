@@ -99,7 +99,7 @@ function addResultSheet(wb: ExcelJS.Workbook, input: ReportInput): void {
 
   const title = [
     [`計算結果レポート — ${input.meta.projectName}`],
-    [`準拠: 土地改良設計基準パイプライン技術書（令和3年6月改訂）`],
+    [`参照: 土地改良設計基準パイプライン技術書（令和3年6月改訂）`],
     [`作成日: ${new Date().toLocaleDateString("ja-JP")}`],
     [],
   ];

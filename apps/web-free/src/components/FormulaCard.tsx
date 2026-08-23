@@ -133,7 +133,7 @@ export function FormulaCard({ entry, variant = "detail", currentValues }: Formul
 
       {/* 参考基準 */}
       <div className="formula-card-section">
-        <h4 className="formula-card-section-title">準拠基準</h4>
+        <h4 className="formula-card-section-title">参照基準</h4>
         <ul className="formula-card-refs">
           {entry.references.map((ref, i) => (
             <li key={i}>

@@ -16,6 +16,7 @@ import {
 } from "@open-waterhammer/workspace";
 
 import { runCli } from "../index.js";
+import { sameFileIdentity } from "../paths.js";
 
 const pipe = {
   id: "P-1",
@@ -61,6 +62,13 @@ async function createBundle(directory: string, runKind = "wave_speed"): Promise<
 }
 
 describe("owh CLI", () => {
+  test("keeps distinct large Windows file identities separate without Number rounding", () => {
+    const input = { dev: 1n, ino: 9_007_199_254_740_992n };
+    const output = { dev: 1n, ino: 9_007_199_254_740_993n };
+
+    assert.equal(sameFileIdentity(input, output), false);
+  });
+
   test("validate and inspect accept a valid bundle and emit concise local results", async () => {
     const directory = await mkdtemp(join(tmpdir(), "owh-cli-"));
     const bundle = await createBundle(directory);

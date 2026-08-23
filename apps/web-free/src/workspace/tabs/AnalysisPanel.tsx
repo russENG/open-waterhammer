@@ -2,6 +2,14 @@ import { RUN_KINDS, type Case, type JsonValue, type Run, type RunKind } from '@o
 import { useMemo, useState } from 'react'
 
 import { validateHydraulicDrafts, type HydraulicDraft } from '../../gis/import-model'
+import {
+  ENGINEERING_FIELDS,
+  readEngineeringValue,
+  updateEngineeringValue,
+  validateEngineeringState,
+  type EngineeringField,
+  type EngineeringState,
+} from '../engineering-fields'
 import { useWorkspace } from '../workspace-context'
 
 const KIND_COPY: Record<RunKind, { code: string; title: string; note: string }> = {
@@ -24,26 +32,61 @@ function root(caseRecord: Case): Record<string, JsonValue> {
 }
 
 export function AnalysisPanel({ caseRecord, onRunSelected }: { caseRecord: Case; onRunSelected(run: Run): void }) {
-  const { run, saveModel, busy, lastError } = useWorkspace()
+  const { data, run, saveModel, busy, lastError } = useWorkspace()
+  const scenario = data.scenarios.find(({ caseId }) => caseId === caseRecord.id)
   const [kind, setKind] = useState<RunKind>('wave_speed')
   const modelRoot = root(caseRecord)
   const inputs = modelRoot.runInputs && typeof modelRoot.runInputs === 'object' && !Array.isArray(modelRoot.runInputs)
     ? modelRoot.runInputs as Record<string, JsonValue> : {}
-  const [modelText, setModelText] = useState(() => JSON.stringify(inputs[kind] ?? {}, null, 2))
+  const initialEngineering = (): EngineeringState => ({
+    model: inputs[kind] ?? {},
+    event: scenario?.eventSettings ?? {},
+    boundary: scenario?.boundaryConditions ?? {},
+    protection: scenario?.protectionSettings ?? {},
+  })
+  const [engineering, setEngineering] = useState<EngineeringState>(initialEngineering)
+  const [modelText, setModelText] = useState(() => JSON.stringify(engineering.model, null, 2))
   const [status, setStatus] = useState<string | null>(null)
-  const validation = useMemo(() => Array.isArray(modelRoot.geoDrafts)
-    ? validateHydraulicDrafts(modelRoot.geoDrafts as unknown as HydraulicDraft[])
-    : { canRun: true, errorsByFeature: {} }, [modelRoot.geoDrafts])
+  const [dirty, setDirty] = useState(false)
+  const hasHydraulicDrafts = Array.isArray(modelRoot.geoDrafts) && modelRoot.geoDrafts.length > 0
+  const validation = useMemo(() => validateHydraulicDrafts(
+    Array.isArray(modelRoot.geoDrafts) ? modelRoot.geoDrafts as unknown as HydraulicDraft[] : [],
+  ), [modelRoot.geoDrafts])
 
   function selectKind(next: RunKind) {
     setKind(next)
-    setModelText(JSON.stringify(inputs[next] ?? {}, null, 2))
+    const nextEngineering: EngineeringState = {
+      model: inputs[next] ?? {}, event: scenario?.eventSettings ?? {},
+      boundary: scenario?.boundaryConditions ?? {}, protection: scenario?.protectionSettings ?? {},
+    }
+    setEngineering(nextEngineering)
+    setModelText(JSON.stringify(nextEngineering.model, null, 2))
+    setDirty(false)
     setStatus(null)
+  }
+
+  function updateField(field: EngineeringField, raw: string) {
+    const value: JsonValue = field.kind === 'number' ? (raw === '' ? '' : Number(raw)) : raw
+    const next = updateEngineeringValue(engineering, field, value)
+    setEngineering(next)
+    setModelText(JSON.stringify(next.model, null, 2))
+    setDirty(true)
   }
 
   async function saveInput() {
     try {
-      await saveModel(caseRecord.id, kind, JSON.parse(modelText))
+      const parsedModel = JSON.parse(modelText) as JsonValue
+      const next = { ...engineering, model: parsedModel }
+      const errors = validateEngineeringState(kind, next)
+      if (errors.length) throw new Error(errors[0]!.message)
+      await saveModel(caseRecord.id, kind, parsedModel, scenario ? {
+        ...scenario,
+        boundaryConditions: next.boundary,
+        eventSettings: next.event,
+        protectionSettings: next.protection,
+      } : undefined)
+      setEngineering(next)
+      setDirty(false)
       setStatus('Input saved')
     } catch (error) {
       setStatus(error instanceof Error ? error.message : String(error))
@@ -51,8 +94,17 @@ export function AnalysisPanel({ caseRecord, onRunSelected }: { caseRecord: Case;
   }
 
   async function execute() {
+    if (dirty) {
+      setStatus('Save input before Run')
+      return
+    }
     if (!validation.canRun) {
       setStatus('Model validation blocks Run')
+      return
+    }
+    const fieldErrors = validateEngineeringState(kind, engineering)
+    if (fieldErrors.length) {
+      setStatus(fieldErrors[0]!.message)
       return
     }
     try {
@@ -74,10 +126,17 @@ export function AnalysisPanel({ caseRecord, onRunSelected }: { caseRecord: Case;
         </label>)}
       </div>
       <section className="analysis-editor notebook-card">
-        <div className="analysis-editor-heading"><div><span className="eyebrow">{KIND_COPY[kind].code} INPUT</span><h2>{KIND_COPY[kind].title}</h2></div><span className={`validation-badge ${validation.canRun ? 'validation-badge--ok' : 'validation-badge--ng'}`}>{validation.canRun ? 'MODEL READY' : `${Object.keys(validation.errorsByFeature).length} INVALID`}</span></div>
-        <p className="field-help">単位付き入力フォームの正準値を JSON で確認・編集します。各方式のフィールドは Case に保存され、Runner が選択した方式だけを読み取ります。</p>
-        <label className="model-editor"><span>Canonical model input</span><textarea value={modelText} onChange={(event) => setModelText(event.target.value)} disabled={caseRecord.state !== 'draft'} spellCheck={false} /></label>
-        <div className="analysis-actions"><button onClick={() => void saveInput()} disabled={busy || caseRecord.state !== 'draft'}>Save input</button><button className="run-button" onClick={() => void execute()} disabled={busy || caseRecord.state !== 'draft' || !validation.canRun} aria-label="Run calculation"><span>▶</span>{busy ? 'Running…' : 'Run calculation'}</button></div>
+        <div className="analysis-editor-heading"><div><span className="eyebrow">{KIND_COPY[kind].code} INPUT</span><h2>{KIND_COPY[kind].title}</h2></div><span className={`validation-badge ${validation.canRun ? 'validation-badge--ok' : 'validation-badge--ng'}`}>{validation.canRun ? 'MODEL READY' : hasHydraulicDrafts ? `${Object.keys(validation.errorsByFeature).length} INVALID` : 'GIS / TOPOLOGY REQUIRED'}</span></div>
+        <p className="field-help">方式別の主要設計値を単位付きで編集します。Scenario に属する操作条件も同じ保存操作で記録されます。</p>
+        <div className="engineering-field-grid">{ENGINEERING_FIELDS[kind].map((field) => {
+          const value = readEngineeringValue(engineering, field)
+          const id = `engineering-${field.target}-${field.path.replace(/[^a-zA-Z0-9]/g, '-')}`
+          return <label key={`${field.target}.${field.path}`} htmlFor={id}><span>{field.label}{field.unit && <b>{field.unit}</b>}</span>{field.kind === 'select'
+            ? <select id={id} value={typeof value === 'string' ? value : ''} onChange={(event) => updateField(field, event.target.value)} disabled={caseRecord.state !== 'draft'}>{field.options?.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}</select>
+            : <input id={id} type={field.kind === 'number' ? 'number' : 'text'} step={field.kind === 'number' ? 'any' : undefined} value={typeof value === 'string' || typeof value === 'number' ? value : ''} onChange={(event) => updateField(field, event.target.value)} disabled={caseRecord.state !== 'draft'} />}</label>
+        })}</div>
+        <details className="advanced-json"><summary>Advanced · canonical JSON</summary><label className="model-editor"><span>Model input</span><textarea value={modelText} onChange={(event) => { setModelText(event.target.value); setDirty(true); try { setEngineering({ ...engineering, model: JSON.parse(event.target.value) as JsonValue }) } catch { /* Retain invalid draft text until save. */ } }} disabled={caseRecord.state !== 'draft'} spellCheck={false} /></label></details>
+        <div className="analysis-actions"><button onClick={() => void saveInput()} disabled={busy || caseRecord.state !== 'draft'}>Save input</button><button className="run-button" onClick={() => void execute()} disabled={busy || dirty || caseRecord.state !== 'draft' || !validation.canRun} aria-label="Run calculation"><span>▶</span>{busy ? 'Running…' : dirty ? 'Save before Run' : 'Run calculation'}</button></div>
         {(status || lastError) && <p className="inline-message" role="status">{status ?? lastError}</p>}
       </section>
     </div>

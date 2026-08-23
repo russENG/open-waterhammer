@@ -1,5 +1,6 @@
 import type { JsonValue, RunKind } from '@open-waterhammer/contracts'
 import type { PythonProtocolResponse } from '@open-waterhammer/runner/browser'
+import { PYODIDE_RUNTIME_ASSETS } from '../../pyodide-assets'
 
 import initSrc from '@open-waterhammer-py/__init__.py?raw'
 import formulasSrc from '@open-waterhammer-py/formulas.py?raw'
@@ -13,12 +14,19 @@ import steadyNetworkSrc from '@open-waterhammer-py/steady_network.py?raw'
 import steadyToMocSrc from '@open-waterhammer-py/steady_to_moc.py?raw'
 import typesSrc from '@open-waterhammer-py/types.py?raw'
 
-// Pyodide is loaded from its official distribution only when the first Python Run is requested.
+// Pyodide is bundled and its pinned runtime files are served below the static app BASE_URL.
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type PyodideRuntime = any
 
-const PYODIDE_VERSION = '0.29.0'
-const PYODIDE_INDEX_URL = `https://cdn.jsdelivr.net/pyodide/v${PYODIDE_VERSION}/full/`
+export { PYODIDE_RUNTIME_ASSETS }
+
+export function resolvePyodideIndexUrl(
+  baseUrl = import.meta.env.BASE_URL,
+  origin = window.location.origin,
+): string {
+  const normalizedBase = baseUrl.endsWith('/') ? baseUrl : `${baseUrl}/`
+  return new URL(`${normalizedBase.replace(/^\//, '')}pyodide/`, `${origin}/`).href
+}
 
 export type PyodideStatus = 'idle' | 'loading' | 'ready' | 'error'
 
@@ -45,8 +53,8 @@ export async function loadPyodideOnce(): Promise<PyodideRuntime> {
   updateStatus('loading')
   runtimePromise = (async () => {
     try {
-      const module = await import(/* @vite-ignore */ `${PYODIDE_INDEX_URL}pyodide.mjs`)
-      const pyodide = await module.loadPyodide({ indexURL: PYODIDE_INDEX_URL })
+      const { loadPyodide } = await import('pyodide')
+      const pyodide = await loadPyodide({ indexURL: resolvePyodideIndexUrl() })
       pyodide.FS.mkdirTree('/home/pyodide/open_waterhammer')
       const sources: Record<string, string> = {
         '__init__.py': initSrc,

@@ -99,7 +99,7 @@ export function WorkspaceLayout() {
   if (selection.tab === 'scenario') panel = <ScenarioPanel key={scenario?.id} scenario={scenario} locked={caseRecord.state !== 'draft'} />
   if (selection.tab === 'analysis') panel = <AnalysisPanel key={caseRecord.id} caseRecord={caseRecord} onRunSelected={(run) => setSelectedRunId(run.id)} />
   if (selection.tab === 'results') panel = <Suspense fallback={<PanelLoading label="results visualization" />}><ResultsPanel runs={caseRuns} selectedRun={selectedRun} focus={focus} onSelectRun={(run: Run) => setSelectedRunId(run.id)} onFocus={setFocus} /></Suspense>
-  if (selection.tab === 'compare') panel = <ComparePanel cases={comparedCases} runs={data.runs} />
+  if (selection.tab === 'compare') panel = <ComparePanel cases={comparedCases} scenarios={data.scenarios} runs={data.runs} />
   if (selection.tab === 'reports') panel = <Suspense fallback={<PanelLoading label="report tools" />}><ReportsPanel runs={caseRuns} /></Suspense>
 
   return <div className="workspace-page">

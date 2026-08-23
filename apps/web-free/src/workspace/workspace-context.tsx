@@ -13,6 +13,8 @@ import {
 import type { WorkspaceData, WorkspaceRepository } from '@open-waterhammer/workspace'
 import { createContext, useCallback, useContext, useMemo, useState, type ReactNode } from 'react'
 
+import { validateHydraulicDrafts, type HydraulicDraft } from '../gis/import-model'
+import type { LocalTransformDefinition } from '../gis/projections'
 import type { BrowserProtocolCaller } from '../runner/browser-runner'
 
 export interface WorkspaceRepositoryClient extends WorkspaceRepository {
@@ -31,8 +33,8 @@ interface WorkspaceContextValue {
   createFrom(caseId: string): Promise<Case>
   fork(caseId: string, reason: string): Promise<Case>
   archive(caseId: string): Promise<Case>
-  saveModel(caseId: string, kind: RunKind, input: JsonValue): Promise<void>
-  saveGeoDrafts(caseId: string, drafts: JsonValue, sourceCrs: string): Promise<void>
+  saveModel(caseId: string, kind: RunKind, input: JsonValue, scenario?: Scenario): Promise<void>
+  saveGeoDrafts(caseId: string, drafts: JsonValue, sourceCrs: string, localTransform?: LocalTransformDefinition): Promise<void>
   saveScenario(scenario: Scenario): Promise<void>
 }
 
@@ -103,6 +105,10 @@ export function WorkspaceProvider({
     const project = data.projects.find(({ id }) => id === alternative?.projectId)
     if (!caseRecord || !scenario || !project) throw new Error('Run context is incomplete')
     if (caseRecord.state !== 'draft') throw new Error('Locked or archived Case must be forked before execution')
+    const snapshot = caseRecord.modelSnapshot
+    const geoDrafts = snapshot && typeof snapshot === 'object' && !Array.isArray(snapshot) && Array.isArray(snapshot.geoDrafts)
+      ? snapshot.geoDrafts as unknown as HydraulicDraft[] : []
+    if (!validateHydraulicDrafts(geoDrafts).canRun) throw new Error('A persisted valid GIS topology is required before Run')
     const model = modelsFrom(caseRecord)[kind]
     if (model === undefined) throw new Error(`Run input is missing: ${kind}`)
     const registry = executors ?? await defaultExecutors(callProtocol)
@@ -122,18 +128,20 @@ export function WorkspaceProvider({
   const createFrom = useCallback((caseId: string) => guarded(async () => {
     const source = data.cases.find(({ id }) => id === caseId)
     if (!source) throw new Error('Source Case not found')
+    const alternative = data.alternatives.find(({ id }) => id === source.alternativeId)
+    const project = data.projects.find(({ id }) => id === alternative?.projectId)
     const timestamp = now()
     const created = createCase({
       id: uuid(),
       alternativeId: source.alternativeId,
-      modelSnapshot: structuredClone(source.modelSnapshot),
+      modelSnapshot: { runInputs: {}, geoDrafts: [], geoSourceCrs: project?.crs ?? 'EPSG:4326' },
       timestamp,
     })
-    const sourceScenario = data.scenarios.find(({ caseId: owner }) => owner === caseId)
-    const scenarios: Scenario[] = sourceScenario ? [{
-      ...structuredClone(sourceScenario), id: uuid(), caseId: created.id,
-      name: '新規シナリオ', createdAt: timestamp, updatedAt: timestamp,
-    }] : []
+    const scenarios: Scenario[] = [{
+      id: uuid(), caseId: created.id, name: '新規シナリオ',
+      boundaryConditions: {}, eventSettings: {}, protectionSettings: {},
+      createdAt: timestamp, updatedAt: timestamp,
+    }]
     await repository.saveDraftCase(created, scenarios)
     await refresh()
     return created
@@ -159,7 +167,7 @@ export function WorkspaceProvider({
     return archived
   }), [guarded, refresh, repository])
 
-  const saveModel = useCallback((caseId: string, kind: RunKind, input: JsonValue) => guarded(async () => {
+  const saveModel = useCallback((caseId: string, kind: RunKind, input: JsonValue, scenario?: Scenario) => guarded(async () => {
     const current = data.cases.find(({ id }) => id === caseId)
     if (!current) throw new Error('Case not found')
     const root = current.modelSnapshot && typeof current.modelSnapshot === 'object' && !Array.isArray(current.modelSnapshot)
@@ -169,18 +177,21 @@ export function WorkspaceProvider({
       modelSnapshot: { ...root, runInputs: { ...modelsFrom(current), [kind]: input } },
       updatedAt: now(),
     }
-    await repository.saveDraftCase(edited, data.scenarios.filter(({ caseId: owner }) => owner === caseId))
+    const scenarios = scenario
+      ? [{ ...scenario, updatedAt: now() }]
+      : data.scenarios.filter(({ caseId: owner }) => owner === caseId)
+    await repository.saveDraftCase(edited, scenarios)
     await refresh()
   }), [data.cases, data.scenarios, guarded, refresh, repository])
 
-  const saveGeoDrafts = useCallback((caseId: string, drafts: JsonValue, sourceCrs: string) => guarded(async () => {
+  const saveGeoDrafts = useCallback((caseId: string, drafts: JsonValue, sourceCrs: string, localTransform?: LocalTransformDefinition) => guarded(async () => {
     const current = data.cases.find(({ id }) => id === caseId)
     if (!current) throw new Error('Case not found')
     const root = current.modelSnapshot && typeof current.modelSnapshot === 'object' && !Array.isArray(current.modelSnapshot)
       ? structuredClone(current.modelSnapshot) : {}
     const edited: Case = {
       ...current,
-      modelSnapshot: { ...root, geoDrafts: drafts, geoSourceCrs: sourceCrs },
+      modelSnapshot: { ...root, geoDrafts: drafts, geoSourceCrs: sourceCrs, geoLocalTransform: localTransform ? { proj4: localTransform.proj4 } : null },
       updatedAt: now(),
     }
     await repository.saveDraftCase(edited, data.scenarios.filter(({ caseId: owner }) => owner === caseId))
