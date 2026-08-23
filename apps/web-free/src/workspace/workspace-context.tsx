@@ -23,7 +23,7 @@ export interface WorkspaceRepositoryClient extends WorkspaceRepository {
   close?(): void
 }
 
-interface WorkspaceContextValue {
+export interface WorkspaceContextValue {
   data: WorkspaceData
   repository: WorkspaceRepositoryClient
   busy: boolean
@@ -234,9 +234,21 @@ export function WorkspaceProvider({
   return <WorkspaceContext value={value}>{children}</WorkspaceContext>
 }
 
-// eslint-disable-next-line react-refresh/only-export-components -- provider and its typed hook form one public module boundary
+// eslint-disable-next-line react-refresh/only-export-components -- provider and its typed hooks form one public module boundary
 export function useWorkspace(): WorkspaceContextValue {
-  const context = useContext(WorkspaceContext)
+  const context = useWorkspaceOptional()
   if (!context) throw new Error('useWorkspace must be used within WorkspaceProvider')
   return context
+}
+
+/**
+ * Same context as `useWorkspace`, but returns `null` instead of throwing when there is no
+ * ancestor `WorkspaceProvider`. For components that are also unit-tested standalone (e.g.
+ * `OverviewPanel`, rendered bare in `__tests__/schematic.test.ts`) and must degrade gracefully —
+ * every real render path always has a `WorkspaceProvider` ancestor (see `WorkspaceApp.tsx`), so
+ * this only matters outside that tree.
+ */
+// eslint-disable-next-line react-refresh/only-export-components -- provider and its typed hooks form one public module boundary
+export function useWorkspaceOptional(): WorkspaceContextValue | null {
+  return useContext(WorkspaceContext)
 }

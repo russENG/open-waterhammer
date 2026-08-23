@@ -124,6 +124,26 @@ test('create, edit, execute, lock, fork, compare, reload, export, and import', a
   await page.getByRole('button', { name: /Excel report/ }).click()
   await expect((await excelDownload).suggestedFilename()).toMatch(/^run-.+\.xlsx$/)
   await expect(page.getByRole('status')).toHaveText('Excel report exported from persisted Run')
+
+  // Task 4b-10: project bundle export/import (.owhproj) — the browser workspace's counterpart
+  // to the CLI's exportProjectBundle/importProjectBundle round trip (packages/workspace).
+  await page.getByRole('link', { name: 'Overview' }).click()
+  const projectDownload = page.waitForEvent('download')
+  await page.getByRole('button', { name: /プロジェクトを書き出し/ }).click()
+  const download = await projectDownload
+  expect(download.suggestedFilename()).toMatch(/\.owhproj$/)
+  const bundlePath = await download.path()
+  expect(bundlePath).toBeTruthy()
+
+  // Re-importing the same bundle into this very same live workspace collides on the Project's
+  // own id (every fresh workspace in this app seeds the same fixed sample Project id, and
+  // nothing in this test deletes it) — the repository's existing duplicate-id rejection
+  // (packages/workspace/src/repository.ts importBundle) must surface here as a readable message
+  // in the UI, not a console error or an invented merge. A genuine cross-repository success
+  // round trip (distinct target, no id collision) is covered at the unit level in
+  // apps/web-free/src/workspace/__tests__/project-transfer.test.ts.
+  await page.locator('.project-transfer-card input[type="file"]').setInputFiles(bundlePath!)
+  await expect(page.locator('.project-transfer-card [role="alert"]')).toContainText('Duplicate workspace entity id')
 })
 
 test('desktop and narrow workspace keep semantic landmarks without serious accessibility violations', async ({ page }, testInfo) => {
