@@ -18,7 +18,9 @@ import formulasSrc from "@open-waterhammer-py/formulas.py?raw"
 import mocSrc from "@open-waterhammer-py/moc.py?raw"
 import simpleCalcSrc from "@open-waterhammer-py/simple_calculation.py?raw"
 import longitudinalSrc from "@open-waterhammer-py/longitudinal_hydraulic.py?raw"
+import protocolSrc from "@open-waterhammer-py/protocol.py?raw"
 import steadyFlowSrc from "@open-waterhammer-py/steady_flow.py?raw"
+import steadyNetworkSrc from "@open-waterhammer-py/steady_network.py?raw"
 import steadyToMocSrc from "@open-waterhammer-py/steady_to_moc.py?raw"
 
 // Pyodide は重い（数 MB）。型は any で受けてランタイムローダ任せにする。
@@ -73,7 +75,9 @@ export async function loadPyodideOnce(): Promise<PyodideRuntime> {
       py.FS.writeFile("/home/pyodide/open_waterhammer/moc.py", mocSrc)
       py.FS.writeFile("/home/pyodide/open_waterhammer/simple_calculation.py", simpleCalcSrc)
       py.FS.writeFile("/home/pyodide/open_waterhammer/longitudinal_hydraulic.py", longitudinalSrc)
+      py.FS.writeFile("/home/pyodide/open_waterhammer/protocol.py", protocolSrc)
       py.FS.writeFile("/home/pyodide/open_waterhammer/steady_flow.py", steadyFlowSrc)
+      py.FS.writeFile("/home/pyodide/open_waterhammer/steady_network.py", steadyNetworkSrc)
       py.FS.writeFile("/home/pyodide/open_waterhammer/steady_to_moc.py", steadyToMocSrc)
       // /home/pyodide が cwd なので、そのまま import できる
       py.runPython("import open_waterhammer")
@@ -125,6 +129,33 @@ from open_waterhammer import *
 ${script}
 `
   return py.runPython(wrapped) as T
+}
+
+export interface PyodideCalculationRequest {
+  protocolVersion: 1
+  kind: string
+  model: unknown
+  scenario: {
+    boundaryConditions: unknown
+    eventSettings: unknown
+    protectionSettings: unknown
+  }
+}
+
+/**
+ * 共通計算プロトコルを Pyodide で実行する。
+ * CPython CLI と同じ protocol.py を呼ぶため、入力ハッシュと数値結果が一致する。
+ */
+export async function runCalculationProtocolPy<T>(
+  request: PyodideCalculationRequest,
+): Promise<T> {
+  const py = await loadPyodideOnce()
+  const serialized = JSON.stringify(request)
+  const code = `
+from open_waterhammer.protocol import run_protocol_json
+run_protocol_json(${JSON.stringify(serialized)})
+`
+  return JSON.parse(py.runPython(code) as string) as T
 }
 
 // ─── 個別の関数ラッパ（型安全のため）────────────────────────────────────────

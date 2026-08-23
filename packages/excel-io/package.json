@@ -16,6 +16,7 @@
     "test": "node --import tsx/esm --test src/__tests__/*.test.ts"
   },
   "dependencies": {
+    "@open-waterhammer/contracts": "0.2.0-alpha.1",
     "@open-waterhammer/core": "*",
     "@types/node": "^25.5.0",
     "exceljs": "^4.4.0"

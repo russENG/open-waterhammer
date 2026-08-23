@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "open-waterhammer"
-version = "0.1.0"
+version = "0.2.0-alpha.1"
 description = "農業用パイプライン水撃圧計算 — 計算コア (Python)"
 readme = "README.md"
 requires-python = ">=3.10"

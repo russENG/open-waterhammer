@@ -16,7 +16,9 @@
   "files": [],
   "references": [
     { "path": "./packages/contracts" },
-    { "path": "./packages/workspace" }
+    { "path": "./packages/workspace" },
+    { "path": "./packages/runner" },
+    { "path": "./packages/cli" }
   ],
   "exclude": ["**/node_modules", "**/dist"]
 }
