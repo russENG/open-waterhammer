@@ -1,3 +1,11 @@
+> **本書の位置づけ（2026-08-24 更新）**: 本書は Phase 0 時点の当初要求仕様を記録したものである。
+> **現在の実装アーキテクチャは [`docs/design-workspace.md`](./design-workspace.md) を正とする**
+> （パッケージ構成・技術スタックは [`docs/architecture.md`](./architecture.md)）。実装との乖離が
+> 大きい §9.1（入力方式）・§10.2（想定パッケージ構成）・§11（ドメインモデル）・§15（ロードマップ）は
+> 本書内で「当初想定」として保持しつつ、現状の記述を追記して更新した。それ以外の節（基本思想・
+> スコープ・プロダクト方針・設計原則・想定ユーザー・対応基準・検証方針）は要求仕様の記録として
+> 現在も有効であり、削除していない。
+
 ## 1. 概要
 
 * 上位構想英名: **Open Civil Design**
@@ -139,22 +147,26 @@ OSSとして公開する範囲は、少なくとも以下を含む。
 
 ### 9.1 入力
 
-入力は原則として所定Excelワークブックを用いる。
-理由は、実務との親和性、既存成果品との整合、監査性、導入容易性のためである。
+> **当初想定（Phase 0）**: 入力は原則として所定Excelワークブックを用いる、という単一経路を想定していた。
+> 理由は、実務との親和性、既存成果品との整合、監査性、導入容易性のためである。最低限の入力項目として
+> 案件情報・採用基準・計算条件・管路/節点/縦断情報・ポンプ/弁/附帯施設・運転条件・ケース設定・簡易式
+> 入力・入力チェック結果を想定し、附帯施設の入力対応を必須としていた。
 
-最低限の入力項目:
+**現状（0.2.0-alpha.1）**: 入力経路は3系統になっている。
 
-* 案件情報
-* 採用基準
-* 計算条件
-* 管路・節点・縦断情報
-* ポンプ・弁・附帯施設
-* 運転条件
-* ケース設定
-* 簡易式入力
-* 入力チェック結果
+1. **フォーム入力**（Analysis タブ）——RunKind ごとに単位付きの工学フィールドをその場で編集する。
+   最も基本的な経路で、新規 Case でもこれだけで完結できる（ネットワーク系4種別を除く）。
+2. **GeoJSON 取込**（Model＋GIS タブ）——節点・管路の位置情報付きネットワークを取り込む。元の CRS と
+   属性マッピングを常に明示させ、値を推測しない。不正・未接続の要素も要素単位のエラー付きドラフト
+   として保持する。
+3. **Excel 取込**（Model＋GIS タブ）——所定テンプレートのダウンロードとワークブック解析。管路・
+   節点・ケース・測点データを各計算の入力にマッピングする。取込は draft の Case への反映のみで、
+   計算は自動実行しない。生のワークブックデータは Case のスナップショットに保持し、帳票生成時の
+   詳細情報源として使う。
 
-附帯施設の入力対応は必須とする。
+いずれの経路も、書き込むのは Case の draft 入力のみであり、計算は共通の実行境界
+（`CalculationRunner`）を通じて明示的に実行するまで走らない。附帯施設（防護設備）の入力対応は
+フォーム・Excel 双方で維持している。
 
 ### 9.2 出力
 
@@ -187,7 +199,7 @@ OSSとして公開する範囲は、少なくとも以下を含む。
 * 無料版はローカルファースト、ブラウザ内処理を優先
 * 商用機能のみ最小限バックエンドを許容
 
-### 10.2 想定構成
+### 10.2 想定構成（Phase 0 時点、当初想定）
 
 ```text
 /apps
@@ -209,40 +221,72 @@ OSSとして公開する範囲は、少なくとも以下を含む。
   /validation
 ```
 
+`web-pro` / `docs-site` / `report-pro` / `ui-components` は本書執筆時点で未着手（§4.2 商用レイヤ構想の
+一部は Phase 2 以降の判断事項として残る）。`report-basic` はスタブのまま（`// TODO: report-basic`）で、
+帳票出力は実際には `excel-io` が担っている。
+
+**現在の実際の構成**（0.2.0-alpha.1、詳細は [`docs/architecture.md`](./architecture.md) §1-2）:
+
+```text
+/apps
+  /web-free              ← 実装済み（React 19 + Vite ワークスペース UI）
+/packages
+  /contracts             ← 正準スキーマ・型・Case ライフサイクル（新設）
+  /workspace             ← WorkspaceRepository・決定性バンドル・移行（新設）
+  /runner                ← 共通計算実行境界（新設）
+  /cli                   ← `owh` コマンド（新設）
+  /core-py               ← Python 計算コア（単一の真理源、新設）
+  /core                  ← TypeScript 計算実装（参照/V&V 専用に縮退）
+  /epanet-adapter
+  /excel-io
+  /sample-data
+  /standards
+  /report-basic          ← スタブのまま
+```
+
 ### 10.3 主要責務
 
-* `core`: 水撃圧・過渡計算
-* `epanet-adapter`: 定常計算接続
-* `excel-io`: Excel解析・生成
-* `standards`: 基準プロファイル
-* `report-basic`: 無料版出力
-* `report-pro`: PDF/Word等の商用出力
-* `sample-data`: サンプル帳票、例題、検証データ
+> **当初想定（Phase 0）**: `core`: 水撃圧・過渡計算／`epanet-adapter`: 定常計算接続／`excel-io`:
+> Excel解析・生成／`standards`: 基準プロファイル／`report-basic`: 無料版出力／`report-pro`: PDF/Word等の
+> 商用出力／`sample-data`: サンプル帳票、例題、検証データ。
+
+**現状**: 計算ロジックの単一の真理源は `core-py`（Python）。`core`（TypeScript）は参照/V&V 専用。
+`contracts`/`workspace`/`runner`/`cli` が新設され、それぞれ正準スキーマ・永続化・実行境界・CLI を
+担う。`epanet-adapter`/`excel-io`/`sample-data`/`standards` の責務は概ね当初想定どおり。`report-pro`は
+未着手。詳細な依存関係は [`docs/architecture.md`](./architecture.md) §2 を参照。
 
 ## 11. ドメインモデル
 
-主要エンティティ:
+> **当初想定（Phase 0）** の主要エンティティ: Project / StandardProfile / CalculationCase /
+> PipelineNetwork / Node・Pipe・Pump・Valve / AppurtenantFacility / OperationScenario /
+> SteadyStateResult / TransientResult / EnvelopeResult / JudgementResult / OutputBundle。
+> 「物理ネットワーク情報・ケース別運転条件・基準ごとのルール・計算エンジン・出力ロジックを分離して
+> 扱う」という関心分離の原則は現行モデルにも引き継がれている。
 
-* Project
-* StandardProfile
-* CalculationCase
-* PipelineNetwork
-* Node / Pipe / Pump / Valve
-* AppurtenantFacility
-* OperationScenario
-* SteadyStateResult
-* TransientResult
-* EnvelopeResult
-* JudgementResult
-* OutputBundle
+**現在の実装（Ledger モデル、0.2.0-alpha.1）**: 単発の `CalculationCase`/`OutputBundle` ではなく、
+履歴・再現性を持つ台帳（ledger）として次の系列を採用している（詳細は
+[`docs/design-workspace.md`](./design-workspace.md) §3-4）。
 
-少なくとも以下を分離して扱う。
+```
+Project ── Alternative ── Case（不変・履歴付き） ── Scenario ── Run ── AutomatedAssessment
+```
 
-* 物理ネットワーク情報
-* ケース別運転条件
-* 基準ごとのルール
-* 計算エンジン
-* 出力ロジック
+* **Project**: 案件情報・採用基準（`StandardSelection`）・CRS。当初想定の `Project` に相当。
+* **Alternative**: Project 配下の代替案。当初想定にはなかった、比較のための新しい階層。
+* **Case**: `draft`/`locked`/`archived` の3状態と `parentCaseId` による派生系譜を持つ、不変性の高い
+  モデルスナップショット（`PipelineNetwork`/`Node`/`Pipe`/`Pump`/`Valve`/`AppurtenantFacility` に相当
+  する内容を JSON スナップショットとして保持）。当初想定の `CalculationCase` に相当するが、
+  ロック・fork・履歴という新しい意味論を持つ。
+* **Scenario**: 境界条件・イベント設定・防護設備設定。当初想定の `OperationScenario` に相当。状態は
+  自身で持たず、所属 Case から導出する。
+* **Run**: 1回の計算実行の完全な記録（マニフェスト・サマリー・時系列・自動評価・エラー）。当初想定の
+  `SteadyStateResult`/`TransientResult`/`EnvelopeResult`/`OutputBundle` を統合し、さらに手法・
+  入出力ハッシュ・エンジン識別子・警告を伴う再現可能な記録にしたもの。
+* **AutomatedAssessment**: `pass`/`warning`/`fail`/`needs_review`/`not_applicable` の5状態と findings。
+  当初想定の `JudgementResult` に相当するが、人間による承認（Decision/Approval）は含まない
+  （本リリースでは対象外）。
+* **LegacyArtifact**: 当初想定にはなかった型。再編前のセッションデータを、再現可能な Run ではなく
+  「不完全な証跡」として保持するための型。
 
 ## 12. 検証方針
 
@@ -299,6 +343,10 @@ OSSとして公開する範囲は、少なくとも以下を含む。
 
 ## 15. ロードマップ
 
+> **当初想定（Phase 0 時点のロードマップ）**。実際の進行はこの区分から大きく乖離しており、
+> **現在有効なロードマップは [`docs/roadmap.md`](./roadmap.md) を参照**（実装済み機能・既知の制約・
+> 今後の課題を実態に沿って管理している）。以下は要求仕様の記録として保持する。
+
 ### Phase 0
 
 * 構成設計
@@ -309,7 +357,7 @@ OSSとして公開する範囲は、少なくとも以下を含む。
 
 ### Phase 1
 
-* 農水準拠中心のMVP
+* 農水基準中心のMVP
 * 簡易式
 * EPANET定常接続
 * 独自過渡計算MVP
@@ -334,3 +382,11 @@ OSSとして公開する範囲は、少なくとも以下を含む。
 
 * 水撃圧以外の技術計算へ展開
 * 公共インフラ設計知の共有基盤化
+
+**実際の到達状況（2026-08-24 時点、概略対応）**: Phase 1 相当の内容（簡易式・EPANET定常接続・過渡
+計算・Excel入出力・ケース別・グラフ/画像出力）は実装済み。Phase 2 相当の附帯施設強化・判定強化も
+実装済み（[`docs/roadmap.md`](./roadmap.md) 実装済み一覧）。ドキュメントサイト整備・Phase 3/4
+（他基準への拡張、水撃圧以外への展開）は未着手。加えて、Phase 0-4 の区分には現れない大きな作業として
+「設計比較支援ワークスペースへの再編」（Project/Alternative/Case/Scenario/Run モデル、決定性バンドル、
+ローカル CLI）を実施した——これは製品の骨格そのものの変更であり、単純な Phase 進行では表現できない
+ため、[`docs/roadmap.md`](./roadmap.md) 冒頭に独立した記述を置いている。

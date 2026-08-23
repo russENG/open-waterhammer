@@ -1,57 +1,197 @@
 # open-waterhammer
 
-> 農業用パイプライン水撃圧計算のオープンソース実装
-> Open-source water hammer calculation for agricultural pipelines
+> 農業用パイプライン水撃圧の設計比較支援ワークスペース（alpha）
+> Open-source water hammer design-comparison workspace for agricultural pipelines
 
 [![License: AGPL v3](https://img.shields.io/badge/License-AGPL%20v3-blue.svg)](https://www.gnu.org/licenses/agpl-3.0)
 
-土地改良事業計画設計基準 設計「パイプライン」技術書（令和3年6月改訂）に準拠した
-水撃圧計算ツール。**ブラウザだけで動作**し、サーバーは不要。
+土地改良事業計画設計基準 設計「パイプライン」技術書（令和3年6月改訂）第7章（定常流）・第8章
+（非定常的な水理現象の解析）を**参照**し、水撃圧の検討を Project → Alternative → Case → Scenario →
+Run という単位で追跡できるようにした、ローカルファーストの設計比較支援ワークスペース。
+**ブラウザだけで動作**し、サーバーは不要。バージョン `0.2.0-alpha.1`（alpha）。
 
 🌐 **公開サイト**: <https://russeng.github.io/open-waterhammer/>
 
----
-
-## 特徴
-
-- **設計基準準拠**: 技術書 §7（定常流）・§8（非定常／水撃圧）の式を素直に実装
-- **ブラウザ完結**: GitHub Pages にホスト。Pyodide で Python core をブラウザ実行
-- **計算ライブラリ層**: 全計算式を一覧・トレース可能にした計算ライブラリページを併設
-- **学習用ノートブック**: Marimo によるリアクティブ notebook をブラウザ上で実行
-- **EPANET 統合**: 定常網計算は米国 EPA EPANET の WASM 移植 (`epanet-js`) に委譲
-- **Excel 入出力**: 入力テンプレート・成果品様式（水理計算書）の生成に対応
-- **セッション機能**: 入力条件・計算条件・結果を一体的に保存・比較・出力
+> **適用限界（常に表示）**: 本ツールは alpha 版であり、包括的な基準適合・検証済みの宣言はしない。
+> 自動評価・自動生成される帳票はいずれも**設計比較のための参考情報**であり、入力条件・適用基準・
+> 数値解法の妥当性は設計者が個別に確認する前提で提供する。柱分離（キャビテーション）などの限界は
+> 「[適用限界](#適用限界)」を参照。
 
 ---
 
-## 提供する計算
+## これは何か
 
-| カテゴリ | 主な内容 |
-|---|---|
-| **波速・閉そく判定** | 技術書 式(8.2.4) 波速 a、振動周期 T₀、急/緩閉そく区分 |
-| **単管路の簡易式** | Joukowsky（急閉そく）、Allievi（緩閉そく） |
-| **経験則** | 給水栓配水系の5系統別評価（§8.3.5） |
-| **定常流** | Hazen-Williams 式・Darcy-Weisbach 式 |
-| **管路網定常** | 樹枝状管路網（EPANET エンジン + 自前実装の選択可能） |
-| **MOC（特性曲線法）** | 単管路・管路網の非定常水撃圧解析（§8.4） |
-| **防護工** | エアチャンバ、サージタンク、吸気弁、減圧バルブ、行き止まり |
-| **判定** | 設計水圧 vs 許容圧の3段階判定 |
-| **帳票** | 水理計算書（成果品様式）、セッションレポート（Excel） |
+再編前は「Excel入力 → 計算 → 結果表示」の単発セッションだった。現在は次のドメインモデルに基づく
+設計ワークスペースになっている。
+
+```
+Project ── Alternative ── Case（不変・履歴付き） ── Scenario ── Run（マニフェスト＋ハッシュ） ── 自動評価
+```
+
+- **Case は不変**: 一度成功した計算があると Case は固定（locked）される。変更したければ、理由を
+  記録して新しい派生 Case を分岐（fork）する——過去の検討条件が後から書き換わらない。
+- **Run は再現可能な記録**: 入力・手法・パラメータ・ハッシュ・警告・自動評価を1つの Run
+  マニフェストに残す（詳細は [`docs/design-workspace.md`](./docs/design-workspace.md)）。
+- **完全ローカル**: プロジェクトデータはブラウザの IndexedDB か、ローカルの `.owhproj` 決定性
+  バンドルのどちらかにのみ存在する。外部へは送信しない（「[データ境界](#データ境界ローカルファースト)」参照）。
+
+設計の詳細（レイヤードアーキテクチャ、Run マニフェストの全項目、決定性バンドル形式、防護設備・
+自動評価・トポロジゲートの意味論）は [`docs/design-workspace.md`](./docs/design-workspace.md) を、
+パッケージ構成・技術スタックは [`docs/architecture.md`](./docs/architecture.md) を参照。
 
 ---
 
-## 使う
+## クイックスタート
 
-ブラウザで <https://russeng.github.io/open-waterhammer/> を開くだけ。インストール不要。
+### 公開サイトを開く
 
-### 動線
+<https://russeng.github.io/open-waterhammer/> をブラウザで開くだけ。インストール不要。初回は
+IndexedDB が空のため、デモ用のサンプルプロジェクト（「東部幹線 水撃圧比較」、4本の代替 Case）が
+自動的に生成される。
 
-- **計算** — メイン計算ページ。Excel 入力、簡易式、MOC、防護工、帳票出力
-- **基準照会** — 土地改良基準 PDF の関連箇所をトピック単位で参照
-- **計算ライブラリ** — 全計算式の数式・入出力・適用条件・GitHub ソースを一覧
-- **計算ノートブック** — Marimo による対話的学習 notebook（[notebooks/](./notebooks/)）
-- **設計フロー** — 標準的な水撃圧検討の流れ
-- **水理俯瞰** — 定常〜非定常までの理論的な俯瞰
+### ローカル開発
+
+前提: Node.js ≥ 20（CI は Node 24）、Python ≥ 3.10（`owh run` の CPython 経路のみ必要。追加の
+pip install は不要——`open_waterhammer` は Python 標準ライブラリのみで動く）。
+
+```bash
+git clone https://github.com/russENG/open-waterhammer.git
+cd open-waterhammer
+npm install
+npm run dev --workspace=apps/web-free
+```
+
+### CLI（`owh`）
+
+ブラウザなしで `.owhproj` バンドルを検証・検査・再計算できるローカル CLI。
+
+```bash
+npm install
+npm run build
+npx owh validate path/to/project.owhproj
+npx owh inspect  path/to/project.owhproj
+npx owh run      path/to/project.owhproj --case <caseId> --scenario <scenarioId> --out out.owhproj [--python <path>]
+```
+
+`--python` を省略すると `PATH` 上の `python` を使う。入力バンドルへの上書きは常に拒否し、出力先が
+既存ファイルと衝突する場合も計算前に拒否する。**現時点では、ブラウザワークスペースから
+`.owhproj` を書き出す UI ボタンは未実装**（`@open-waterhammer/workspace` の `exportProjectBundle`
+API 自体はテスト済みで、ブラウザ起動時のサンプル投入にも内部的に使われている）。CLI は主に、
+バンドル化された既存プロジェクトのオフライン検証・バッチ再計算・CI 組み込みを想定している。
+
+---
+
+## データ境界（ローカルファースト）
+
+- プロジェクトデータは **ブラウザの IndexedDB**、または **ローカルの `.owhproj` ZIP バンドル**
+  にのみ保存される。外部サーバーへの送信は行わない。
+- ベースマップ（OpenStreetMap タイル）は**既定 OFF**。有効化した場合のみ `tile.openstreetmap.org`
+  への通信が発生する——それ以外に、計算実行中を含めて外部ネットワークアクセスは発生しない
+  （CSP は `script-src 'self' 'wasm-unsafe-eval'` のみで、CDN からのスクリプト読み込みは行わない）。
+- クラウドバックエンド・公開 HTTP API・認証・アカウントは存在しない（「[繰延事項](#繰延事項)」参照）。
+
+---
+
+## Python が計算の真理源
+
+計算ロジックの実装は `packages/core-py/open_waterhammer/`（Python）にのみ存在する。ブラウザは
+自己ホストした Pyodide 0.29.0（バージョン固定・CDN 不使用）、CLI/Node は CPython サブプロセスで、
+**どちらも同一の `open_waterhammer.protocol.run_protocol_json` 関数を呼ぶ**——ブラウザと CLI とで
+計算結果が分岐しない設計。TypeScript 実装（`packages/core`）は既存テストとともに参照/V&V 用途で
+残すのみで、production の計算経路（UI・CLI・runner）からは呼ばれない。
+
+## 再現性（Run manifest とハッシュ）
+
+すべての計算は `CalculationRunner` という単一の実行境界を通る。実行のたびに Case/Scenario の入力を
+正準 JSON 化して SHA-256 ハッシュを取り、Python 側が返す正規化ハッシュとバイト単位で突き合わせる
+（不一致は失敗 Run として記録される）。成功・失敗いずれの Run も、手法・数値パラメータ・境界条件・
+警告・入出力ハッシュ・エンジン/ランタイム識別子を含む完全なマニフェストとして永続化される。詳細な
+フィールド一覧は [`docs/design-workspace.md`](./docs/design-workspace.md#4-run-とマニフェスト) を参照。
+
+---
+
+## 機能一覧
+
+### 計算（全11種類、共通の実行境界を経由）
+
+| 分類 | RunKind | 内容 |
+|---|---|---|
+| 波速・簡易式 | Wave speed | 管材・管厚・拘束条件から波速 a・振動周期 T₀・急/緩閉そく区分 |
+| | Joukowsky / Allievi | 急閉・緩閉の比較式 |
+| | Empirical pressure | 経験則（送配水方式 6 系統別）による概略値 |
+| 定常流 | Steady single pipe | 単管路の損失水頭と動水位（Hazen-Williams / Darcy-Weisbach） |
+| | Steady network（Python） | 樹枝状管路網の定常水理計算（自前実装） |
+| | Steady network（EPANET） | 同上、`epanet-js`（WASM 版 EPANET）エンジン |
+| 縦断 | Longitudinal hydraulics | 測点列に沿った縦断水理・設計内圧 |
+| 非定常（MOC・特性曲線法） | Transient single pipe | 単一路線の特性曲線法解析 |
+| | Transient network | 分岐・合流を含む管路網の過渡解析 |
+| | Pump transient | ポンプ停止・起動イベント |
+| | Protection device | 防護設備（サージタンク・空気室等）ありなしの比較計算 |
+
+### 判定・追跡
+- **自動評価**: 許容圧力を入力した場合、設計水圧との比較（式8.3.2）を Joukowsky/Allievi・経験則・
+  縦断水理の3種類に配線。判定は `pass`/`warning`/`fail`/`needs_review`/`not_applicable` の5状態
+  （MOC 系はすべて `needs_review`——詳細は「[適用限界](#適用限界)」）。
+- **Case 系譜・比較**: Project → Alternative → Case のツリーで draft/locked/archived と派生関係を
+  可視化。2〜4件の Case を選び、条件・結果の差分を比較できる。
+- **Run Inspector**: 選択中 Run のマニフェスト・自動評価・警告・来歴を表示し、任意の値を再帰的に
+  差分表示する。
+
+### GIS
+OpenLayers + Proj4（遅延ロード）。EPSG:4326・EPSG:3857・JGD2011 平面直角座標系 I〜XIX
+（EPSG:6669–6687）・ローカル XY（明示的な変換を保存するまで地図表示・WGS84 書き出しをブロック）に
+対応。取込ウィザードは常に元 CRS と属性マッピングを明示させ、値を推測しない。不正・未接続の要素も
+ドラフトとして保持し、要素単位でエラーを表示する。
+
+### Excel 入出力・帳票
+- 入力テンプレートのダウンロードとワークブック取込（管路・節点・ケース・測点 → 各計算の入力に
+  マッピング。取込は draft の Case にのみ可能で、計算は一切自動実行しない）。
+- 帳票は3種類: 計算結果 Excel レポート、Run JSON（正準エビデンス）、水理計算書・検討書
+  （成果品様式、永続化済みの成功 Run から**再計算せずに**生成）。いずれも alpha・設計比較支援・
+  適用限界の表示を保持する。
+
+### 出力・学習補助
+- 各グラフ（時系列・エンベロープ・縦断プロファイル・ポンプ回転速度）から CSV / SVG / PNG を出力。
+- Analysis タブに折りたたみ式の方式選択ガイド（技術書 §8.3.2 の判定フローを再現し、条件に応じた
+  RunKind を推奨）。
+- 全計算式の数式・入出力・適用条件・GitHub ソースを一覧する計算ライブラリページ（旧サイトで公開
+  していた `#<式ID>` 形式の引用 URL も、`#/docs/library?topic=<式ID>` へ自動リダイレクトして
+  無効化しないようにしている）。
+- Marimo によるリアクティブ notebook 3本（ブラウザ上で実行、[notebooks/](./notebooks/)）。
+
+---
+
+## 適用限界
+
+- **alpha・設計比較支援**: 包括的な基準適合・検証済みの宣言はしない。自動評価・自動生成帳票は
+  設計比較のための参考情報であり、設計者による個別確認を前提とする。
+- **柱分離（キャビテーション・気柱分離）は未対応**: MOC の境界条件は `H = max(CP, 0)` でクランプ
+  するのみで、蒸気キャビティの形成・収縮・再衝突は計算しない。防護設備を適用したサンプルが正当に
+  負圧（hmin < 0）を示すのはこの限界の表れである。
+- **自動評価の対象は11種別中3種別のみ**（Joukowsky/Allievi・経験則・縦断水理）、かつ許容圧力
+  （MPa）を入力した場合に限る。MOC 系（単管路/管路網/ポンプ/防護設備の過渡解析）は自動評価の対象外
+  （`needs_review`）のまま。
+- **防護設備はイベント節点以外の境界条件置換としてのみ機能する**: バルブ・ポンプの節点を対象にした
+  設備は拒否される（イベント自体を消してしまい、緩和効果を測定できなくなるため）。
+- ループ管路網の自前定常実装は樹枝状のみ対応（ループ網は EPANET エンジンを選択）。
+- ポンプの4象限特性は簡易モデル（H-Q放物線＋相似則トルク）——詳細な逆流・逆転解析は精度が劣化する。
+
+---
+
+## 繰延事項
+
+以下は本リリースのスコープに含めないことを明示的に決定している（Global Constraints）。将来の
+リリースでの検討対象。
+
+- クラウドバックエンド・公開 HTTP API・認証・コラボレーション機能
+- 電子署名・人間による承認（Decision / Approval）記録——本リリースの判定は自動評価のみで、
+  人が承認した記録という概念自体が存在しない
+- 追加の Level 2（参照例）／Level 3（実務・商用比較）V&V ベンチマークプログラム
+
+進行中のリリース工程（本リリースのスコープ内・別タスクで対応）として、パッケージ間のバージョン
+文字列統一、ビルド Git SHA の Run manifest への実値埋め込み、CI でのフルテストマトリクス（CLI・
+Python・typecheck・E2E を含む）実行がある。現状は [`docs/validation-plan.md`](./docs/validation-plan.md)
+を参照。
 
 ---
 
@@ -62,64 +202,50 @@
 ```
 open-waterhammer/
 ├── packages/
-│   ├── core/              ← TypeScript core（型・データ・薄いラッパ）
-│   ├── core-py/           ← 計算実装の単一の真理源（Python, AGPL-3.0）
-│   ├── epanet-adapter/    ← epanet-js (WASM) のラッパ — 定常網
-│   ├── excel-io/          ← Excel 入出力（exceljs）
-│   ├── sample-data/       ← デモデータ
-│   └── standards/         ← 設計基準メタ情報
+│   ├── contracts/          ← 正準スキーマ・型・Case ライフサイクル
+│   ├── workspace/          ← WorkspaceRepository・決定性 .owhproj バンドル・レガシー移行
+│   ├── runner/              ← 共通計算実行境界（全 RunKind）
+│   ├── cli/                  ← `owh` コマンド
+│   ├── core-py/              ← 計算実装の単一の真理源（Python, AGPL-3.0）
+│   ├── core/                  ← TypeScript 計算実装（参照/V&V 専用）
+│   ├── epanet-adapter/       ← epanet-js (WASM) のラッパ — 定常網
+│   ├── excel-io/              ← Excel 入出力（exceljs）
+│   ├── sample-data/           ← デモデータ
+│   └── standards/             ← 設計基準メタ情報
 ├── apps/
-│   └── web-free/          ← React + Vite ブラウザアプリ
-├── notebooks/             ← Marimo 学習用ノートブック
-├── scripts/               ← ビルドスクリプト
-└── docs/                  ← 設計ドキュメント・基準PDF参照
+│   └── web-free/               ← React 19 + Vite ワークスペース UI
+├── notebooks/                   ← Marimo 学習用ノートブック
+├── scripts/                      ← ビルド・lint スクリプト
+└── docs/                          ← 設計ドキュメント・基準 PDF 参照
 ```
 
-**単一の真理源**: 計算実装は `packages/core-py/open_waterhammer/` の Python パッケージ。
-ブラウザでは Pyodide 経由で同じ `.py` を実行する。
+詳細なパッケージ責務・依存関係・技術スタックは [`docs/architecture.md`](./docs/architecture.md) を
+参照。`apps/web-free` の内部構造は [`apps/web-free/README.md`](./apps/web-free/README.md)。
 
-### セットアップ
-
-前提: Node.js ≥ 20、Python ≥ 3.11
+### ビルド・テスト
 
 ```bash
 npm install
-pip install marimo  # ノートブックを書く/エクスポートする場合のみ
-```
 
-### 開発サーバ
+# 全ワークスペースのテスト（node:test / Vitest）
+npm test
 
-```bash
-npm run dev --workspace=apps/web-free
-```
+# Python core のテスト
+python -m pytest packages/core-py/tests -q
 
-### ビルド
+# 型チェック・lint（UI 文言チェック含む）
+npm run typecheck
+npm run lint
 
-```bash
-# Python core テスト
-cd packages/core-py && pytest
-
-# TS core テスト
-npm test --workspaces
-
-# ノートブックを WASM HTML にエクスポート
-node scripts/build-notebooks.mjs
+# ブラウザ E2E（Playwright、axe アクセシビリティ監査を含む）
+npm run test:e2e -w apps/web-free
 
 # 全体ビルド
 npm run build
 ```
 
-### テスト
-
-| パッケージ | テスト数 |
-|---|---|
-| core (TS) | 156 |
-| epanet-adapter | 9 |
-| excel-io | 22 |
-| core-py (pytest) | 108 |
-| **合計** | **295件** |
-
-`npm test --workspaces` で全 TS テストを実行。`cd packages/core-py && pytest` で Python テストを実行。
+現在のテスト件数・カバレッジ方針・許容誤差は [`docs/validation-plan.md`](./docs/validation-plan.md)
+にまとめている。
 
 ---
 
@@ -133,15 +259,49 @@ npm run build
 
 ---
 
+## 外部 OSS との比較
+
+水撃圧・過渡流解析の周辺分野には複数の OSS が存在する。以下は 2026-08-24 に一次情報源
+（公式 GitHub リポジトリ・README・GitHub REST API・PyPI レジストリ）で確認した内容。
+
+| プロジェクト | 公式リポジトリ | ライセンス | 最新版 | 直近の保守状況 |
+|---|---|---|---|---|
+| [TSNet](https://github.com/glorialulu/TSNet)（Python, MOC法） | glorialulu/TSNet | MIT | 0.3.1（PyPI, 2023-09-21）※GitHub Release タグは v0.1.0 のみ | 停滞。最終 push 2023-09-21、`Development Status :: 2 - Pre-Alpha` |
+| [USEPA EPANET 2.2](https://github.com/USEPA/EPANET2.2) | USEPA/EPANET2.2 | MIT | 2.2.0（2020-07-24） | push は2025-09-15まで確認できるが新版タグなし。2.3の公式リリースは未確認 |
+| [OWA EPANET](https://github.com/OpenWaterAnalytics/EPANET)（コミュニティ版） | OpenWaterAnalytics/EPANET | MIT | v2.3.5（2026-02-20） | 活発。最終 push 2026-07-23 |
+| [WNTR](https://github.com/USEPA/WNTR) | USEPA/WNTR | Revised BSD License | 1.5.0（2026-07-01） | 活発。release 日と push 日が同日 |
+
+参考: [epanet-js](https://github.com/epanet-js/epanet-js-toolkit)（npm パッケージ名 `epanet-js`、最新
+0.9.0・MIT）は OWA EPANET を WebAssembly 化した TS/JS ラッパーで、本ツールの
+`steady_network_epanet` エンジンとして採用している。
+
+TSNet（本ツールと同じく MOC 法で過渡流を解析する数少ない OSS）との機能対応（TSNet 公式ドキュメント
+記載ベース）:
+
+| 機能 | TSNet | 本ツール |
+|---|---|---|
+| ポンプトリップ（慣性考慮） | 未対応（ユーザー指定の速度-時間カーブによる制御停止/起動のみ） | H-Q放物線＋相似則トルクの簡易モデルで対応 |
+| 空気室・サージタンク BC | 対応（開放型・密閉型とも） | 対応（`transient_protection_device`） |
+| 下流バルブ閉鎖 | 対応（開度-時間カーブ、既定はゲート弁特性） | 対応 |
+| 保守状況 | 事実上停滞（約3年間動きなし、pre-alpha） | 活発に開発中（本リリース自体が alpha） |
+
+WNTR・EPANET（USEPA/OWA いずれも）は定常・EPS 水理/水質解析が中心で、過渡（水撃圧）解析はスコープ
+外——本ツールが対象とする領域を直接カバーする OSS は限定的、というのがこの調査の結論である。
+
+---
+
 ## ライセンス
 
 [**AGPL-3.0-or-later**](https://www.gnu.org/licenses/agpl-3.0.html)
 
 商用・非商用を問わず利用可能。ただし**改変・ネットワーク提供を行う場合はソースコードの公開**が必要。
+全文は [`docs/license.md`](./docs/license.md) を参照（リポジトリルートの `LICENSE` ファイルへの
+正文収録は別タスクで対応中）。
 
 ### Why AGPL?
 
-水撃圧の評価ロジックは公共財として共有されるべきという立場から、改変版を非公開のまま運用することを許容しない強コピーレフトを採用しています。詳細は本サイト「about」ページの思想節を参照。
+水撃圧の評価ロジックは公共財として共有されるべきという立場から、改変版を非公開のまま運用することを
+許容しない強コピーレフトを採用しています。詳細は本サイト「about」ページの思想節を参照。
 
 ---
 
