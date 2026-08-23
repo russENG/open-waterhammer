@@ -14,6 +14,7 @@ import {
 } from "@open-waterhammer/workspace";
 
 import type { CliCommand } from "./arguments.js";
+import { resolveGitSha } from "./git-sha.js";
 import { assertNewOutputPath } from "./paths.js";
 
 export interface CliIo {
@@ -84,6 +85,7 @@ export async function executeCommand(command: CliCommand, io: CliIo): Promise<nu
     scenarioSnapshot,
     kind,
     executors: createDefaultExecutorRegistry({ pythonExecutor }),
+    gitSha: resolveGitSha(),
   });
   const output = await repository.exportBundle(inspection.project.id);
   await writeFile(command.output, output, { flag: "wx" });

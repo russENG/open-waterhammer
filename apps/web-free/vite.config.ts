@@ -1,5 +1,6 @@
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
+import { execSync } from 'node:child_process'
 import { readFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import path from 'path'
@@ -7,6 +8,19 @@ import path from 'path'
 import { PYODIDE_RUNTIME_ASSETS } from './pyodide-assets.ts'
 
 const pyodideDirectory = path.dirname(fileURLToPath(import.meta.resolve('pyodide')))
+
+// Build-time git SHA embedded via `define` below: process.env.VITE_GIT_SHA (e.g. set by
+// CI) takes priority, then a local `git rev-parse`, then 'unknown' if git isn't available
+// (e.g. building from a source tarball). The dev-server fallback ('browser-build', for
+// `vite dev` where this define is skipped) lives in workspace-context.tsx instead.
+function resolveBuildGitSha(): string {
+  if (process.env.VITE_GIT_SHA) return process.env.VITE_GIT_SHA
+  try {
+    return execSync('git rev-parse --short HEAD', { encoding: 'utf8' }).trim()
+  } catch {
+    return 'unknown'
+  }
+}
 
 function selfHostedPyodide() {
   return {
@@ -36,6 +50,9 @@ function selfHostedPyodide() {
 export default defineConfig({
   plugins: [react(), selfHostedPyodide()],
   base: process.env.VITE_BASE_PATH ?? "/",
+  define: {
+    'import.meta.env.VITE_GIT_SHA': JSON.stringify(resolveBuildGitSha()),
+  },
   resolve: {
     alias: {
       '@open-waterhammer/excel-io': path.resolve(import.meta.dirname, '../../packages/excel-io/src/index.ts'),

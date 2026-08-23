@@ -1,6 +1,6 @@
 {
   "name": "open-waterhammer",
-  "version": "0.0.1",
+  "version": "0.2.0-alpha.1",
   "private": true,
   "description": "水撃圧計算 OSS — Open Civil Design / 社会基盤設計コモンズ",
   "workspaces": [

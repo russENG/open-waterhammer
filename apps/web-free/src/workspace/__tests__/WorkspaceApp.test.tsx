@@ -1,4 +1,5 @@
 import {
+  PRODUCT_VERSION,
   RUN_KINDS,
   type RunKind,
 } from '@open-waterhammer/contracts'
@@ -71,6 +72,10 @@ describe('full workspace application', () => {
 
     expect(await screen.findByRole('banner')).toHaveTextContent('alpha')
     expect(screen.getByRole('banner')).toHaveTextContent('設計比較支援')
+    // Asserted against the imported constant (never a literal) so this test tracks
+    // WorkspaceLayout's PRODUCT_VERSION display and would fail if it ever reverted to a
+    // hardcoded string that drifted from @open-waterhammer/contracts.
+    expect(screen.getByRole('banner')).toHaveTextContent(`v${PRODUCT_VERSION}`)
     expect(screen.getByRole('contentinfo')).toHaveTextContent('適用限界')
     expect(screen.getByRole('navigation', { name: 'Workspace tabs' })).toBeVisible()
     expect(screen.getByRole('complementary', { name: 'Run Inspector' })).toBeVisible()

@@ -6,6 +6,7 @@
  */
 
 import ExcelJS from "exceljs";
+import { PRODUCT_VERSION } from "@open-waterhammer/contracts";
 import type { Pipe, Node, CalculationCase, MeasurementPoint } from "@open-waterhammer/core";
 import type { ProjectMeta } from "./types.js";
 
@@ -27,7 +28,7 @@ function addMetaSheet(wb: ExcelJS.Workbook, meta: Partial<ProjectMeta>): ExcelJS
     ["designer", meta.designer ?? "", "設計者名"],
     ["date", meta.date ?? new Date().toISOString().slice(0, 10), "設計年月日"],
     ["standard_id", meta.standardId ?? "nochi_pipeline_2021", "採用基準ID"],
-    ["version", meta.version ?? "0.0.1", "ソフトウェアバージョン（自動）"],
+    ["version", meta.version ?? PRODUCT_VERSION, "ソフトウェアバージョン（自動）"],
     ["method_id", meta.methodId ?? "joukowsky_v1", "手法識別子"],
     ["notes", meta.notes ?? "", "備考"],
   ];

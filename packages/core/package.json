@@ -1,6 +1,6 @@
 {
   "name": "@open-waterhammer/core",
-  "version": "0.0.1",
+  "version": "0.2.0-alpha.1",
   "description": "水撃圧・過渡計算コア — 計算エンジン、ドメインモデル、基礎式",
   "type": "module",
   "main": "./dist/index.js",

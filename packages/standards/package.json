@@ -1,6 +1,6 @@
 {
   "name": "@open-waterhammer/standards",
-  "version": "0.0.1",
+  "version": "0.2.0-alpha.1",
   "description": "基準プロファイル定義（農水パイプライン等）",
   "type": "module",
   "main": "./dist/index.js",

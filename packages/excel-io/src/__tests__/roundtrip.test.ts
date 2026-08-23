@@ -4,6 +4,7 @@
 
 import assert from "node:assert/strict";
 import { describe, test } from "node:test";
+import { PRODUCT_VERSION } from "@open-waterhammer/contracts";
 import { generateTemplate } from "../template.js";
 import { parseWorkbook } from "../reader.js";
 import type { Pipe, Node, CalculationCase } from "@open-waterhammer/core";
@@ -90,6 +91,9 @@ describe("Excel ラウンドトリップ（generateTemplate → parseWorkbook）
     });
     test("基準IDが一致", () => {
       assert.equal(result.data.meta.standardId, testMeta.standardId);
+    });
+    test("バージョン未指定時は PRODUCT_VERSION が既定値になる", () => {
+      assert.equal(result.data.meta.version, PRODUCT_VERSION);
     });
   });
 
