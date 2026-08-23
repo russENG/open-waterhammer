@@ -38,15 +38,20 @@ export function ExcelIoCard({ caseRecord }: { caseRecord: Case }) {
   const locked = caseRecord.state !== 'draft'
 
   async function downloadTemplate() {
-    const { generateTemplate } = await import('@open-waterhammer/excel-io')
-    const buf = await generateTemplate({
-      meta: { projectName: '（案件名を入力）', standardId: 'nochi_pipeline_2021', methodId: 'joukowsky_v1' },
-      pipes: [DEMO_CASE_01_PIPE],
-      nodes: [],
-      cases: [DEMO_CASE_01_CASE, DEMO_CASE_02_CASE],
-      measurementPoints: DEMO_MEASUREMENT_POINTS,
-    })
-    download(buf, 'waterhammer-template.xlsx', XLSX_MIME)
+    try {
+      await ensureBrowserBuffer()
+      const { generateTemplate } = await import('@open-waterhammer/excel-io')
+      const buf = await generateTemplate({
+        meta: { projectName: '（案件名を入力）', standardId: 'nochi_pipeline_2021', methodId: 'joukowsky_v1' },
+        pipes: [DEMO_CASE_01_PIPE],
+        nodes: [],
+        cases: [DEMO_CASE_01_CASE, DEMO_CASE_02_CASE],
+        measurementPoints: DEMO_MEASUREMENT_POINTS,
+      })
+      download(buf, 'waterhammer-template.xlsx', XLSX_MIME)
+    } catch (error) {
+      setStatus(error instanceof Error ? error.message : String(error))
+    }
   }
 
   async function handleFile(file: File) {
