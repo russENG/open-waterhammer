@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import copy
 import hashlib
 import json
 import math
@@ -515,6 +516,77 @@ def _transient_network(model: dict[str, Any], scenario: dict[str, Any]) -> dict[
     return _moc_output("moc-network", model, scenario, output)
 
 
+def _enabled_protection_devices(scenario: dict[str, Any]) -> list[dict[str, Any]]:
+    devices = scenario.get("protectionSettings", {}).get("devices", [])
+    if not isinstance(devices, list):
+        return []
+    return [device for device in devices if isinstance(device, dict) and device.get("enabled", True)]
+
+
+def _pipe_head_extremes(output: Any) -> dict[str, dict[str, float]]:
+    """worst (max Hmax / min Hmin) head observed per pipe, from a raw run_moc() output."""
+    return {
+        pipe_id: {"hmax": max(pipe.Hmax), "hmin": min(pipe.Hmin)}
+        for pipe_id, pipe in output.pipes.items()
+    }
+
+
+def _protection_summary(baseline_output: Any, protected_output: Any) -> dict[str, Any]:
+    """Deterministic baseline-vs-protected comparison block (Task 4b-2, amendment A2).
+
+    reductionRate = (worst baseline Hmax − worst protected Hmax) / worst baseline Hmax,
+    i.e. the fraction by which the protection devices cut the worst surge head across
+    every pipe in the network. Guards division by zero: a zero (or non-positive) worst
+    baseline Hmax yields reductionRate 0.0 rather than raising or producing inf/NaN.
+    """
+    baseline_pipes = _pipe_head_extremes(baseline_output)
+    protected_pipes = _pipe_head_extremes(protected_output)
+    worst_baseline_hmax = max(pipe["hmax"] for pipe in baseline_pipes.values())
+    worst_protected_hmax = max(pipe["hmax"] for pipe in protected_pipes.values())
+    reduction_rate = (
+        (worst_baseline_hmax - worst_protected_hmax) / worst_baseline_hmax
+        if worst_baseline_hmax > 0
+        else 0.0
+    )
+    return {
+        "baseline": {"pipes": baseline_pipes},
+        "protected": {"pipes": protected_pipes},
+        "reductionRate": reduction_rate,
+    }
+
+
+def _transient_protection(model: dict[str, Any], scenario: dict[str, Any]) -> dict[str, Any]:
+    enabled_devices = _enabled_protection_devices(scenario)
+    if not enabled_devices:
+        # Backward compatible: no devices (or none enabled) behaves exactly like the
+        # plain network run this kind used to alias unconditionally.
+        return _transient_network(model, scenario)
+
+    network_value = _required(model, "network")
+    nodes_value = _required(network_value, "nodes")
+    for device in enabled_devices:
+        node_id = _required(device, "id")
+        if node_id not in nodes_value:
+            raise ProtocolError("INVALID_INPUT", f"Unknown protection device target node: {node_id}")
+
+    options = model.get("options", {})
+    moc_options = MocOptions(t_max=options.get("tMax"), initial_flow=options.get("initialFlow"))
+    baseline_output = run_moc(_network(network_value), moc_options)
+
+    protected_network_value = copy.deepcopy(network_value)
+    for device in enabled_devices:
+        # Reuses the same node-BC construction path (_network -> _boundary_condition) the
+        # plain network handler already uses: a device dict of type surge_tank/air_chamber
+        # (plus the id/enabled keys _boundary_condition simply ignores) is structurally the
+        # same as a network node's boundary condition, so it can replace one outright.
+        protected_network_value["nodes"][device["id"]] = device
+    protected_output = run_moc(_network(protected_network_value), moc_options)
+
+    result = _moc_output("moc-network", model, scenario, protected_output)
+    result["summary"]["protection"] = _protection_summary(baseline_output, protected_output)
+    return result
+
+
 def _transient_pump(model: dict[str, Any], scenario: dict[str, Any]) -> dict[str, Any]:
     event = scenario["eventSettings"]
     pipe = _pipe(_required(model, "pipe"))
@@ -547,7 +619,7 @@ HANDLERS: dict[str, Callable[[dict[str, Any], dict[str, Any]], dict[str, Any]]] 
     "transient_single_pipe": _transient_single,
     "transient_network": _transient_network,
     "transient_pump": _transient_pump,
-    "transient_protection_device": _transient_network,
+    "transient_protection_device": _transient_protection,
 }
 
 

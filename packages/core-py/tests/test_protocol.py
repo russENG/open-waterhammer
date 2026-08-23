@@ -257,6 +257,82 @@ def test_transient_protocol_preserves_user_defined_pipe_and_node_ids_verbatim():
     assert set(result["timeSeries"]["nodes"]) == {"node_up", "node_down"}
 
 
+# ─── 防護設備 baseline / protected 実行 (Task 4b-2) ───────────────────────────
+
+
+def _worst_hmax(pipes_summary):
+    return max(pipe["hmax"] for pipe in pipes_summary.values())
+
+
+def test_transient_protection_device_runs_baseline_and_protected_networks_and_reports_reduction():
+    network_request = requests_by_kind()["transient_network"]
+    protection_request = request(
+        "transient_protection_device",
+        network_request["model"],
+        scenario(protection_settings={
+            "devices": [
+                {"id": "D", "type": "surge_tank", "enabled": True, "tankArea": 4.0, "initialLevel": 119.0},
+            ],
+        }),
+    )
+
+    result = execute_request(protection_request)["result"]
+    protection = result["summary"]["protection"]
+
+    worst_baseline = _worst_hmax(protection["baseline"]["pipes"])
+    worst_protected = _worst_hmax(protection["protected"]["pipes"])
+
+    assert worst_protected < worst_baseline
+    assert protection["reductionRate"] > 0
+    assert math.isclose(
+        protection["reductionRate"],
+        (worst_baseline - worst_protected) / worst_baseline,
+        rel_tol=1e-12,
+    )
+
+
+def test_transient_protection_device_rejects_a_device_targeting_an_unknown_node():
+    network_request = requests_by_kind()["transient_network"]
+    protection_request = request(
+        "transient_protection_device",
+        network_request["model"],
+        scenario(protection_settings={
+            "devices": [
+                {"id": "NO-SUCH-NODE", "type": "surge_tank", "enabled": True, "tankArea": 4.0, "initialLevel": 119.0},
+            ],
+        }),
+    )
+
+    with pytest.raises(ProtocolError, match="NO-SUCH-NODE") as invalid:
+        execute_request(protection_request)
+    assert invalid.value.code == "INVALID_INPUT"
+
+
+def test_transient_protection_device_with_no_enabled_devices_matches_plain_network_output_exactly():
+    network_request = requests_by_kind()["transient_network"]
+    plain_result = execute_request(request("transient_network", network_request["model"]))["result"]
+
+    disabled_request = request(
+        "transient_protection_device",
+        network_request["model"],
+        scenario(protection_settings={
+            "devices": [
+                {"id": "D", "type": "surge_tank", "enabled": False, "tankArea": 4.0, "initialLevel": 119.0},
+            ],
+        }),
+    )
+    disabled_result = execute_request(disabled_request)["result"]
+    assert "protection" not in disabled_result["summary"]
+    assert disabled_result["summary"] == plain_result["summary"]
+    assert disabled_result["timeSeries"] == plain_result["timeSeries"]
+
+    # Regression lock: the file's existing parametric fixture for this kind
+    # (protectionSettings={"device": "valve"}, no "devices" list) must keep behaving
+    # exactly like _transient_network, unchanged, per test_executes_each_python_run_kind_...
+    legacy_result = execute_request(requests_by_kind()["transient_protection_device"])["result"]
+    assert "protection" not in legacy_result["summary"]
+
+
 def test_pyodide_compatible_function_and_cpython_entrypoint_have_golden_parity():
     calculation_request = requests_by_kind()["longitudinal_hydraulics"]
     pyodide_compatible = json.loads(run_protocol_json(json.dumps(calculation_request)))

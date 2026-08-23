@@ -65,16 +65,12 @@ export const SAMPLE_RUN_INPUTS: Record<RunKind, JsonValue> = {
   transient_single_pipe: { pipe },
   transient_network: { network: transientNetwork, options: { tMax: 8, initialFlow: 0.07 } },
   transient_pump: { pipe },
-  transient_protection_device: {
-    network: {
-      ...transientNetwork,
-      nodes: {
-        ...transientNetwork.nodes,
-        'V-01': { type: 'surge_tank', tankArea: 4, initialLevel: 30, datum: 0 },
-      },
-    },
-    options: { tMax: 8, initialFlow: 0.07 },
-  },
+  // V-01 stays the same closing valve as the transient_network sample (network topology
+  // is unchanged by adding protection) — the surge tank is expressed as an enabled
+  // protectionSettings device instead of being baked into the node's boundary condition,
+  // so packages/core-py's _transient_protection handler actually swaps it in at run time
+  // (Task 4b-2). Parameters (tankArea/initialLevel) match the device this replaced.
+  transient_protection_device: { network: transientNetwork, options: { tMax: 8, initialFlow: 0.07 } },
 }
 
 const geoDrafts: JsonValue = [
