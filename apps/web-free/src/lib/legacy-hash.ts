@@ -16,9 +16,9 @@
  * 一覧へ」の2択のみで、過去に実在した URL 形式をすべてカバーする。
  */
 
-import { getFormulaById } from "../data/formulaCatalog";
+import { getFormulaById } from '../data/formulaCatalog'
 
-const LEGACY_ANCHOR_PATTERN = /^#[A-Za-z0-9_-]+$/;
+const LEGACY_ANCHOR_PATTERN = /^#[A-Za-z0-9_-]+$/
 
 /**
  * @param hash 現在（または初期表示時）の `window.location.hash`
@@ -28,7 +28,7 @@ const LEGACY_ANCHOR_PATTERN = /^#[A-Za-z0-9_-]+$/;
  *   - アンカーの形はしているが未知のID: `#/docs/library`（一覧にフォールバック）
  */
 export function resolveLegacyHash(hash: string): string | null {
-  if (!hash || hash.startsWith("#/") || !LEGACY_ANCHOR_PATTERN.test(hash)) return null;
-  const id = hash.slice(1);
-  return getFormulaById(id) ? `#/docs/library?topic=${encodeURIComponent(id)}` : "#/docs/library";
+  if (!hash || hash.startsWith('#/') || !LEGACY_ANCHOR_PATTERN.test(hash)) return null
+  const id = hash.slice(1)
+  return getFormulaById(id) ? `#/docs/library?topic=${encodeURIComponent(id)}` : '#/docs/library'
 }

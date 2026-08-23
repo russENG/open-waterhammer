@@ -33,12 +33,19 @@ export default function App() {
 
   // レガシー式アンカー URL（#joukowsky 等）を #/docs/library へ書き換える。
   // 初期表示・hashchange の両方をこの1エフェクトでカバーする（マウント時に一度手動実行）。
+  // `location.hash = target` は使わない — それは新しい履歴エントリを push してしまい、
+  // 「外部引用リンクから着地 → 補正後の URL」という2エントリの間に元の #joukowsky が
+  // 残り続け、Back を押すたびに hashchange が再発火してまた push し直す
+  // （Back で参照元まで戻れなくなる）罠になる。replaceState は現在のエントリを
+  // その場で書き換えるだけなので履歴は増えず、hashchange も飛ばないため state は
+  // 明示的に setHash で揃える。
   useEffect(() => {
     const update = () => {
       const raw = window.location.hash
       const legacyTarget = resolveLegacyHash(raw)
       if (legacyTarget) {
-        window.location.hash = legacyTarget
+        history.replaceState(null, '', legacyTarget)
+        setHash(legacyTarget)
         return
       }
       setHash(raw)
