@@ -176,6 +176,12 @@ test('all exact RunKinds execute and persist through the production browser regi
     await expect(inspector).toContainText(kind)
     await expect(inspector).toContainText(kind === 'steady_network_epanet' ? 'epanet-js' : 'open-waterhammer-core-py')
     await expect(inspector.getByRole('heading', { name: 'Summary fields' }).locator('..').locator('dd').first()).not.toHaveText('')
+    if (kind === 'joukowsky_allievi') {
+      // Sample input now carries 許容圧力 (allowablePressureMpa: 0.75), so the Python
+      // protocol computes a real judge_design_pressure assessment instead of the
+      // needs_review default — confirms the wiring end-to-end through Pyodide.
+      await expect(inspector.locator('p.assessment')).not.toHaveClass(/assessment--needs_review/)
+    }
 
     if (index < runKinds.length - 1) {
       await page.getByRole('button', { name: 'Fork Case' }).click()

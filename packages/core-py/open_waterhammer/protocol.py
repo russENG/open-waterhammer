@@ -10,7 +10,13 @@ import sys
 from dataclasses import asdict, is_dataclass
 from typing import Any, Callable
 
-from .formulas import calc_empirical_waterhammer, calc_vibration_period, calc_wave_speed
+from .formulas import (
+    calc_empirical_waterhammer,
+    calc_vibration_period,
+    calc_wave_speed,
+    head_to_mpa,
+    judge_design_pressure,
+)
 from .longitudinal_hydraulic import calc_longitudinal_hydraulic
 from .moc import (
     AirChamberBC,
@@ -104,18 +110,85 @@ def _result(
     summary: dict[str, Any],
     warnings: list[str] | None = None,
     time_series: dict[str, Any] | None = None,
+    assessment: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     output = {
         "method": method,
         "numericParameters": model,
         "boundaryParameters": scenario,
         "summary": summary,
-        "assessment": {"status": "needs_review", "findings": []},
+        "assessment": assessment if assessment is not None else {"status": "needs_review", "findings": []},
         "warnings": warnings or [],
     }
     if time_series is not None:
         output["timeSeries"] = time_series
     return output
+
+
+# ─── 耐圧判定アセスメント ─────────────────────────────────────────────────────
+#
+# judge_design_pressure (formulas.py:209) を Run.assessment (contracts の
+# automatedAssessmentSchema) に変換する共通ヘルパー。設計水圧判定を持つ3種の
+# RunKind (joukowsky_allievi / empirical_pressure / longitudinal_hydraulics)
+# のハンドラから呼ばれる。入力のみに依存する純粋関数（決定論的）。
+
+RULE_DESIGN_PRESSURE = "judge_design_pressure/8.3.2"
+
+_ASSESSMENT_STATUS_BY_JUDGEMENT: dict[str, str] = {"ok": "pass", "warning": "warning", "ng": "fail"}
+_ASSESSMENT_STATUS_SEVERITY: dict[str, int] = {"pass": 0, "warning": 1, "fail": 2}
+
+
+def _positive_number(value: Any) -> float | None:
+    """Return `value` as a float if it is a finite, strictly positive JSON number."""
+    if isinstance(value, bool) or not isinstance(value, (int, float)):
+        return None
+    if not math.isfinite(value) or value <= 0:
+        return None
+    return float(value)
+
+
+def _design_pressure_finding(
+    target_ref: str,
+    observed_value: float,
+    threshold: float,
+    location: str | None,
+) -> dict[str, Any]:
+    finding: dict[str, Any] = {
+        "targetRef": target_ref,
+        "observedValue": observed_value,
+        "threshold": threshold,
+        "unit": "MPa",
+        "ruleId": RULE_DESIGN_PRESSURE,
+    }
+    if location is not None:
+        finding["location"] = location
+    return finding
+
+
+def _assess_design_pressure_targets(
+    targets: list[tuple[str, float, float, str | None]],
+) -> tuple[dict[str, Any], list[str]]:
+    """Judge each `(targetRef, designPressureMpa, allowablePressureMpa, location)` target.
+
+    Every target is judged independently with `judge_design_pressure`. The overall
+    status is the worst across all targets (fail > warning > pass). Exactly one
+    finding is emitted per warning/fail target, in target order; pass targets emit
+    neither a finding nor a message. Returns `(assessment, messages)` where
+    `messages` holds the JudgementResult message for each warning/fail target, for
+    the caller to append to the result's `warnings` list.
+    """
+    overall_status = "pass"
+    findings: list[dict[str, Any]] = []
+    messages: list[str] = []
+    for target_ref, design_pressure_mpa, allowable_pressure_mpa, location in targets:
+        judgement = judge_design_pressure(design_pressure_mpa, allowable_pressure_mpa)
+        status = _ASSESSMENT_STATUS_BY_JUDGEMENT[judgement.status]
+        if _ASSESSMENT_STATUS_SEVERITY[status] > _ASSESSMENT_STATUS_SEVERITY[overall_status]:
+            overall_status = status
+        if status != "pass":
+            findings.append(_design_pressure_finding(target_ref, design_pressure_mpa, allowable_pressure_mpa, location))
+            messages.append(judgement.message)
+    return {"status": overall_status, "findings": findings}, messages
 
 
 def _wave_speed(model: dict[str, Any], scenario: dict[str, Any]) -> dict[str, Any]:
@@ -131,6 +204,7 @@ def _wave_speed(model: dict[str, Any], scenario: dict[str, Any]) -> dict[str, An
 
 
 def _joukowsky_allievi(model: dict[str, Any], scenario: dict[str, Any]) -> dict[str, Any]:
+    pipe = _pipe(_required(model, "pipe"))
     case_value = _required(model, "calculationCase")
     calculation_case = CalculationCase(
         id=_required(case_value, "id"),
@@ -142,22 +216,56 @@ def _joukowsky_allievi(model: dict[str, Any], scenario: dict[str, Any]) -> dict[
         description=case_value.get("description"),
     )
     output = run_simple_formula(
-        _pipe(_required(model, "pipe")),
+        pipe,
         calculation_case,
         _required(scenario["eventSettings"], "closeTime"),
     )
     summary = _json_value(output)
-    return _result("joukowsky-allievi", model, scenario, summary, output.warnings)
+
+    warnings = list(output.warnings)
+    assessment = None
+    allowable_pressure_mpa = _positive_number(model.get("allowablePressureMpa"))
+    if allowable_pressure_mpa is not None and output.closure_type != "numerical_required":
+        # 旧UI導出ロジックを踏襲 (git show master:.../WaterhammerCalculator.tsx 前後 467-474):
+        # ハンマー水頭は「急閉塞ならジューコフスキー水頭、緩閉塞ならアリエビ最大水頭-H0」。
+        initial_head = calculation_case.initial_head
+        if output.delta_h_joukowsky is not None:
+            hammer_head = output.delta_h_joukowsky
+        elif output.hmax_allievi_close is not None:
+            hammer_head = output.hmax_allievi_close - initial_head
+        else:
+            hammer_head = None
+        if hammer_head is not None:
+            design_pressure_mpa = head_to_mpa(initial_head + hammer_head)
+            assessment, messages = _assess_design_pressure_targets(
+                [(pipe.id, design_pressure_mpa, allowable_pressure_mpa, None)]
+            )
+            warnings += messages
+
+    return _result("joukowsky-allievi", model, scenario, summary, warnings, assessment=assessment)
 
 
 def _empirical_pressure(model: dict[str, Any], scenario: dict[str, Any]) -> dict[str, Any]:
+    system_type = _required(model, "systemType")
+    static_pressure_mpa = _required(model, "staticPressureMpa")
     output = calc_empirical_waterhammer(
-        _required(model, "systemType"),
-        _required(model, "staticPressureMpa"),
+        system_type,
+        static_pressure_mpa,
         model.get("operatingPressureMpa"),
         model.get("hydraulicGradePressureMpa"),
     )
-    return _result("empirical-pressure", model, scenario, _json_value(output), output.warnings)
+
+    warnings = list(output.warnings)
+    assessment = None
+    allowable_pressure_mpa = _positive_number(model.get("allowablePressureMpa"))
+    if allowable_pressure_mpa is not None:
+        design_pressure_mpa = static_pressure_mpa + output.waterhammer_mpa
+        assessment, messages = _assess_design_pressure_targets(
+            [(system_type, design_pressure_mpa, allowable_pressure_mpa, None)]
+        )
+        warnings += messages
+
+    return _result("empirical-pressure", model, scenario, _json_value(output), warnings, assessment=assessment)
 
 
 def _steady_single_pipe(model: dict[str, Any], scenario: dict[str, Any]) -> dict[str, Any]:
@@ -235,7 +343,21 @@ def _longitudinal(model: dict[str, Any], scenario: dict[str, Any]) -> dict[str, 
             case_name=model.get("caseName"),
         )
     )
-    return _result("longitudinal-hydraulics", model, scenario, _json_value(output), output.warnings)
+
+    warnings = list(output.warnings)
+    assessment = None
+    allowable_pressure_mpa = _positive_number(model.get("allowablePressureMpa"))
+    if allowable_pressure_mpa is not None:
+        # 各測点の設計内圧 (Pp) を個別に判定し、最悪ステータスを全体判定とする。
+        # point_results は入力 points の順序を保つため、findings も測点順で安定する。
+        targets = [
+            (point.point_id, point.design_pressure, allowable_pressure_mpa, point.point_id)
+            for point in output.point_results
+        ]
+        assessment, messages = _assess_design_pressure_targets(targets)
+        warnings += messages
+
+    return _result("longitudinal-hydraulics", model, scenario, _json_value(output), warnings, assessment=assessment)
 
 
 def _moc_output(method: str, model: dict[str, Any], scenario: dict[str, Any], output: Any) -> dict[str, Any]:

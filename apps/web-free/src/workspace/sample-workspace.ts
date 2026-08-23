@@ -45,8 +45,9 @@ export const SAMPLE_RUN_INPUTS: Record<RunKind, JsonValue> = {
       id: 'CALC-01', name: '末端弁閉鎖', operationType: 'valve_close',
       targetFacilityId: 'V-01', initialVelocity: 1, initialHead: 30,
     },
+    allowablePressureMpa: 0.75,
   },
-  empirical_pressure: { systemType: 'gravity_open', staticPressureMpa: 0.42 },
+  empirical_pressure: { systemType: 'gravity_open', staticPressureMpa: 0.42, allowablePressureMpa: 0.75 },
   steady_single_pipe: {
     method: 'hazen-williams', innerDiameter: 0.3, length: 500, flowRate: 0.03,
     upstreamElevation: 100, downstreamElevation: 88, roughnessC: 130,
@@ -59,6 +60,7 @@ export const SAMPLE_RUN_INPUTS: Record<RunKind, JsonValue> = {
       { id: 'STA-000', horizontalDistance: 0, groundLevel: 100, pipeCenterHeight: 98, pipeLength: 0, flowRate: 0.03, diameter: 0.3, roughnessC: 130, bendLossCoeff: 0, valveLossCoeff: 0, branchLossCoeff: 0 },
       { id: 'STA-500', horizontalDistance: 500, groundLevel: 90, pipeCenterHeight: 88, pipeLength: 500, flowRate: 0.03, diameter: 0.3, roughnessC: 130, bendLossCoeff: 0.2, valveLossCoeff: 0, branchLossCoeff: 0 },
     ],
+    allowablePressureMpa: 0.75,
   },
   transient_single_pipe: { pipe },
   transient_network: { network: transientNetwork, options: { tMax: 8, initialFlow: 0.07 } },

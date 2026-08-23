@@ -19,8 +19,8 @@ import { SAMPLE_RUN_INPUTS } from '../sample-workspace'
 
 const OPTIONAL_CANONICAL_PATHS: Record<(typeof RUN_KINDS)[number], string[]> = {
   wave_speed: ['model.pipe.name', 'model.pipe.startNodeId', 'model.pipe.endNodeId', 'event.closeTime'],
-  joukowsky_allievi: ['model.pipe.name', 'model.pipe.startNodeId', 'model.pipe.endNodeId'],
-  empirical_pressure: [],
+  joukowsky_allievi: ['model.pipe.name', 'model.pipe.startNodeId', 'model.pipe.endNodeId', 'model.allowablePressureMpa'],
+  empirical_pressure: ['model.allowablePressureMpa'],
   steady_single_pipe: ['model.method'],
   steady_network_python: [
     'model.caseName', 'model.pipes.0.minorLossCoeff', 'model.nodes.0.head', 'model.nodes.1.demand',
@@ -28,7 +28,7 @@ const OPTIONAL_CANONICAL_PATHS: Record<(typeof RUN_KINDS)[number], string[]> = {
   steady_network_epanet: [
     'model.caseName', 'model.pipes.0.minorLossCoeff', 'model.nodes.0.head', 'model.nodes.1.demand',
   ],
-  longitudinal_hydraulics: ['model.caseName', 'model.waterhammerRatio'],
+  longitudinal_hydraulics: ['model.caseName', 'model.waterhammerRatio', 'model.allowablePressureMpa'],
   transient_single_pipe: [
     'model.pipe.name', 'model.pipe.startNodeId', 'model.pipe.endNodeId',
     'event.nReaches', 'event.tMax', 'event.operation',
@@ -386,6 +386,21 @@ describe('RunKind engineering field catalog', () => {
       model: { systemType: 'natural', staticPressureMpa: 0.42 },
       event: {}, boundary: {}, protection: {},
     })).toEqual(expect.arrayContaining([expect.objectContaining({ path: 'systemType' })]))
+  })
+
+  test('adds an optional positive design-pressure threshold field labeled 許容圧力 (MPa) for the three judged RunKinds', () => {
+    for (const kind of ['joukowsky_allievi', 'empirical_pressure', 'longitudinal_hydraulics'] as const) {
+      const field = engineeringFieldsFor(kind, ENGINEERING_TEMPLATES[kind]).find(({ target, path }) => target === 'model' && path === 'allowablePressureMpa')
+      expect(field, kind).toMatchObject({ label: '許容圧力', unit: 'MPa', kind: 'number', required: false })
+      expect(validateEngineeringState(kind, ENGINEERING_TEMPLATES[kind]), kind).toEqual([])
+
+      const zeroed = updateEngineeringValue(ENGINEERING_TEMPLATES[kind], { target: 'model', path: 'allowablePressureMpa' }, 0)
+      expect(validateEngineeringState(kind, zeroed), kind).toContainEqual(expect.objectContaining({ path: 'allowablePressureMpa' }))
+
+      const cleared = updateEngineeringFieldFromInput(ENGINEERING_TEMPLATES[kind], field!, '')
+      expect(cleared.model).not.toHaveProperty('allowablePressureMpa')
+      expect(validateEngineeringState(kind, cleared), kind).toEqual([])
+    }
   })
 
   test('deletes a cleared optional numeric path while a cleared required numeric path remains invalid', () => {

@@ -6,6 +6,7 @@ from pathlib import Path
 
 import pytest
 
+from open_waterhammer.formulas import judge_design_pressure
 from open_waterhammer.protocol import (
     PROTOCOL_VERSION,
     ProtocolError,
@@ -301,3 +302,136 @@ def test_protocol_rejects_unsupported_and_malformed_requests_explicitly():
             "message": "protocolVersion must be 1",
         },
     }
+
+
+# ─── 耐圧判定アセスメント (Task 4b-1) ───────────────────────────────────────────
+
+
+def test_joukowsky_allievi_assessment_fails_when_design_pressure_exceeds_allowable():
+    calculation_request = requests_by_kind()["joukowsky_allievi"]
+    calculation_request["model"]["allowablePressureMpa"] = 0.9
+
+    result = execute_request(calculation_request)["result"]
+    assessment = result["assessment"]
+
+    assert assessment["status"] == "fail"
+    assert len(assessment["findings"]) == 1
+    finding = assessment["findings"][0]
+    assert set(finding.keys()) == {"targetRef", "observedValue", "threshold", "unit", "ruleId"}
+    assert finding["targetRef"] == "P-1"
+    assert finding["unit"] == "MPa"
+    assert finding["threshold"] == 0.9
+    assert math.isclose(finding["observedValue"], 1.702579306278724, rel_tol=1e-9)
+    assert finding["ruleId"] == "judge_design_pressure/8.3.2"
+    expected_message = judge_design_pressure(finding["observedValue"], finding["threshold"]).message
+    assert expected_message in result["warnings"]
+
+
+def test_joukowsky_allievi_assessment_passes_with_a_generous_allowable_pressure():
+    calculation_request = requests_by_kind()["joukowsky_allievi"]
+    calculation_request["model"]["allowablePressureMpa"] = 2.5
+
+    result = execute_request(calculation_request)["result"]
+
+    assert result["assessment"] == {"status": "pass", "findings": []}
+    assert result["warnings"] == []
+
+
+def test_joukowsky_allievi_assessment_flags_the_warning_band_under_ten_percent_margin():
+    calculation_request = requests_by_kind()["joukowsky_allievi"]
+    calculation_request["model"]["allowablePressureMpa"] = 1.8
+
+    result = execute_request(calculation_request)["result"]
+    assessment = result["assessment"]
+
+    assert assessment["status"] == "warning"
+    assert len(assessment["findings"]) == 1
+    assert assessment["findings"][0]["unit"] == "MPa"
+    expected_message = judge_design_pressure(
+        assessment["findings"][0]["observedValue"], assessment["findings"][0]["threshold"]
+    ).message
+    assert expected_message in result["warnings"]
+
+
+def test_joukowsky_allievi_assessment_stays_needs_review_for_numerical_required_closure():
+    # tν ≦ L/300 の等価閉そく時間では急/緩いずれの近似式も使えない
+    # (delta_h_joukowsky も hmax_allievi_close も None) ため、許容圧力が
+    # 指定されていても判定不能 = needs_review のままとする。
+    calculation_request = requests_by_kind()["joukowsky_allievi"]
+    calculation_request["model"]["allowablePressureMpa"] = 5.0
+    calculation_request["scenario"]["eventSettings"]["closeTime"] = 0.25
+
+    result = execute_request(calculation_request)["result"]
+
+    assert result["summary"]["closureType"] == "numerical_required"
+    assert result["assessment"] == {"status": "needs_review", "findings": []}
+
+
+def test_empirical_pressure_assessment_fails_when_design_pressure_exceeds_allowable():
+    calculation_request = requests_by_kind()["empirical_pressure"]
+    calculation_request["model"]["allowablePressureMpa"] = 0.2
+
+    result = execute_request(calculation_request)["result"]
+    assessment = result["assessment"]
+
+    assert assessment["status"] == "fail"
+    assert len(assessment["findings"]) == 1
+    finding = assessment["findings"][0]
+    assert set(finding.keys()) == {"targetRef", "observedValue", "threshold", "unit", "ruleId"}
+    assert finding["targetRef"] == "gravity_open"
+    assert finding["unit"] == "MPa"
+    assert finding["threshold"] == 0.2
+    assert math.isclose(finding["observedValue"], 0.26, rel_tol=1e-9)
+    expected_message = judge_design_pressure(finding["observedValue"], finding["threshold"]).message
+    assert expected_message in result["warnings"]
+
+
+def test_longitudinal_hydraulics_assessment_locates_the_failing_measurement_point():
+    point_1 = {
+        "id": "IP.1", "horizontalDistance": 0.0, "groundLevel": 100.0, "pipeCenterHeight": 99.0,
+        "pipeLength": 10.0, "flowRate": 0.01, "diameter": 0.3, "roughnessC": 130.0,
+        "bendLossCoeff": 0.0, "valveLossCoeff": 0.0, "branchLossCoeff": 0.0,
+    }
+    point_2 = {
+        "id": "IP.2", "horizontalDistance": 100.0, "groundLevel": 40.0, "pipeCenterHeight": 39.0,
+        "pipeLength": 10.0, "flowRate": 0.01, "diameter": 0.3, "roughnessC": 130.0,
+        "bendLossCoeff": 0.0, "valveLossCoeff": 0.0, "branchLossCoeff": 0.0,
+    }
+    calculation_request = request("longitudinal_hydraulics", {
+        "points": [point_1, point_2],
+        "staticWaterLevel": 120.0,
+        "waterhammerPressureMpa": 0.2,
+        "caseName": "Golden",
+        "allowablePressureMpa": 0.75,
+    })
+
+    result = execute_request(calculation_request)["result"]
+    assessment = result["assessment"]
+    point_results = result["summary"]["pointResults"]
+
+    assert assessment["status"] == "fail"
+    assert len(assessment["findings"]) == 1
+    finding = assessment["findings"][0]
+    assert set(finding.keys()) == {"targetRef", "observedValue", "threshold", "unit", "ruleId", "location"}
+    assert finding["targetRef"] == "IP.2"
+    assert finding["location"] == "IP.2"
+    assert finding["location"] == point_results[1]["pointId"]
+    assert math.isclose(finding["observedValue"], point_results[1]["designPressure"], rel_tol=1e-12)
+
+    expected_message = judge_design_pressure(point_results[1]["designPressure"], 0.75).message
+    assert expected_message in result["warnings"]
+
+
+def test_longitudinal_hydraulics_assessment_passes_when_every_point_stays_under_the_allowable():
+    calculation_request = requests_by_kind()["longitudinal_hydraulics"]
+    calculation_request["model"]["allowablePressureMpa"] = 10.0
+
+    result = execute_request(calculation_request)["result"]
+
+    assert result["assessment"] == {"status": "pass", "findings": []}
+
+
+def test_design_pressure_assessment_kinds_stay_needs_review_when_allowable_pressure_is_absent():
+    for kind in ("joukowsky_allievi", "empirical_pressure", "longitudinal_hydraulics"):
+        result = execute_request(requests_by_kind()[kind])["result"]
+        assert result["assessment"] == {"status": "needs_review", "findings": []}, kind

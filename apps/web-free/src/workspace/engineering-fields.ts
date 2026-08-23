@@ -74,6 +74,7 @@ const FIELD_OVERRIDES: Record<RunKind, EngineeringField[]> = {
     numeric('model', 'calculationCase.initialHead', '初期水頭', 'm'),
     numeric('event', 'closeTime', '閉鎖時間', 's'),
     numeric('model', 'pipe.innerDiameter', '管内径', 'm'),
+    numeric('model', 'allowablePressureMpa', '許容圧力', 'MPa', { required: false, exclusiveMinimum: 0 }),
   ],
   empirical_pressure: [
     select('model', 'systemType', '送配水方式', [
@@ -87,6 +88,7 @@ const FIELD_OVERRIDES: Record<RunKind, EngineeringField[]> = {
     numeric('model', 'staticPressureMpa', '静水圧', 'MPa'),
     numeric('model', 'operatingPressureMpa', '通水圧', 'MPa', { required: false, minimum: 0 }),
     numeric('model', 'hydraulicGradePressureMpa', '動水勾配線水圧', 'MPa', { required: false, minimum: 0 }),
+    numeric('model', 'allowablePressureMpa', '許容圧力', 'MPa', { required: false, exclusiveMinimum: 0 }),
   ],
   steady_single_pipe: [
     numeric('model', 'innerDiameter', '管内径', 'm'), numeric('model', 'length', '管路延長', 'm'),
@@ -100,6 +102,7 @@ const FIELD_OVERRIDES: Record<RunKind, EngineeringField[]> = {
     numeric('model', 'points.0.flowRate', '始点流量', 'm³/s'),
     numeric('model', 'points.0.diameter', '始点管径', 'm'),
     numeric('model', 'waterhammerRatio', '水撃圧比', '—', { required: false, minimum: 0 }),
+    numeric('model', 'allowablePressureMpa', '許容圧力', 'MPa', { required: false, exclusiveMinimum: 0 }),
   ],
   transient_single_pipe: [
     ...pipeFields(), numeric('event', 'waveSpeed', '波速', 'm/s'), numeric('event', 'initialVelocity', '初期流速', 'm/s'),
@@ -178,6 +181,7 @@ const LABELS: Record<string, string> = {
   horizontalDistance: '水平距離', groundLevel: '地盤高', pipeCenterHeight: '管中心高', pipeLength: '区間長', diameter: '管径',
   bendLossCoeff: '曲管損失係数', valveLossCoeff: '弁損失係数', branchLossCoeff: '分岐損失係数', staticWaterLevel: '静水位',
   waterhammerRatio: '水撃圧比', systemType: '送配水方式', staticPressureMpa: '静水圧', operatingPressureMpa: '通水圧', hydraulicGradePressureMpa: '動水勾配線水圧',
+  allowablePressureMpa: '許容圧力',
   operationType: '操作種別', targetFacilityId: '対象施設 ID', initialVelocity: '初期流速', initialHead: '初期水頭',
   closeTime: '閉鎖時間', waveSpeed: '波速', initialDownstreamHead: '下流初期水頭', nReaches: '計算区間数', tMax: '解析時間', operation: '操作',
   initialFlow: '初期流量', mode: 'ポンプ操作', Q0: '定格流量', Q_rated: '定格流量', pumpHead: 'ポンプ揚程', shutdownTime: '停止時間', checkValve: '逆止弁',
@@ -193,7 +197,7 @@ const UNITS: Record<string, string> = {
   elevation: 'm', head: 'm', demand: 'm³/s', horizontalDistance: 'm', groundLevel: 'm', pipeCenterHeight: 'm', pipeLength: 'm', diameter: 'm',
   staticWaterLevel: 'm', initialHead: 'm', initialDownstreamHead: 'm', pumpHead: 'm', initialLevel: 'm', datum: 'm',
   initialVelocity: 'm/s', waveSpeed: 'm/s', initialFlow: 'm³/s', Q0: 'm³/s', Q_rated: 'm³/s', tankArea: 'm²',
-  closeTime: 's', tMax: 's', shutdownTime: 's', staticPressureMpa: 'MPa', operatingPressureMpa: 'MPa', hydraulicGradePressureMpa: 'MPa',
+  closeTime: 's', tMax: 's', shutdownTime: 's', staticPressureMpa: 'MPa', operatingPressureMpa: 'MPa', hydraulicGradePressureMpa: 'MPa', allowablePressureMpa: 'MPa',
   H0: 'm', H0v: 'm', Hs: 'm', startupTime: 's', staticHead: 'm', V_air0: 'm³', H_air0: 'm', atmosphericHead: 'm', setHead: 'm',
   youngsModulus: 'kN/m²', c1Coeff: '—', waterhammerPressureMpa: 'MPa', otherLoss: 'm',
   GD2: 'N·m²', N0: 'min⁻¹', eta0: '—', polytropicIndex: '—',
@@ -202,12 +206,12 @@ const UNITS: Record<string, string> = {
 
 const OPTIONAL_PATHS: Record<RunKind, Set<string>> = {
   wave_speed: new Set(['model.pipe.name', 'model.pipe.startNodeId', 'model.pipe.endNodeId', 'event.closeTime']),
-  joukowsky_allievi: new Set(['model.pipe.name', 'model.pipe.startNodeId', 'model.pipe.endNodeId']),
-  empirical_pressure: new Set(['model.operatingPressureMpa', 'model.hydraulicGradePressureMpa']),
+  joukowsky_allievi: new Set(['model.pipe.name', 'model.pipe.startNodeId', 'model.pipe.endNodeId', 'model.allowablePressureMpa']),
+  empirical_pressure: new Set(['model.operatingPressureMpa', 'model.hydraulicGradePressureMpa', 'model.allowablePressureMpa']),
   steady_single_pipe: new Set(['model.method']),
   steady_network_python: new Set(['model.caseName', 'model.pipes.0.minorLossCoeff', 'model.nodes.0.head', 'model.nodes.0.demand']),
   steady_network_epanet: new Set(['model.caseName', 'model.pipes.0.minorLossCoeff', 'model.nodes.0.head', 'model.nodes.0.demand']),
-  longitudinal_hydraulics: new Set(['model.caseName', 'model.waterhammerRatio', 'model.waterhammerPressureMpa', 'model.points.0.name', 'model.points.0.otherLoss']),
+  longitudinal_hydraulics: new Set(['model.caseName', 'model.waterhammerRatio', 'model.waterhammerPressureMpa', 'model.points.0.name', 'model.points.0.otherLoss', 'model.allowablePressureMpa']),
   transient_single_pipe: new Set([
     'model.pipe.name', 'model.pipe.startNodeId', 'model.pipe.endNodeId',
     'event.nReaches', 'event.tMax', 'event.operation',
