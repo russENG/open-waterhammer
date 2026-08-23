@@ -1,6 +1,6 @@
 import type { AnySchemaObject } from "ajv";
 
-import { AUTOMATED_ASSESSMENT_STATUSES, PRODUCT_VERSION, RUN_KIND, SCHEMA_VERSION } from "./types.js";
+import { AUTOMATED_ASSESSMENT_STATUSES, PRODUCT_VERSION, RUN_KINDS, SCHEMA_VERSION } from "./types.js";
 
 const uuid = { type: "string", pattern: "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$" } as const;
 const utcTimestamp = { type: "string", format: "date-time", pattern: "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(?:\\.\\d+)?Z$" } as const;
@@ -156,7 +156,7 @@ export const runSchema: AnySchemaObject = {
     id: uuid,
     caseId: uuid,
     scenarioId: uuid,
-    kind: { const: RUN_KIND },
+    kind: { enum: RUN_KINDS },
     status: { enum: ["pending", "running", "succeeded", "failed", "interrupted"] },
     manifest: runManifestSchema,
     summary: {},

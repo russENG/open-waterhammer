@@ -82,7 +82,7 @@ export const runFixture: Run = {
   id: runManifestFixture.runId,
   caseId: caseFixture.id,
   scenarioId: scenarioFixture.id,
-  kind: "transient",
+  kind: "transient_single_pipe",
   status: "succeeded",
   manifest: runManifestFixture,
   summary: { peakPressureMpa: 1.24 },

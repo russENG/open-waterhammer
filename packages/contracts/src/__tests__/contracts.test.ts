@@ -4,11 +4,13 @@ import { describe, test } from "node:test";
 import {
   AUTOMATED_ASSESSMENT_STATUSES,
   PRODUCT_VERSION,
+  RUN_KINDS,
   SCHEMA_VERSION,
   applyFinalRun,
   archiveCase,
   createCase,
   forkCase,
+  synchronizeScenarioState,
   validateAlternative,
   validateAutomatedAssessment,
   validateCase,
@@ -24,7 +26,7 @@ import {
   runManifestFixture,
   scenarioFixture,
 } from "../index.js";
-import type { Case, Run, RunManifest } from "../index.js";
+import type { Case, Run, RunManifest, Scenario } from "../index.js";
 
 const project = {
   id: "11111111-1111-4111-8111-111111111111",
@@ -97,7 +99,7 @@ const succeededRun: Run = {
   id: manifest.runId,
   caseId: draftCase.id,
   scenarioId: scenario.id,
-  kind: "transient",
+  kind: "transient_single_pipe",
   status: "succeeded",
   manifest,
   summary: { peakPressureMpa: 1.24 },
@@ -122,12 +124,33 @@ describe("canonical JSON schema validators", () => {
     );
   });
 
-  test("reject invalid UUIDs, non-UTC timestamps, child cases without reasons, and unsupported run kinds", () => {
+  test("rejects invalid UUIDs, non-UTC timestamps, child cases without reasons, and unrecognized RunKinds", () => {
     assert.equal(validateProject({ ...project, id: "project-1" }), false);
     assert.equal(validateProject({ ...project, createdAt: "2026-08-23T10:02:03+09:00" }), false);
     assert.equal(validateProject({ ...project, createdAt: "2026-02-30T01:02:03.000Z" }), false);
     assert.equal(validateCase({ ...draftCase, parentCaseId: draftCase.id }), false);
     assert.equal(validateRun({ ...succeededRun, kind: "steady" }), false);
+  });
+
+  test("accepts every supported RunKind", () => {
+    const expectedRunKinds = [
+      "wave_speed",
+      "joukowsky_allievi",
+      "empirical_pressure",
+      "steady_single_pipe",
+      "steady_network_python",
+      "steady_network_epanet",
+      "longitudinal_hydraulics",
+      "transient_single_pipe",
+      "transient_network",
+      "transient_pump",
+      "transient_protection_device",
+    ];
+
+    assert.deepEqual(RUN_KINDS, expectedRunKinds);
+    for (const kind of expectedRunKinds) {
+      assert.equal(validateRun({ ...succeededRun, kind }), true, kind);
+    }
   });
 
   test("rejects an unrecognized assessment status and a legacy artifact shaped as a Run", () => {
@@ -165,7 +188,7 @@ describe("Case lifecycle", () => {
     assert.deepEqual(created, draftCase);
   });
 
-  test("forks only editable Cases and requires a non-blank reason", () => {
+  test("forks draft and locked Cases with a non-blank reason", () => {
     assert.throws(() => forkCase(draftCase, {
       id: "66666666-6666-4666-8666-666666666666",
       revisionReason: "   ",
@@ -188,18 +211,49 @@ describe("Case lifecycle", () => {
       createdAt: "2026-08-23T02:02:03.000Z",
       updatedAt: "2026-08-23T02:02:03.000Z",
     });
+
+    const lockedParent: Case = { ...draftCase, state: "locked", lockProvenance: "successful_run" };
+    assert.deepEqual(forkCase(lockedParent, {
+      id: "77777777-7777-4777-8777-777777777777",
+      revisionReason: "Revise pressure control strategy",
+      timestamp: "2026-08-23T03:02:03.000Z",
+    }), {
+      ...draftCase,
+      id: "77777777-7777-4777-8777-777777777777",
+      parentCaseId: lockedParent.id,
+      revisionReason: "Revise pressure control strategy",
+      state: "draft",
+      lockProvenance: null,
+      createdAt: "2026-08-23T03:02:03.000Z",
+      updatedAt: "2026-08-23T03:02:03.000Z",
+    });
   });
 
-  test("archives editable Cases and rejects editing locked or archived Cases", () => {
+  test("archives editable Cases and rejects archived Case changes", () => {
     const archived = archiveCase(draftCase, "2026-08-23T02:02:03.000Z");
     assert.equal(archived.state, "archived");
     assert.equal(archived.updatedAt, "2026-08-23T02:02:03.000Z");
     assert.throws(() => archiveCase(archived, "2026-08-23T03:02:03.000Z"), /not editable/i);
-    assert.throws(() => forkCase({ ...draftCase, state: "locked", lockProvenance: "successful_run" }, {
+    assert.throws(() => forkCase(archived, {
       id: "66666666-6666-4666-8666-666666666666",
       revisionReason: "New analysis",
       timestamp: "2026-08-23T02:02:03.000Z",
     }), /not editable/i);
+  });
+
+  test("synchronizes Scenario state from its owning Case", () => {
+    const lockedCase: Case = { ...draftCase, state: "locked", lockProvenance: "successful_run", updatedAt: "2026-08-23T02:02:03.000Z" };
+    const staleScenario: Scenario = { ...scenario, state: "draft", updatedAt: "2026-08-23T01:02:03.000Z" };
+
+    assert.deepEqual(synchronizeScenarioState(lockedCase, staleScenario), {
+      ...staleScenario,
+      state: "locked",
+      updatedAt: "2026-08-23T02:02:03.000Z",
+    });
+    assert.throws(() => synchronizeScenarioState(lockedCase, {
+      ...staleScenario,
+      caseId: "99999999-9999-4999-8999-999999999999",
+    }), /does not belong/i);
   });
 
   test("locks a Case only when its first final Run succeeds", () => {

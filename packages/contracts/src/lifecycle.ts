@@ -1,7 +1,13 @@
-import type { Case, CreateCaseInput, ForkCaseInput, Run, UtcTimestamp } from "./types.js";
+import type { Case, CreateCaseInput, ForkCaseInput, Run, Scenario, UtcTimestamp } from "./types.js";
 
 function assertEditable(caseRecord: Case): void {
   if (caseRecord.state !== "draft") {
+    throw new Error("Case is not editable");
+  }
+}
+
+function assertForkable(caseRecord: Case): void {
+  if (caseRecord.state === "archived") {
     throw new Error("Case is not editable");
   }
 }
@@ -20,7 +26,7 @@ export function createCase(input: CreateCaseInput): Case {
 }
 
 export function forkCase(caseRecord: Case, input: ForkCaseInput): Case {
-  assertEditable(caseRecord);
+  assertForkable(caseRecord);
   if (!input.revisionReason.trim()) {
     throw new Error("A non-blank revision reason is required");
   }
@@ -52,5 +58,17 @@ export function applyFinalRun(caseRecord: Case, run: Run): Case {
     state: "locked",
     lockProvenance: "successful_run",
     updatedAt: run.updatedAt,
+  };
+}
+
+export function synchronizeScenarioState(caseRecord: Case, scenario: Scenario): Scenario {
+  if (scenario.caseId !== caseRecord.id) {
+    throw new Error("Scenario does not belong to the Case");
+  }
+
+  return {
+    ...scenario,
+    state: caseRecord.state,
+    updatedAt: caseRecord.updatedAt,
   };
 }

@@ -1,6 +1,18 @@
 export const PRODUCT_VERSION = "0.2.0-alpha.1" as const;
 export const SCHEMA_VERSION = "1.0.0" as const;
-export const RUN_KIND = "transient" as const;
+export const RUN_KINDS = [
+  "wave_speed",
+  "joukowsky_allievi",
+  "empirical_pressure",
+  "steady_single_pipe",
+  "steady_network_python",
+  "steady_network_epanet",
+  "longitudinal_hydraulics",
+  "transient_single_pipe",
+  "transient_network",
+  "transient_pump",
+  "transient_protection_device",
+] as const;
 
 export const AUTOMATED_ASSESSMENT_STATUSES = [
   "pass",
@@ -16,7 +28,7 @@ export type Uuid = string;
 export type UtcTimestamp = string;
 export type CaseState = "draft" | "locked" | "archived";
 export type CaseLockProvenance = "successful_run" | "legacy_import" | null;
-export type RunKind = typeof RUN_KIND;
+export type RunKind = (typeof RUN_KINDS)[number];
 export type RunStatus = "pending" | "running" | "succeeded" | "failed" | "interrupted";
 export type FinalRunStatus = Extract<RunStatus, "succeeded" | "failed" | "interrupted">;
 export type AutomatedAssessmentStatus = (typeof AUTOMATED_ASSESSMENT_STATUSES)[number];
