@@ -3,6 +3,7 @@ import { lazy, Suspense, useEffect, useMemo, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 
 import type { LinkedFocus } from './focus'
+import { PyodideStatusChip } from './PyodideStatusChip'
 import { RunInspector } from './RunInspector'
 import { WorkspaceTree } from './WorkspaceTree'
 import { useWorkspace } from './workspace-context'
@@ -106,7 +107,7 @@ export function WorkspaceLayout() {
     <a href="#workspace-main" className="skip-link">Skip to workspace</a>
     <header className="product-header">
       <div className="product-mark"><span className="mark-lines" aria-hidden="true"><i /><i /><i /></span><div><strong>OPEN WATERHAMMER</strong><small>Hydraulic transient workspace</small></div></div>
-      <div className="product-context"><span className="alpha-label">alpha</span><span className="support-label">設計比較支援</span><span className="version-label">v0.2.0-alpha.1</span></div>
+      <div className="product-context"><span className="alpha-label">alpha</span><span className="support-label">設計比較支援</span><span className="version-label">v0.2.0-alpha.1</span><PyodideStatusChip /></div>
       <nav aria-label="Documentation"><Link to={canonicalPath(selection.projectId, selection.caseId, 'overview')}>Workspace</Link><a href="#/docs/reference">Reference</a><a href="#/docs/library">Library</a><a href="#/docs/design-flow">設計フロー</a><a href="#/docs/hydraulic">水理設計の視点</a><a href="#/docs/about">Help / About</a></nav>
     </header>
     <div className="workspace-grid">

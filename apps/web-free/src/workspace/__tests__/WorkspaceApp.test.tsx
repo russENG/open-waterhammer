@@ -6,10 +6,21 @@ import { createExecutorRegistry } from '@open-waterhammer/runner'
 import { InMemoryWorkspaceRepository } from '@open-waterhammer/workspace'
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import { afterEach, beforeEach, describe, expect, test } from 'vitest'
+import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest'
 
+import { prefetchPyodide } from '../../lib/pyodide-bridge'
 import { WorkspaceApp } from '../WorkspaceApp'
 import { buildSampleWorkspace } from '../sample-workspace'
+
+// Every scenario in this file injects an `executors` registry (below), which makes
+// WorkspaceApp skip its real Pyodide prefetch (see the dedicated describe block at the
+// bottom of this file). `prefetchPyodide` itself is still mocked out here so that the
+// one scenario which intentionally omits `executors` never touches the real Pyodide/
+// pyodide-bridge machinery — keeping this suite fast and network-free.
+vi.mock('../../lib/pyodide-bridge', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../../lib/pyodide-bridge')>()
+  return { ...actual, prefetchPyodide: vi.fn() }
+})
 
 const executor = async ({ kind, calculationInputHash }: { kind: RunKind; calculationInputHash: string }) => ({
   engine: 'integration-engine',
@@ -35,6 +46,13 @@ function setup() {
   const data = buildSampleWorkspace('2026-08-23T01:02:03.000Z')
   const repository = new InMemoryWorkspaceRepository(data)
   render(<WorkspaceApp repository={repository} initialData={data} executors={executors} />)
+  return { data, repository }
+}
+
+function setupWithoutExecutors() {
+  const data = buildSampleWorkspace('2026-08-23T01:02:03.000Z')
+  const repository = new InMemoryWorkspaceRepository(data)
+  render(<WorkspaceApp repository={repository} initialData={data} />)
   return { data, repository }
 }
 
@@ -385,5 +403,30 @@ describe('full workspace application', () => {
       selected = (await repository.snapshot()).cases.at(-1)!
       expect(selected.modelSnapshot).toMatchObject({ geoLocalTransform: { proj4: expect.stringContaining('+lat_0=35') } })
     })
+  })
+})
+
+describe('pyodide prefetch on mount', () => {
+  // The bridge mock above is created once for the whole file (module mocks are hoisted
+  // and evaluated a single time), so its call history is not implicitly cleared between
+  // these two tests the way per-test spies are — reset it explicitly for isolation.
+  beforeEach(() => {
+    vi.mocked(prefetchPyodide).mockClear()
+  })
+
+  test('mounting without an injected executor registry prefetches the Pyodide runtime exactly once', async () => {
+    setupWithoutExecutors()
+
+    await screen.findByRole('banner')
+    await waitFor(() => expect(prefetchPyodide).toHaveBeenCalledTimes(1))
+  })
+
+  test('mounting with an injected executor registry (the test path) skips the prefetch', async () => {
+    setup()
+
+    await screen.findByRole('banner')
+    // Give any deferred (requestIdleCallback/setTimeout) scheduling a chance to run before asserting the negative.
+    await new Promise((resolve) => setTimeout(resolve, 0))
+    expect(prefetchPyodide).not.toHaveBeenCalled()
   })
 })

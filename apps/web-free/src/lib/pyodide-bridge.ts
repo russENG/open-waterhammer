@@ -84,6 +84,19 @@ export async function loadPyodideOnce(): Promise<PyodideRuntime> {
   return runtimePromise
 }
 
+/**
+ * Fire-and-forget warm-up: starts loading the Pyodide runtime in the background without
+ * making the caller await it, and swallows a rejection so a failed prefetch never surfaces
+ * as an unhandled rejection. This is safe to "lose" because `loadPyodideOnce` clears its
+ * cached promise in the `catch` branch above before it rejects — so it never caches a
+ * rejected promise. The next real caller (typically the first Run) that awaits
+ * `loadPyodideOnce()` therefore starts a brand-new load attempt instead of replaying the
+ * same failure.
+ */
+export function prefetchPyodide(): void {
+  void loadPyodideOnce().catch(() => {})
+}
+
 export interface PyodideCalculationRequest {
   protocolVersion: 1
   kind: RunKind
