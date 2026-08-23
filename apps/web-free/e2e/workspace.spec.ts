@@ -1,5 +1,23 @@
 import AxeBuilder from '@axe-core/playwright'
-import { expect, test } from '@playwright/test'
+import { expect, test, type Page } from '@playwright/test'
+
+async function createBlankCaseWithValidGis(page: Page) {
+  await page.getByRole('button', { name: 'New Case' }).click()
+  await page.getByRole('link', { name: 'Model＋GIS' }).click()
+  await page.getByRole('button', { name: 'Import GeoJSON' }).click()
+  const dialog = page.getByRole('dialog', { name: 'GeoJSON import wizard' })
+  await dialog.getByLabel('GeoJSON').fill(JSON.stringify({
+    type: 'FeatureCollection',
+    features: [
+      { type: 'Feature', properties: { id: 'R-01', elevation: 100 }, geometry: { type: 'Point', coordinates: [139.7, 35.68] } },
+      { type: 'Feature', properties: { id: 'J-01', elevation: 88 }, geometry: { type: 'Point', coordinates: [139.708, 35.684] } },
+      { type: 'Feature', properties: { id: 'P-01', startNodeId: 'R-01', endNodeId: 'J-01', innerDiameter: 0.3 }, geometry: { type: 'LineString', coordinates: [[139.7, 35.68], [139.708, 35.684]] } },
+    ],
+  }))
+  await dialog.getByRole('button', { name: 'Import as drafts' }).click()
+  await expect(page.getByText('HYDRAULICS VALID', { exact: true })).toBeVisible()
+  await page.getByRole('link', { name: 'Analysis' }).click()
+}
 
 test('create, edit, execute, lock, fork, compare, reload, export, and import', async ({ page }) => {
   await page.goto('/')
@@ -177,4 +195,40 @@ test('all exact RunKinds execute and persist through the production browser regi
   await page.reload()
   await expect(page.locator('.state-pill')).toHaveText('locked')
   await expect(page.getByRole('complementary', { name: 'Run Inspector' })).toContainText('transient_protection_device')
+})
+
+test('blank form-only Darcy and pump-start branches execute through the real production Runner', async ({ page }) => {
+  test.setTimeout(180_000)
+  const externalRequests = new Set<string>()
+  page.on('request', (request) => {
+    const url = new URL(request.url())
+    if (url.origin !== 'http://127.0.0.1:4173') externalRequests.add(url.origin)
+  })
+  await page.goto('/')
+
+  await createBlankCaseWithValidGis(page)
+  await page.locator('input[type="radio"][value="steady_single_pipe"]').check()
+  await page.getByLabel('計算方式').selectOption('darcy-weisbach')
+  await expect(page.getByLabel(/Darcy 摩擦係数/)).toHaveValue('0.02')
+  await expect(page.getByLabel(/Hazen–Williams C/)).toHaveCount(0)
+  await expect(page.locator('details.advanced-json')).not.toHaveAttribute('open', '')
+  await page.getByRole('button', { name: 'Save input' }).click()
+  await expect(page.getByRole('status')).toHaveText('Input saved')
+  await page.getByRole('button', { name: 'Run calculation' }).click()
+  await expect(page.getByRole('status')).toHaveText('Run succeeded', { timeout: 120_000 })
+  await expect(page.getByRole('complementary', { name: 'Run Inspector' })).toContainText('steady_single_pipe')
+
+  await createBlankCaseWithValidGis(page)
+  await page.locator('input[type="radio"][value="transient_pump"]').check()
+  await page.getByLabel('ポンプ操作').selectOption('start')
+  await expect(page.getByLabel(/定格流量/)).toHaveValue('0.07')
+  await expect(page.getByLabel(/起動時間/)).toHaveValue('0.5')
+  await expect(page.getByLabel(/停止時間/)).toHaveCount(0)
+  await expect(page.locator('details.advanced-json')).not.toHaveAttribute('open', '')
+  await page.getByRole('button', { name: 'Save input' }).click()
+  await expect(page.getByRole('status')).toHaveText('Input saved')
+  await page.getByRole('button', { name: 'Run calculation' }).click()
+  await expect(page.getByRole('status')).toHaveText('Run succeeded', { timeout: 120_000 })
+  await expect(page.getByRole('complementary', { name: 'Run Inspector' })).toContainText('transient_pump')
+  expect([...externalRequests]).toEqual([])
 })

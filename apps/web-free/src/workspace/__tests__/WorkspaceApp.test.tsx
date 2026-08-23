@@ -193,6 +193,39 @@ describe('full workspace application', () => {
     expect(Object.values(inputs).every((input) => input && typeof input === 'object')).toBe(true)
   })
 
+  test('switches blank form-only Cases to Darcy and pump-start branches before persistence', async () => {
+    const user = userEvent.setup()
+    const { data, repository } = setup()
+    const tabs = screen.getByRole('navigation', { name: 'Workspace tabs' })
+    await user.click(screen.getByRole('button', { name: 'New Case' }))
+    await user.click(within(tabs).getByRole('link', { name: 'Analysis' }))
+
+    await user.click(await screen.findByRole('radio', { name: /Steady single pipe/ }))
+    await user.selectOptions(screen.getByLabelText('計算方式'), 'darcy-weisbach')
+    expect(screen.getByLabelText(/Darcy 摩擦係数/)).toHaveValue(0.02)
+    expect(screen.queryByLabelText(/Hazen–Williams C/)).not.toBeInTheDocument()
+    expect(screen.getByText('Advanced · canonical JSON').closest('details')).not.toHaveAttribute('open')
+    await user.click(screen.getByRole('button', { name: 'Save input' }))
+    expect(await screen.findByRole('status')).toHaveTextContent('Input saved')
+
+    await user.click(screen.getByRole('radio', { name: /Pump transient/ }))
+    await user.selectOptions(screen.getByLabelText('ポンプ操作'), 'start')
+    expect(screen.getByLabelText(/定格流量/)).toHaveValue(0.07)
+    expect(screen.getByLabelText(/起動時間/)).toHaveValue(0.5)
+    expect(screen.queryByLabelText(/停止時間/)).not.toBeInTheDocument()
+    expect(screen.getByText('Advanced · canonical JSON').closest('details')).not.toHaveAttribute('open')
+    await user.click(screen.getByRole('button', { name: 'Save input' }))
+    expect(await screen.findByRole('status')).toHaveTextContent('Input saved')
+
+    const snapshot = await repository.snapshot()
+    const created = snapshot.cases.find(({ id }) => !data.cases.some((record) => record.id === id))!
+    const inputs = (created.modelSnapshot as { runInputs: Record<string, Record<string, unknown>> }).runInputs
+    expect(inputs.steady_single_pipe).toMatchObject({ method: 'darcy-weisbach', frictionFactor: 0.02 })
+    expect(inputs.steady_single_pipe).not.toHaveProperty('roughnessC')
+    expect(snapshot.scenarios.find(({ caseId }) => caseId === created.id)?.eventSettings).toMatchObject({ mode: 'start', Q_rated: 0.07, startupTime: 0.5 })
+    expect(snapshot.scenarios.find(({ caseId }) => caseId === created.id)?.eventSettings).not.toHaveProperty('Q0')
+  })
+
   test('executes through the common runner, locks the Case, and requires a reason to fork', async () => {
     const user = userEvent.setup()
     const { repository } = setup()

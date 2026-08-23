@@ -67,7 +67,7 @@ export function AnalysisPanel({ caseRecord, onRunSelected }: { caseRecord: Case;
   }
 
   function updateField(field: EngineeringField, raw: string | boolean) {
-    const next = updateEngineeringFieldFromInput(engineering, field, raw)
+    const next = updateEngineeringFieldFromInput(engineering, field, raw, kind)
     setEngineering(next)
     setModelText(JSON.stringify(next.model, null, 2))
     setDirty(true)
