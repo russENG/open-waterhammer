@@ -75,7 +75,6 @@ export interface Scenario {
   boundaryConditions: JsonValue;
   eventSettings: JsonValue;
   protectionSettings: JsonValue;
-  state: CaseState;
   createdAt: UtcTimestamp;
   updatedAt: UtcTimestamp;
 }

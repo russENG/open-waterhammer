@@ -50,7 +50,6 @@ export const scenarioFixture: Scenario = {
   boundaryConditions: { upstream: "reservoir", downstream: "closed_valve" },
   eventSettings: { kind: "pump_trip", atSeconds: 1 },
   protectionSettings: { airValve: { enabled: true } },
-  state: "draft",
   createdAt: "2026-08-23T01:02:03.000Z",
   updatedAt: "2026-08-23T01:02:03.000Z",
 };

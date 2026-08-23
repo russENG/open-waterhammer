@@ -75,7 +75,7 @@ export const scenarioSchema: AnySchemaObject = {
   $id: "https://open-waterhammer.org/schemas/scenario/1.0.0",
   type: "object",
   additionalProperties: false,
-  required: ["id", "caseId", "name", "boundaryConditions", "eventSettings", "protectionSettings", "state", "createdAt", "updatedAt"],
+  required: ["id", "caseId", "name", "boundaryConditions", "eventSettings", "protectionSettings", "createdAt", "updatedAt"],
   properties: {
     id: uuid,
     caseId: uuid,
@@ -83,7 +83,6 @@ export const scenarioSchema: AnySchemaObject = {
     boundaryConditions: {},
     eventSettings: {},
     protectionSettings: {},
-    state: { enum: caseStates },
     ...timestamps,
   },
 };

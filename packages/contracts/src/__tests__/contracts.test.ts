@@ -9,8 +9,8 @@ import {
   applyFinalRun,
   archiveCase,
   createCase,
+  deriveScenarioState,
   forkCase,
-  synchronizeScenarioState,
   validateAlternative,
   validateAutomatedAssessment,
   validateCase,
@@ -67,7 +67,6 @@ const scenario = {
   boundaryConditions: { upstream: "reservoir", downstream: "closed_valve" },
   eventSettings: { kind: "pump_trip", atSeconds: 1 },
   protectionSettings: { airValve: { enabled: true } },
-  state: "draft",
   createdAt: "2026-08-23T01:02:03.000Z",
   updatedAt: "2026-08-23T01:02:03.000Z",
 };
@@ -129,6 +128,7 @@ describe("canonical JSON schema validators", () => {
     assert.equal(validateProject({ ...project, createdAt: "2026-08-23T10:02:03+09:00" }), false);
     assert.equal(validateProject({ ...project, createdAt: "2026-02-30T01:02:03.000Z" }), false);
     assert.equal(validateCase({ ...draftCase, parentCaseId: draftCase.id }), false);
+    assert.equal(validateScenario({ ...scenario, state: "locked" }), false);
     assert.equal(validateRun({ ...succeededRun, kind: "steady" }), false);
   });
 
@@ -241,17 +241,14 @@ describe("Case lifecycle", () => {
     }), /not editable/i);
   });
 
-  test("synchronizes Scenario state from its owning Case", () => {
+  test("derives Scenario state from its owning Case without rewriting Scenario timestamps", () => {
     const lockedCase: Case = { ...draftCase, state: "locked", lockProvenance: "successful_run", updatedAt: "2026-08-23T02:02:03.000Z" };
-    const staleScenario: Scenario = { ...scenario, state: "draft", updatedAt: "2026-08-23T01:02:03.000Z" };
+    const scenarioWithNewerTimestamp: Scenario = { ...scenario, updatedAt: "2026-08-23T03:02:03.000Z" };
 
-    assert.deepEqual(synchronizeScenarioState(lockedCase, staleScenario), {
-      ...staleScenario,
-      state: "locked",
-      updatedAt: "2026-08-23T02:02:03.000Z",
-    });
-    assert.throws(() => synchronizeScenarioState(lockedCase, {
-      ...staleScenario,
+    assert.equal(deriveScenarioState(lockedCase, scenarioWithNewerTimestamp), "locked");
+    assert.equal(scenarioWithNewerTimestamp.updatedAt, "2026-08-23T03:02:03.000Z");
+    assert.throws(() => deriveScenarioState(lockedCase, {
+      ...scenarioWithNewerTimestamp,
       caseId: "99999999-9999-4999-8999-999999999999",
     }), /does not belong/i);
   });

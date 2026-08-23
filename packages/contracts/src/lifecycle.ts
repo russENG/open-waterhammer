@@ -61,14 +61,10 @@ export function applyFinalRun(caseRecord: Case, run: Run): Case {
   };
 }
 
-export function synchronizeScenarioState(caseRecord: Case, scenario: Scenario): Scenario {
+export function deriveScenarioState(caseRecord: Case, scenario: Scenario): Case["state"] {
   if (scenario.caseId !== caseRecord.id) {
     throw new Error("Scenario does not belong to the Case");
   }
 
-  return {
-    ...scenario,
-    state: caseRecord.state,
-    updatedAt: caseRecord.updatedAt,
-  };
+  return caseRecord.state;
 }
