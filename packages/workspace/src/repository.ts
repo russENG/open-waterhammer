@@ -64,6 +64,10 @@ export class WorkspaceRepositoryBase implements WorkspaceRepository {
       }
       replaceById(draft.cases, structuredClone(caseRecord));
       for (const scenario of scenarios) {
+        const existingScenario = draft.scenarios.find((candidate) => candidate.id === scenario.id);
+        if (existingScenario && existingScenario.caseId !== scenario.caseId) {
+          throw new Error(`Scenario ${scenario.id} cannot change its owning Case`);
+        }
         replaceById(draft.scenarios, structuredClone(scenario));
       }
     });
@@ -139,19 +143,15 @@ export class WorkspaceRepositoryBase implements WorkspaceRepository {
   async importBundle(bytes: Uint8Array): Promise<import("@open-waterhammer/contracts").Project> {
     const imported = await importProjectBundle(bytes);
     return this.storage.transaction((draft) => {
-      const collections = [
-        [draft.projects, imported.projects, "Project"],
-        [draft.alternatives, imported.alternatives, "Alternative"],
-        [draft.cases, imported.cases, "Case"],
-        [draft.scenarios, imported.scenarios, "Scenario"],
-        [draft.runs, imported.runs, "Run"],
-        [draft.legacyArtifacts, imported.legacyArtifacts, "LegacyArtifact"],
-      ] as const;
-      for (const [existing, incoming, label] of collections) {
-        const ids = new Set(existing.map(({ id }) => id));
-        const duplicate = incoming.find(({ id }) => ids.has(id));
-        if (duplicate) throw new Error(`Duplicate ${label} id: ${duplicate.id}`);
-      }
+      const existingIds = new Set([
+        ...draft.projects, ...draft.alternatives, ...draft.cases,
+        ...draft.scenarios, ...draft.runs, ...draft.legacyArtifacts,
+      ].map(({ id }) => id));
+      const duplicate = [
+        ...imported.projects, ...imported.alternatives, ...imported.cases,
+        ...imported.scenarios, ...imported.runs, ...imported.legacyArtifacts,
+      ].find(({ id }) => existingIds.has(id));
+      if (duplicate) throw new Error(`Duplicate workspace entity id: ${duplicate.id}`);
       draft.projects.push(...structuredClone(imported.projects));
       draft.alternatives.push(...structuredClone(imported.alternatives));
       draft.cases.push(...structuredClone(imported.cases));

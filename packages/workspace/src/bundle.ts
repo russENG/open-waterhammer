@@ -21,7 +21,7 @@ import { strFromU8, strToU8, unzipSync, zipSync } from "fflate";
 import type { BundleInspection, LegacyArtifactRecord, WorkspaceData } from "./types.js";
 
 const BUNDLE_FORMAT_VERSION = 1;
-const FIXED_ZIP_TIME = new Date("1980-01-01T00:00:00.000Z");
+const FIXED_ZIP_TIME = new Date(1980, 0, 1, 0, 0, 0, 0);
 
 interface BundleManifest {
   bundleFormatVersion: number;
@@ -374,7 +374,13 @@ export async function inspectProjectBundle(bytes: Uint8Array): Promise<BundleIns
       throw new Error("Run manifest relationships are invalid");
     }
   }
-  for (const record of legacyArtifacts) if (!caseIds.has(record.caseId)) throw new Error("LegacyArtifact does not belong to a Case");
+  for (const record of legacyArtifacts) {
+    const caseRecord = cases.find((candidate) => candidate.id === record.caseId);
+    if (!caseRecord) throw new Error("LegacyArtifact does not belong to a Case");
+    if (caseRecord.state !== "locked" || caseRecord.lockProvenance !== "legacy_import") {
+      throw new Error("LegacyArtifact must reference a Case locked with legacy_import provenance");
+    }
+  }
   for (const caseRecord of cases) {
     const succeeded = runs.some((run) => run.caseId === caseRecord.id && run.status === "succeeded");
     if (succeeded && (caseRecord.state !== "locked" || caseRecord.lockProvenance !== "successful_run")) {
@@ -382,6 +388,10 @@ export async function inspectProjectBundle(bytes: Uint8Array): Promise<BundleIns
     }
     if (caseRecord.state === "locked" && caseRecord.lockProvenance === "successful_run" && !succeeded) {
       throw new Error("Successfully locked Case is missing its successful Run");
+    }
+    if (caseRecord.state === "locked" && caseRecord.lockProvenance === "legacy_import") {
+      const artifactCount = legacyArtifacts.filter((record) => record.caseId === caseRecord.id).length;
+      if (artifactCount !== 1) throw new Error("A legacy_import Case must have exactly one LegacyArtifact");
     }
   }
 

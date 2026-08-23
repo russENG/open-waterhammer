@@ -127,4 +127,50 @@ describe("in-memory WorkspaceRepository", () => {
     assert.deepEqual(saved.runs, []);
     assert.deepEqual(saved.cases, [caseFixture]);
   });
+
+  test("rejects an imported id that collides with any existing entity type before writing", async () => {
+    const source = createRepository();
+    const target = new InMemoryWorkspaceRepository({
+      projects: [],
+      alternatives: [],
+      cases: [{ ...caseFixture, id: projectFixture.id }],
+      scenarios: [],
+      runs: [],
+      legacyArtifacts: [],
+    });
+    const before = await target.snapshot();
+
+    await assert.rejects(
+      target.importBundle(await source.exportBundle(projectFixture.id)),
+      /duplicate workspace entity id/i,
+    );
+    assert.deepEqual(await target.snapshot(), before);
+  });
+
+  test("rejects changing an existing Scenario id to a different owning Case", async () => {
+    const lockedOwner: Case = {
+      ...caseFixture,
+      state: "locked",
+      lockProvenance: "successful_run",
+    };
+    const draftCase: Case = {
+      ...caseFixture,
+      id: "66666666-6666-4666-8666-666666666666",
+    };
+    const repository = new InMemoryWorkspaceRepository({
+      projects: [projectFixture],
+      alternatives: [alternativeFixture],
+      cases: [lockedOwner, draftCase],
+      scenarios: [scenarioFixture],
+      runs: [],
+      legacyArtifacts: [],
+    });
+    const before = await repository.snapshot();
+
+    await assert.rejects(repository.saveDraftCase(draftCase, [{
+      ...scenarioFixture,
+      caseId: draftCase.id,
+    }]), /cannot change its owning Case/i);
+    assert.deepEqual(await repository.snapshot(), before);
+  });
 });

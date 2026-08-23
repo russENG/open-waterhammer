@@ -1,5 +1,7 @@
 import assert from "node:assert/strict";
+import { execFileSync } from "node:child_process";
 import { createHash } from "node:crypto";
+import { fileURLToPath } from "node:url";
 import { describe, test } from "node:test";
 
 import {
@@ -31,19 +33,51 @@ const runWithTimeSeries = {
   timeSeries: { timeSeconds: [0, 1], pressureMpa: [0.4, 1.24] },
 };
 
+const legacyCase = {
+  ...caseFixture,
+  id: "88888888-8888-4888-8888-888888888888",
+  modelSnapshot: { imported: true },
+  state: "locked" as const,
+  lockProvenance: "legacy_import" as const,
+};
+
 const workspace: WorkspaceData = {
   projects: [projectFixture],
   alternatives: [alternativeFixture],
-  cases: [lockedCase],
+  cases: [lockedCase, legacyCase],
   scenarios: [scenarioFixture],
   runs: [runWithTimeSeries],
   legacyArtifacts: [{
     id: "99999999-9999-4999-8999-999999999999",
-    caseId: caseFixture.id,
+    caseId: legacyCase.id,
     sourceId: "legacy-session-12",
     artifact: legacyArtifactFixture,
   }],
 };
+
+const timezoneFixturePath = fileURLToPath(new URL("./fixtures/export-timezone.ts", import.meta.url));
+
+function exportUnderTimezone(timezone: string): Uint8Array {
+  const base64 = execFileSync(process.execPath, ["--import", "tsx/esm", timezoneFixturePath], {
+    encoding: "utf8",
+    env: { ...process.env, TZ: timezone },
+  });
+  return Buffer.from(base64, "base64");
+}
+
+function centralDirectoryDosTimestamps(bytes: Uint8Array): Array<{ date: number; time: number }> {
+  const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+  const timestamps: Array<{ date: number; time: number }> = [];
+  for (let offset = 0; offset <= bytes.byteLength - 46; offset += 1) {
+    if (view.getUint32(offset, true) === 0x02014b50) {
+      timestamps.push({
+        time: view.getUint16(offset + 12, true),
+        date: view.getUint16(offset + 14, true),
+      });
+    }
+  }
+  return timestamps;
+}
 
 function repack(
   bytes: Uint8Array,
@@ -79,6 +113,8 @@ describe("deterministic .owhproj bundles", () => {
       "cases/33333333-3333-4333-8333-333333333333/case.json",
       "cases/33333333-3333-4333-8333-333333333333/model.json",
       "cases/33333333-3333-4333-8333-333333333333/scenarios/44444444-4444-4444-8444-444444444444.json",
+      "cases/88888888-8888-4888-8888-888888888888/case.json",
+      "cases/88888888-8888-4888-8888-888888888888/model.json",
       "checksums.json",
       "legacy/99999999-9999-4999-8999-999999999999.json",
       "project.json",
@@ -92,6 +128,17 @@ describe("deterministic .owhproj bundles", () => {
     assert.equal(inspection.bundleFormatVersion, 1);
     assert.deepEqual(inspection.project, projectFixture);
     assert.deepEqual(inspection.runs, [runWithTimeSeries]);
+  });
+
+  test("writes identical fixed DOS timestamps under UTC and a negative timezone", () => {
+    const utc = exportUnderTimezone("UTC");
+    const negativeOffset = exportUnderTimezone("America/Los_Angeles");
+
+    assert.deepEqual(negativeOffset, utc);
+    const timestamps = centralDirectoryDosTimestamps(utc);
+    assert.ok(timestamps.length > 0);
+    assert.ok(timestamps.every(({ time }) => time === 0));
+    assert.ok(timestamps.every(({ date }) => date === 0x0021));
   });
 
   test("round-trips a valid bundle into an empty repository", async () => {
@@ -174,5 +221,46 @@ describe("deterministic .owhproj bundles", () => {
       });
       await assert.rejects(validateProjectBundle(archive), /unsafe ZIP path/i, unsafeName);
     }
+  });
+
+  test("rejects a LegacyArtifact attached to a Case without legacy_import provenance", async () => {
+    const valid = await new InMemoryWorkspaceRepository(workspace).exportBundle(projectFixture.id);
+    const invalid = repack(valid, (files) => {
+      const name = "legacy/99999999-9999-4999-8999-999999999999.json";
+      const record = JSON.parse(strFromU8(files[name]!));
+      record.caseId = caseFixture.id;
+      files[name] = strToU8(JSON.stringify(record));
+    }, true);
+
+    await assert.rejects(validateProjectBundle(invalid), /LegacyArtifact.*legacy_import/i);
+  });
+
+  test("rejects a legacy_import Case without exactly one LegacyArtifact", async () => {
+    const valid = await new InMemoryWorkspaceRepository(workspace).exportBundle(projectFixture.id);
+    const invalid = repack(valid, (files) => {
+      delete files["legacy/99999999-9999-4999-8999-999999999999.json"];
+      const manifest = JSON.parse(strFromU8(files["bundle.json"]!));
+      manifest.legacyArtifactIds = [];
+      files["bundle.json"] = strToU8(JSON.stringify(manifest));
+    }, true);
+
+    await assert.rejects(validateProjectBundle(invalid), /legacy_import Case.*exactly one LegacyArtifact/i);
+  });
+
+  test("rejects multiple LegacyArtifacts that reference the same legacy_import Case", async () => {
+    const valid = await new InMemoryWorkspaceRepository(workspace).exportBundle(projectFixture.id);
+    const invalid = repack(valid, (files) => {
+      const originalName = "legacy/99999999-9999-4999-8999-999999999999.json";
+      const duplicateId = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa";
+      const duplicate = JSON.parse(strFromU8(files[originalName]!));
+      duplicate.id = duplicateId;
+      duplicate.sourceId = "legacy-session-copy";
+      files[`legacy/${duplicateId}.json`] = strToU8(JSON.stringify(duplicate));
+      const manifest = JSON.parse(strFromU8(files["bundle.json"]!));
+      manifest.legacyArtifactIds.push(duplicateId);
+      files["bundle.json"] = strToU8(JSON.stringify(manifest));
+    }, true);
+
+    await assert.rejects(validateProjectBundle(invalid), /legacy_import Case.*exactly one LegacyArtifact/i);
   });
 });
