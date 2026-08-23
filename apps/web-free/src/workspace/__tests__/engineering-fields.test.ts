@@ -45,7 +45,7 @@ const OPTIONAL_CANONICAL_PATHS: Record<(typeof RUN_KINDS)[number], string[]> = {
   ],
   transient_protection_device: [
     'model.network.pipes.0.pipe.name', 'model.network.pipes.0.pipe.startNodeId', 'model.network.pipes.0.pipe.endNodeId',
-    'model.network.pipes.0.initialFlow', 'model.network.nodes.V-01.datum',
+    'model.network.pipes.0.initialFlow', 'model.network.nodes.V-01.operation',
     'model.options.tMax', 'model.options.initialFlow',
   ],
 }
