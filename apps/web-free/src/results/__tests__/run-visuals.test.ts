@@ -27,7 +27,9 @@ const transientRun: Run = {
         { t: 0.25, H: [98, 98, 98], Q: [0, 0, 0] },
       ],
     },
-    nodes: { 'N-17': { H: [30, 34] } },
+    // 実際の永続化形式（packages/core-py の moc.py MocNodeResult.H / protocol.py の
+    // _moc_output）ではノード H も [{t, H}, ...] 形式で記録される（フラット数値配列ではない）。
+    nodes: { 'N-17': { H: [{ t: 0, H: 30 }, { t: 0.25, H: 34 }] } },
   },
 }
 
@@ -53,6 +55,45 @@ describe('persisted Run visualization model', () => {
     })
 
     expect(visuals.timeSeries).toEqual({ id: 'N-17', seconds: [0, 0.25], values: [30, 34] })
+  })
+})
+
+// packages/core-py が実際に永続化するノード時系列の形（moc.py:226 MocNodeResult.H /
+// protocol.py:382-384 の shallow copy 経由）を再現する最小 Run。パイプ側の decoy を含めず、
+// nodeTrace() の欠陥（object-array を空値扱いする）だけを検出できるようにする。
+const nodeSeriesRun: Run = {
+  ...runFixture,
+  kind: 'transient_network',
+  summary: { dt: 0.1 },
+  timeSeries: {
+    nodes: {
+      'N-obj': { H: [{ t: 0, H: 45 }, { t: 0.1, H: 52 }, { t: 0.2, H: 58 }] },
+      'N-flat': { H: [45, 52, 58] },
+    },
+  },
+}
+
+describe('persisted node H time series (real object shape vs flat shape)', () => {
+  test('derives a node time-series trace from the real persisted object shape [{t,H}, ...]', () => {
+    const visuals = deriveRunVisuals(nodeSeriesRun, {
+      targetRef: 'N-obj', mapFeatureId: 'N-obj', profileCursor: 'N-obj',
+      envelopeSeriesId: 'N-obj', timeSeriesId: 'N-obj',
+    })
+
+    expect(visuals.timeSeries).toEqual({
+      id: 'N-obj', seconds: [0, 0.1, 0.2], values: [45, 52, 58],
+    })
+  })
+
+  test('also derives a node time-series trace from a flat number-array shape', () => {
+    const visuals = deriveRunVisuals(nodeSeriesRun, {
+      targetRef: 'N-flat', mapFeatureId: 'N-flat', profileCursor: 'N-flat',
+      envelopeSeriesId: 'N-flat', timeSeriesId: 'N-flat',
+    })
+
+    expect(visuals.timeSeries).toEqual({
+      id: 'N-flat', seconds: [0, 0.1, 0.2], values: [45, 52, 58],
+    })
   })
 })
 

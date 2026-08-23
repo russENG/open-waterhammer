@@ -70,15 +70,11 @@ function interpolateSpatialValue(values: number[], ratio: number | undefined): n
   return values[lower]! + (values[upper]! - values[lower]!) * weight
 }
 
-function nodeTrace(id: string, output: RecordValue, dt: number): RunVisuals['timeSeries'] {
-  const values = numbers(output.H)
-  return values.length ? { id, seconds: values.map((_, index) => index * dt), values } : undefined
-}
-
 /**
- * ポンプ節点の N（回転速度）等、時刻付きサンプル列を { seconds, values } に変換する。
- * 永続化された Run の実体（packages/core-py の moc.py / protocol.py 経由）では
- * ノード時系列は `[{ t, N }, ...]` の形（各要素が時刻を持つ）で記録される。
+ * ノード（節点）の時刻付きサンプル列を { seconds, values } に変換する。
+ * 永続化された Run の実体（packages/core-py の moc.py MocNodeResult / protocol.py の
+ * _moc_output 経由）では、H（水頭）・N（ポンプ回転速度）等のノード時系列はいずれも
+ * `[{ t, <key> }, ...]` の形（各要素が時刻を持つ）で記録される。
  * フラットな数値配列（他の時系列と同じ規約）で記録されているケースにも対応する。
  */
 function timedSeries(value: JsonValue | undefined, key: string, dt: number): { seconds: number[]; values: number[] } | undefined {
@@ -100,6 +96,11 @@ function timedSeries(value: JsonValue | undefined, key: string, dt: number): { s
     }
   })
   return values.length ? { seconds, values } : undefined
+}
+
+function nodeTrace(id: string, output: RecordValue, dt: number): RunVisuals['timeSeries'] {
+  const series = timedSeries(output.H, 'H', dt)
+  return series ? { id, ...series } : undefined
 }
 
 function findSpeedSeries(nodes: RecordValue | undefined, preferredId: string | undefined, dt: number): RunVisuals['speedSeries'] {
