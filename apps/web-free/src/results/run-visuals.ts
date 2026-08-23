@@ -14,6 +14,7 @@ export interface PlotLine {
 export interface RunVisuals {
   envelope?: PlotLine
   timeSeries?: { id: string; seconds: number[]; values: number[] }
+  speedSeries?: { id: string; seconds: number[]; values: number[] }
   profileCursorRatio?: number
   summaryMetrics: Array<{ path: string; value: number }>
 }
@@ -72,6 +73,44 @@ function interpolateSpatialValue(values: number[], ratio: number | undefined): n
 function nodeTrace(id: string, output: RecordValue, dt: number): RunVisuals['timeSeries'] {
   const values = numbers(output.H)
   return values.length ? { id, seconds: values.map((_, index) => index * dt), values } : undefined
+}
+
+/**
+ * ポンプ節点の N（回転速度）等、時刻付きサンプル列を { seconds, values } に変換する。
+ * 永続化された Run の実体（packages/core-py の moc.py / protocol.py 経由）では
+ * ノード時系列は `[{ t, N }, ...]` の形（各要素が時刻を持つ）で記録される。
+ * フラットな数値配列（他の時系列と同じ規約）で記録されているケースにも対応する。
+ */
+function timedSeries(value: JsonValue | undefined, key: string, dt: number): { seconds: number[]; values: number[] } | undefined {
+  if (!Array.isArray(value) || !value.length) return undefined
+  const seconds: number[] = []
+  const values: number[] = []
+  value.forEach((item, index) => {
+    if (typeof item === 'number' && Number.isFinite(item)) {
+      seconds.push(index * dt)
+      values.push(item)
+      return
+    }
+    const entry = record(item)
+    const t = entry?.t
+    const v = entry?.[key]
+    if (typeof t === 'number' && typeof v === 'number' && Number.isFinite(t) && Number.isFinite(v)) {
+      seconds.push(t)
+      values.push(v)
+    }
+  })
+  return values.length ? { seconds, values } : undefined
+}
+
+function findSpeedSeries(nodes: RecordValue | undefined, preferredId: string | undefined, dt: number): RunVisuals['speedSeries'] {
+  if (!nodes) return undefined
+  const ids = Object.keys(nodes).sort()
+  const ordered = preferredId && ids.includes(preferredId) ? [preferredId, ...ids.filter((id) => id !== preferredId)] : ids
+  for (const id of ordered) {
+    const series = timedSeries(record(nodes[id])?.N, 'N', dt)
+    if (series) return { id, ...series }
+  }
+  return undefined
 }
 
 export function deriveRunVisuals(run: Run, focus?: LinkedFocus): RunVisuals {
@@ -133,9 +172,12 @@ export function deriveRunVisuals(run: Run, focus?: LinkedFocus): RunVisuals {
     if (seconds.length && values.length) derivedTimeSeries = { id: focus?.timeSeriesId ?? 'series', seconds, values }
   }
 
+  const speedSeries = findSpeedSeries(nodeSeriesContainer, focus?.timeSeriesId, dt)
+
   return {
     ...(envelope ? { envelope } : {}),
     ...(derivedTimeSeries ? { timeSeries: derivedTimeSeries } : {}),
+    ...(speedSeries ? { speedSeries } : {}),
     ...(focus ? { profileCursorRatio: cursorRatio(focus.location, length) } : {}),
     summaryMetrics: numericLeaves(run.summary).slice(0, 80),
   }

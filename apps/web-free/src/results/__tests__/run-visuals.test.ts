@@ -55,3 +55,47 @@ describe('persisted Run visualization model', () => {
     expect(visuals.timeSeries).toEqual({ id: 'N-17', seconds: [0, 0.25], values: [30, 34] })
   })
 })
+
+const pumpRun: Run = {
+  ...runFixture,
+  kind: 'transient_pump',
+  manifest: {
+    ...runFixture.manifest,
+    numericParameters: { pipe: { length: 300 } },
+  },
+  summary: {
+    dt: 0.1,
+    pipes: {
+      pipe_0: { H_steady: [50, 48], Hmax: [55, 60], Hmin: [45, 40] },
+    },
+  },
+  timeSeries: {
+    pipes: {
+      pipe_0: [{ t: 0, H: [50, 48], Q: [0.1, 0.1] }],
+    },
+    // 実際の Python プロトコル出力（packages/core-py/open_waterhammer/protocol.py の
+    // _moc_output / moc.py の node_series_n）ではポンプ節点の N は [{t, N}, ...] 形式。
+    nodes: {
+      pump_node: {
+        H: [{ t: 0, H: 50 }, { t: 0.1, H: 49 }],
+        N: [{ t: 0, N: 1450 }, { t: 0.1, N: 1400 }, { t: 0.2, N: 1300 }],
+      },
+    },
+  },
+}
+
+describe('persisted pump speed series', () => {
+  test('derives a pump rotational-speed series from persisted node N samples', () => {
+    const visuals = deriveRunVisuals(pumpRun)
+
+    expect(visuals.speedSeries).toEqual({
+      id: 'pump_node', seconds: [0, 0.1, 0.2], values: [1450, 1400, 1300],
+    })
+  })
+
+  test('omits speedSeries when no node carries persisted N samples', () => {
+    const visuals = deriveRunVisuals(transientRun)
+
+    expect(visuals.speedSeries).toBeUndefined()
+  })
+})
