@@ -52,6 +52,42 @@ describe("CPython calculation adapter", () => {
     assert.ok(Math.abs((output.summary as { waveSpeed: number }).waveSpeed - 1212.579306278724) < 1e-9);
   });
 
+  test("matches CPython hashes for literal small numbers and ECMAScript exponent boundaries", async () => {
+    const caseSnapshot = {
+      ...caseFixture,
+      modelSnapshot: {
+        pipe,
+        canonicalNumbers: {
+          smallPlain: 0.00001,
+          smallBoundary: 0.000001,
+          smallExponent: 1e-7,
+          largePlain: 1e20,
+          largeExponent: 1e21,
+        },
+      },
+    };
+    const scenarioSnapshot = {
+      ...scenarioFixture,
+      boundaryConditions: {},
+      eventSettings: { closeTime: 2 },
+      protectionSettings: {},
+    };
+    const calculationInputHash = await canonicalSha256({
+      kind: "wave_speed",
+      model: caseSnapshot.modelSnapshot,
+      scenario: scenarioCalculationInput(scenarioSnapshot),
+    });
+
+    const output = await createCpythonExecutor()({
+      kind: "wave_speed",
+      caseSnapshot,
+      scenarioSnapshot,
+      calculationInputHash,
+    });
+
+    assert.equal(output.inputHash, calculationInputHash);
+  });
+
   test("reports a missing configured Python executable with an actionable code", async () => {
     const executor = createCpythonExecutor({ pythonPath: "definitely-missing-python-for-owh" });
     await assert.rejects(executor({

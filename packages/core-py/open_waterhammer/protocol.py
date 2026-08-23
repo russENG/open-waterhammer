@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import math
 import platform
 import sys
 from dataclasses import asdict, is_dataclass
@@ -401,13 +402,88 @@ HANDLERS: dict[str, Callable[[dict[str, Any], dict[str, Any]], dict[str, Any]]] 
 }
 
 
+def _ecmascript_number(value: int | float) -> str:
+    """Return the ECMAScript NumberToString spelling used by JSON.stringify."""
+    number = float(value)
+    if not math.isfinite(number):
+        raise ValueError("Canonical JSON cannot contain non-finite numbers")
+    if number == 0:
+        return "0"
+
+    sign = "-" if number < 0 else ""
+    text = repr(abs(number)).lower()
+    if "e" in text:
+        mantissa, exponent_text = text.split("e", 1)
+        exponent = int(exponent_text)
+    else:
+        mantissa = text
+        exponent = 0
+
+    integer, separator, fraction = mantissa.partition(".")
+    combined = integer + (fraction if separator else "")
+    leading_zero_count = len(combined) - len(combined.lstrip("0"))
+    digits = combined.lstrip("0").rstrip("0")
+    decimal_position = len(integer) - leading_zero_count + exponent
+    digit_count = len(digits)
+
+    if digit_count <= decimal_position <= 21:
+        body = digits + ("0" * (decimal_position - digit_count))
+    elif 0 < decimal_position <= 21:
+        body = f"{digits[:decimal_position]}.{digits[decimal_position:]}"
+    elif -6 < decimal_position <= 0:
+        body = f"0.{('0' * -decimal_position)}{digits}"
+    else:
+        exponent_value = decimal_position - 1
+        coefficient = digits[0] if digit_count == 1 else f"{digits[0]}.{digits[1:]}"
+        exponent_sign = "+" if exponent_value >= 0 else "-"
+        body = f"{coefficient}e{exponent_sign}{abs(exponent_value)}"
+    return sign + body
+
+
+def _canonical_json(value: Any, seen: set[int] | None = None) -> str:
+    """Match the sorted-key workspace canonicalJson representation exactly."""
+    if seen is None:
+        seen = set()
+    if value is None:
+        return "null"
+    if isinstance(value, bool):
+        return "true" if value else "false"
+    if isinstance(value, str):
+        return json.dumps(value, ensure_ascii=False, separators=(",", ":"))
+    if isinstance(value, (int, float)):
+        return _ecmascript_number(value)
+    if isinstance(value, (list, tuple)):
+        identity = id(value)
+        if identity in seen:
+            raise ValueError("Canonical JSON cannot contain cycles")
+        seen.add(identity)
+        try:
+            return "[" + ",".join(_canonical_json(item, seen) for item in value) + "]"
+        finally:
+            seen.remove(identity)
+    if isinstance(value, dict):
+        identity = id(value)
+        if identity in seen:
+            raise ValueError("Canonical JSON cannot contain cycles")
+        if any(not isinstance(key, str) for key in value):
+            raise TypeError("Canonical JSON object keys must be strings")
+        seen.add(identity)
+        try:
+            members = (
+                f"{_canonical_json(key, seen)}:{_canonical_json(value[key], seen)}"
+                for key in sorted(
+                    value,
+                    key=lambda item: item.encode("utf-16-be", errors="surrogatepass"),
+                )
+            )
+            return "{" + ",".join(members) + "}"
+        finally:
+            seen.remove(identity)
+    raise TypeError(f"Canonical JSON cannot contain {type(value).__name__}")
+
+
 def _canonical_input(kind: str, model: dict[str, Any], scenario: dict[str, Any]) -> bytes:
-    return json.dumps(
-        {"kind": kind, "model": model, "scenario": scenario},
-        ensure_ascii=False,
-        separators=(",", ":"),
-        sort_keys=True,
-    ).encode("utf-8")
+    return _canonical_json({"kind": kind, "model": model, "scenario": scenario}).encode("utf-8")
 
 
 def execute_request(request: Any) -> dict[str, Any]:

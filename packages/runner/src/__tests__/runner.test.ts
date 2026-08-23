@@ -161,6 +161,60 @@ describe("calculation runner", () => {
     assert.deepEqual(scenarioFixture, beforeScenario);
   });
 
+  test("snapshots caller inputs before async hashing even when the executor returns no input hash", async () => {
+    const mutableCase = structuredClone(caseFixture);
+    const mutableScenario = structuredClone(scenarioFixture);
+    const originalCase = structuredClone(mutableCase);
+    const originalScenario = structuredClone(mutableScenario);
+    let executedLength: number | undefined;
+    let executedUpstream: string | undefined;
+    const hashlessExecutor: CalculationExecutor = async (input) => {
+      executedLength = (input.caseSnapshot.modelSnapshot as { pipes: Array<{ lengthM: number }> })
+        .pipes[0]!.lengthM;
+      executedUpstream = (input.scenarioSnapshot.boundaryConditions as { upstream: string }).upstream;
+      return successfulExecutor()(input);
+    };
+
+    const pendingRun = runCalculation({
+      repository: repository(),
+      project: projectFixture,
+      caseSnapshot: mutableCase,
+      scenarioSnapshot: mutableScenario,
+      kind: "steady_network_epanet",
+      executors: registry(hashlessExecutor),
+      createRunId: () => "55555555-5555-4555-8555-555555555555",
+      now: clock(),
+      gitSha: "abc1234",
+    });
+
+    (mutableCase.modelSnapshot as { pipes: Array<{ lengthM: number }> }).pipes[0]!.lengthM = 9999;
+    (mutableScenario.boundaryConditions as { upstream: string }).upstream = "mutated";
+    const run = await pendingRun;
+
+    assert.equal(run.status, "succeeded");
+    assert.equal(executedLength, (
+      originalCase.modelSnapshot as { pipes: Array<{ lengthM: number }> }
+    ).pipes[0]!.lengthM);
+    assert.equal(
+      executedUpstream,
+      (originalScenario.boundaryConditions as { upstream: string }).upstream,
+    );
+    assert.deepEqual(run.manifest.numericParameters, originalCase.modelSnapshot);
+    assert.deepEqual(run.manifest.boundaryParameters, originalScenario.boundaryConditions);
+
+    const originalScenarioInput = {
+      boundaryConditions: originalScenario.boundaryConditions,
+      eventSettings: originalScenario.eventSettings,
+      protectionSettings: originalScenario.protectionSettings,
+    };
+    const expectedHash = createHash("sha256").update(canonicalJson({
+      kind: "steady_network_epanet",
+      model: originalCase.modelSnapshot,
+      scenario: originalScenarioInput,
+    })).digest("hex");
+    assert.equal(run.manifest.inputHashes.calculation, expectedHash);
+  });
+
   test("persists an executed result as succeeded and locks the Case even when assessment fails", async () => {
     const workspace = repository();
     const run = await runCalculation({

@@ -92,6 +92,10 @@ async function failedRun(
 }
 
 export async function runCalculation(input: RunCalculationInput): Promise<RunCalculationResult> {
+  const caseSnapshot = deepFreeze(structuredClone(input.caseSnapshot));
+  const scenarioSnapshot = deepFreeze(structuredClone(input.scenarioSnapshot));
+  input = { ...input, caseSnapshot, scenarioSnapshot };
+
   assertValid("Project", validateProject(input.project));
   assertValid("Case", validateCase(input.caseSnapshot));
   assertValid("Scenario", validateScenario(input.scenarioSnapshot));
@@ -111,8 +115,8 @@ export async function runCalculation(input: RunCalculationInput): Promise<RunCal
   try {
     const output = await executor({
       kind: input.kind,
-      caseSnapshot: deepFreeze(structuredClone(input.caseSnapshot)),
-      scenarioSnapshot: deepFreeze(structuredClone(input.scenarioSnapshot)),
+      caseSnapshot: input.caseSnapshot,
+      scenarioSnapshot: input.scenarioSnapshot,
       calculationInputHash: hashes.calculation,
     });
     if (output.inputHash !== undefined && output.inputHash !== hashes.calculation) {

@@ -1,4 +1,3 @@
-import hashlib
 import json
 import math
 import subprocess
@@ -10,6 +9,7 @@ import pytest
 from open_waterhammer.protocol import (
     PROTOCOL_VERSION,
     ProtocolError,
+    _canonical_input,
     execute_request,
     run_protocol_json,
 )
@@ -180,20 +180,30 @@ def test_executes_each_python_run_kind_with_a_structured_result(kind):
 def test_wave_speed_hash_and_numeric_result_are_canonical_and_hand_checkable():
     calculation_request = requests_by_kind()["wave_speed"]
     response = execute_request(calculation_request)
-    canonical_input = json.dumps(
-        {
-            "kind": calculation_request["kind"],
-            "model": calculation_request["model"],
-            "scenario": calculation_request["scenario"],
-        },
-        ensure_ascii=False,
-        separators=(",", ":"),
-        sort_keys=True,
-    ).encode("utf-8")
 
-    assert response["inputHash"] == hashlib.sha256(canonical_input).hexdigest()
+    assert response["inputHash"] == "10835479684f1b9eea1921ee1502c44047d700bbd683fbcd09b6b8ba30a9d342"
     assert math.isclose(response["result"]["summary"]["waveSpeed"], 1212.579306278724, rel_tol=1e-12)
     assert math.isclose(response["result"]["summary"]["vibrationPeriod"], 0.3298753309814903, rel_tol=1e-12)
+
+
+def test_canonical_input_uses_ecmascript_number_spelling_at_exponent_boundaries():
+    canonical_input = _canonical_input(
+        "wave_speed",
+        {
+            "smallPlain": 0.00001,
+            "smallBoundary": 0.000001,
+            "smallExponent": 1e-7,
+            "largePlain": 1e20,
+            "largeExponent": 1e21,
+        },
+        {},
+    )
+
+    assert canonical_input == (
+        b'{"kind":"wave_speed","model":{"largeExponent":1e+21,'
+        b'"largePlain":100000000000000000000,"smallBoundary":0.000001,'
+        b'"smallExponent":1e-7,"smallPlain":0.00001},"scenario":{}}'
+    )
 
 
 def test_native_python_steady_network_matches_the_reference_method_tolerance():
