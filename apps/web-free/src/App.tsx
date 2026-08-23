@@ -2,6 +2,7 @@ import { lazy, Suspense, useEffect, useState } from 'react'
 import type { WorkspaceData } from '@open-waterhammer/workspace'
 
 import { onNavigate, type AppPage } from './lib/navigation'
+import { resolveLegacyHash } from './lib/legacy-hash'
 import { WorkspaceApp } from './workspace/WorkspaceApp'
 import { initializeBrowserWorkspace } from './workspace/bootstrap'
 import type { WorkspaceRepositoryClient } from './workspace/workspace-context'
@@ -25,13 +26,24 @@ function documentationPage(hash: string): AppPage | null {
 }
 
 export default function App() {
-  const [hash, setHash] = useState(window.location.hash)
+  const [hash, setHash] = useState(() => resolveLegacyHash(window.location.hash) ?? window.location.hash)
   const [workspace, setWorkspace] = useState<BrowserWorkspace | null>(null)
   const [bootError, setBootError] = useState<string | null>(null)
   const docsPage = documentationPage(hash)
 
+  // レガシー式アンカー URL（#joukowsky 等）を #/docs/library へ書き換える。
+  // 初期表示・hashchange の両方をこの1エフェクトでカバーする（マウント時に一度手動実行）。
   useEffect(() => {
-    const update = () => setHash(window.location.hash)
+    const update = () => {
+      const raw = window.location.hash
+      const legacyTarget = resolveLegacyHash(raw)
+      if (legacyTarget) {
+        window.location.hash = legacyTarget
+        return
+      }
+      setHash(raw)
+    }
+    update()
     window.addEventListener('hashchange', update)
     return () => window.removeEventListener('hashchange', update)
   }, [])
