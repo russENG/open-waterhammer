@@ -171,6 +171,12 @@ test('all exact RunKinds execute and persist through the production browser regi
     await expect(page.getByRole('button', { name: 'Run calculation' })).toContainText('Save before Run')
     await expect(page.getByRole('button', { name: 'Run calculation' })).toBeDisabled()
     await expect(page.locator('details.advanced-json')).not.toHaveAttribute('open', '')
+    if (kind === 'joukowsky_allievi') {
+      // Fresh drafts deliberately omit 許容圧力 (withoutDemoOnlyAllowablePressure strips the
+      // demo-only threshold from ENGINEERING_TEMPLATES), so enter it the way an engineer
+      // would; the assessment assertion below depends on this typed-in threshold.
+      await page.getByLabel(/許容圧力/).fill('0.75')
+    }
     await page.getByRole('button', { name: 'Save input' }).click()
     await expect(page.getByRole('status')).toHaveText('Input saved')
     await expect(page.getByRole('button', { name: 'Run calculation' })).toBeEnabled()
@@ -182,10 +188,10 @@ test('all exact RunKinds execute and persist through the production browser regi
     await expect(inspector).toContainText(kind === 'steady_network_epanet' ? 'epanet-js' : 'open-waterhammer-core-py')
     await expect(inspector.getByRole('heading', { name: 'Summary fields' }).locator('..').locator('dd').first()).not.toHaveText('')
     if (kind === 'joukowsky_allievi') {
-      // Sample input now carries 許容圧力 (allowablePressureMpa: 0.75), so the Python
-      // protocol computes a real judge_design_pressure assessment instead of the
-      // needs_review default — confirms the wiring end-to-end through Pyodide.
-      await expect(inspector.locator('p.assessment')).not.toHaveClass(/assessment--needs_review/)
+      // With 許容圧力 typed in before the save above, the Python protocol computes a real
+      // judge_design_pressure assessment (pass/warning/fail) instead of the needs_review
+      // default — confirms the wiring end-to-end through Pyodide.
+      await expect(inspector.locator('p.assessment')).toHaveClass(/assessment--(pass|warning|fail)/)
     }
 
     if (index < runKinds.length - 1) {

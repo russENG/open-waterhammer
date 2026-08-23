@@ -14,6 +14,7 @@ import {
   type EngineeringField,
   type EngineeringState,
 } from '../engineering-fields'
+import { MethodSelectionGuide } from '../MethodSelectionGuide'
 import { evaluateRunGate, TOPOLOGY_REQUIRED_KINDS } from '../run-policy'
 import { useWorkspace } from '../workspace-context'
 
@@ -152,6 +153,7 @@ export function AnalysisPanel({ caseRecord, onRunSelected }: { caseRecord: Case;
 
   return <div className="panel-stack analysis-panel">
     <div className="panel-title-row"><div><span className="eyebrow">LOCAL CALCULATION / 04</span><h1>Analysis</h1><p>11種類の計算は共通 CalculationRunner を経由し、完了した Run が Case を固定します。</p></div><span className="offline-ticket">LOCAL / OFFLINE</span></div>
+    <details className="method-selection-guide"><summary>計算方法の選び方（§8.3.2 参照）</summary><MethodSelectionGuide onRecommend={selectKind} /></details>
     <div className="analysis-layout">
       <div className="run-kind-list" role="radiogroup" aria-label="Run kind">
         {RUN_KINDS.map((item) => <label key={item} className={item === kind ? 'run-kind-card run-kind-card--active' : 'run-kind-card'}>
