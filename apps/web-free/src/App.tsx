@@ -18,7 +18,7 @@ interface BrowserWorkspace {
   data: WorkspaceData
 }
 
-function documentationPage(hash: string): Exclude<AppPage, 'water-hammer'> | null {
+function documentationPage(hash: string): AppPage | null {
   const value = hash.replace(/^#\/?docs\/?/, '').split(/[?/]/)[0]
   if (value === 'reference' || value === 'library' || value === 'design-flow' || value === 'hydraulic' || value === 'about') return value
   return null
@@ -37,8 +37,7 @@ export default function App() {
   }, [])
 
   useEffect(() => onNavigate(({ page, topicId }) => {
-    const target = page === 'water-hammer' ? '#/' : `#/docs/${page}${topicId ? `?topic=${encodeURIComponent(topicId)}` : ''}`
-    window.location.hash = target
+    window.location.hash = `#/docs/${page}${topicId ? `?topic=${encodeURIComponent(topicId)}` : ''}`
   }), [])
 
   useEffect(() => {
@@ -59,10 +58,10 @@ export default function App() {
   return <WorkspaceApp repository={workspace.repository} initialData={workspace.data} />
 }
 
-function DocumentationShell({ page }: { page: Exclude<AppPage, 'water-hammer'> }) {
+function DocumentationShell({ page }: { page: AppPage }) {
   const topic = new URLSearchParams(window.location.hash.split('?')[1] ?? '').get('topic') ?? undefined
   return <div className="docs-app">
-    <header className="docs-header"><a className="docs-brand" href="#/"><span>OWH</span><div><strong>OPEN WATERHAMMER</strong><small>documentation & design references</small></div></a><div className="product-context"><span className="alpha-label">alpha</span><span className="support-label">設計比較支援</span></div><nav aria-label="Documentation sections"><a href="#/">Workspace</a><a className={page === 'reference' ? 'active' : ''} href="#/docs/reference">Reference</a><a className={page === 'library' ? 'active' : ''} href="#/docs/library">Library</a><a className={page === 'about' ? 'active' : ''} href="#/docs/about">About</a></nav></header>
+    <header className="docs-header"><a className="docs-brand" href="#/"><span>OWH</span><div><strong>OPEN WATERHAMMER</strong><small>documentation & design references</small></div></a><div className="product-context"><span className="alpha-label">alpha</span><span className="support-label">設計比較支援</span></div><nav aria-label="Documentation sections"><a href="#/">Workspace</a><a className={page === 'reference' ? 'active' : ''} href="#/docs/reference">Reference</a><a className={page === 'library' ? 'active' : ''} href="#/docs/library">Library</a><a className={page === 'design-flow' ? 'active' : ''} href="#/docs/design-flow">設計フロー</a><a className={page === 'hydraulic' ? 'active' : ''} href="#/docs/hydraulic">水理設計の視点</a><a className={page === 'about' ? 'active' : ''} href="#/docs/about">About</a></nav></header>
     <main className="docs-main"><Suspense fallback={<div className="panel-loading" role="status"><span /><p>Loading documentation…</p></div>}>
       {page === 'reference' && <ReferencePage initialTopicId={topic} />}
       {page === 'library' && <LibraryPage initialAnchor={topic} />}

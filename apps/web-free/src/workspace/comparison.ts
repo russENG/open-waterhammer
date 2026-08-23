@@ -9,9 +9,10 @@ export function formatComparisonNumber(value: number): string {
   return String(value)
 }
 
-function flatten(value: JsonValue, prefix = ''): Array<[string, JsonValue]> {
-  if (Array.isArray(value)) return value.flatMap((child, index) => flatten(child, `${prefix}[${index}]`))
-  if (value && typeof value === 'object') return Object.keys(value).sort().flatMap((key) => flatten(value[key]!, prefix ? `${prefix}.${key}` : key))
+/** JsonValue を「パス → 末端値」の一覧に再帰的に平坦化する（配列は [i]、オブジェクトは .key で連結）。 */
+export function flattenComparisonValue(value: JsonValue, prefix = ''): Array<[string, JsonValue]> {
+  if (Array.isArray(value)) return value.flatMap((child, index) => flattenComparisonValue(child, `${prefix}[${index}]`))
+  if (value && typeof value === 'object') return Object.keys(value).sort().flatMap((key) => flattenComparisonValue(value[key]!, prefix ? `${prefix}.${key}` : key))
   return [[prefix, value]]
 }
 
@@ -25,7 +26,7 @@ export function buildComparisonRows(cases: Case[], scenarios: Scenario[], runs: 
 } {
   const conditions = cases.map((caseRecord) => {
     const scenario = scenarios.find(({ caseId }) => caseId === caseRecord.id)
-    return Object.fromEntries(flatten({
+    return Object.fromEntries(flattenComparisonValue({
       model: caseRecord.modelSnapshot,
       scenario: {
         boundaryConditions: scenario?.boundaryConditions ?? null,
@@ -40,7 +41,7 @@ export function buildComparisonRows(cases: Case[], scenarios: Scenario[], runs: 
 
   const results = cases.map((caseRecord) => {
     const run = latestRun(caseRecord.id, runs)
-    return Object.fromEntries(run ? flatten(run.summary).filter((entry): entry is [string, number] => typeof entry[1] === 'number' && Number.isFinite(entry[1])).map(([path, value]) => [`summary.${path}`, value]) : [])
+    return Object.fromEntries(run ? flattenComparisonValue(run.summary).filter((entry): entry is [string, number] => typeof entry[1] === 'number' && Number.isFinite(entry[1])).map(([path, value]) => [`summary.${path}`, value]) : [])
   })
   const resultPaths = [...new Set(results.flatMap(Object.keys))].sort()
   const resultRows = resultPaths.map((path) => {

@@ -3767,7 +3767,7 @@ select.input--narrow {
     gap: 14px;
   }
 
-  /* 結果テーブルヘッダ（タイトル＋CSVボタン）を縦積みに */
+  /* カード見出し（.card-title）の文字サイズを縮小 */
   .card-title {
     font-size: 1rem;
   }

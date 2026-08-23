@@ -1,14 +1,17 @@
 /**
- * シンプルなページ間ナビゲーション機構（カスタムイベント方式）
+ * ページ間ナビゲーション機構（カスタムイベント方式）
  *
- * App.tsx は useState ベースのルーティングのため、
- * 子コンポーネントから親 (App) に「基準照会ページの特定トピックを開いてほしい」を伝える手段が無い。
+ * アプリ全体はハッシュベースのルーティングで画面を切り替える
+ * （App.tsx の hashchange 購読、および Workspace 側の react-router HashRouter）。
+ * 計算フォームや参照カードのようにルーターの外側にある深い子コンポーネントから、
+ * 「基準照会・計算ライブラリの特定トピックを開いてほしい」と親 (App.tsx) へ伝える手段として、
+ * モジュール内に閉じたグローバル EventTarget を1つ用意する。
  *
- * グローバル EventTarget を1つ用意し、計算コンポーネントから dispatch、App.tsx で listen する。
- * 外部依存ゼロ・ProviderTreeも不要。
+ * 子コンポーネントは navigateTo() で dispatch し、App.tsx の onNavigate() がそれを受けて
+ * window.location.hash を書き換える。外部依存ゼロ・Provider ツリーも不要。
  */
 
-export type AppPage = "about" | "design-flow" | "hydraulic" | "water-hammer" | "reference" | "library";
+export type AppPage = "about" | "design-flow" | "hydraulic" | "reference" | "library";
 
 export interface NavigateDetail {
   page: AppPage;

@@ -24,6 +24,17 @@ describe('persisted Run exports', () => {
     expect(exported.manifestSummary.productVersion).toBe('0.2.0-alpha.1')
   })
 
+  test('Run JSON manifestSummary.productVersion reflects the persisted manifest, not the current build constant', () => {
+    const persistedManifest = {
+      ...runFixture.manifest,
+      productVersion: '9.9.9-test' as unknown as typeof runFixture.manifest.productVersion,
+    }
+    const text = buildRunJsonExport({ ...runFixture, manifest: persistedManifest })
+    const exported = JSON.parse(text)
+
+    expect(exported.manifestSummary.productVersion).toBe('9.9.9-test')
+  })
+
   test('Excel generation passes the exact persisted Run to generateRunReport without recalculation', async () => {
     const bytes = new Uint8Array([1, 2, 3])
     const generator = vi.fn(async () => bytes)

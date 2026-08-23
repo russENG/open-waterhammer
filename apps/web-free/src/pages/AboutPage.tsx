@@ -1,3 +1,5 @@
+import { navigateTo } from '../lib/navigation'
+
 /* eslint-disable no-irregular-whitespace -- preserved Japanese documentation contains intentional full-width spacing */
 /**
  * 公共設計コモンズ（Open Civil Design）説明ページ
@@ -94,7 +96,7 @@ export function AboutPage() {
             <p>
               計算ロジックは Python パッケージ（<code>packages/core-py/</code>）に単一の真理源を置き、
               ブラウザでも Pyodide 経由で同じコードを実行します。
-              「<a href="#" onClick={(e) => { e.preventDefault(); window.dispatchEvent(new CustomEvent("ocd:navigate", { detail: { page: "library" } })); }}>計算ライブラリ</a>」ページから
+              「<a href="#" onClick={(e) => { e.preventDefault(); navigateTo("library"); }}>計算ライブラリ</a>」ページから
               各計算式の数式・入出力・適用条件・ソースコード位置を一望できます。
             </p>
           </div>

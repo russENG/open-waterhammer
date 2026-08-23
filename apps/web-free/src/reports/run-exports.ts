@@ -1,4 +1,4 @@
-import { PRODUCT_VERSION, type Run } from '@open-waterhammer/contracts'
+import type { Run } from '@open-waterhammer/contracts'
 
 export const APPLICABILITY_LIMITATIONS = '適用限界：本ツールの自動評価は設計比較支援のための参考情報です。入力条件、適用基準、数値解法の妥当性は設計者が個別に確認してください。'
 
@@ -10,7 +10,7 @@ export function buildRunJsonExport(run: Run): string {
     labels: ['alpha', '設計比較支援'],
     applicabilityLimitations: APPLICABILITY_LIMITATIONS,
     manifestSummary: {
-      productVersion: PRODUCT_VERSION,
+      productVersion: run.manifest.productVersion,
       engine: run.manifest.engine,
       runtime: run.manifest.runtime,
       method: run.manifest.method,

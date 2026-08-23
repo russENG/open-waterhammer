@@ -78,6 +78,20 @@ describe('full workspace application', () => {
     expect(screen.getByText('2 Cases')).toBeVisible()
   })
 
+  test('marks the active workspace tab with aria-current for assistive technology', async () => {
+    const user = userEvent.setup()
+    setup()
+    const tabs = screen.getByRole('navigation', { name: 'Workspace tabs' })
+
+    expect(await within(tabs).findByRole('link', { name: 'Overview' })).toHaveAttribute('aria-current', 'page')
+    expect(within(tabs).getByRole('link', { name: 'Scenario' })).not.toHaveAttribute('aria-current')
+
+    await user.click(within(tabs).getByRole('link', { name: 'Scenario' }))
+
+    expect(await within(tabs).findByRole('link', { name: 'Scenario' })).toHaveAttribute('aria-current', 'page')
+    expect(within(tabs).getByRole('link', { name: 'Overview' })).not.toHaveAttribute('aria-current')
+  })
+
   test('New Case creates an independent empty draft instead of cloning the selected snapshot', async () => {
     const user = userEvent.setup()
     const { data, repository } = setup()

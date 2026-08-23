@@ -1,5 +1,7 @@
 import type { Case, Project, Run, Scenario } from '@open-waterhammer/contracts'
 
+import { deriveSchematic, type SchematicPipe } from '../schematic'
+
 function modelMetrics(caseRecord: Case) {
   const root = caseRecord.modelSnapshot
   const inputs = root && typeof root === 'object' && !Array.isArray(root) && root.runInputs && typeof root.runInputs === 'object' && !Array.isArray(root.runInputs)
@@ -8,8 +10,19 @@ function modelMetrics(caseRecord: Case) {
   return { inputs, geo }
 }
 
+function formatElevation(elevation?: number): string {
+  return elevation === undefined ? 'EL —' : `EL ${elevation.toFixed(2)}`
+}
+
+function formatPipeDimensions(pipe: SchematicPipe): string {
+  const diameter = pipe.diameter === undefined ? '—' : String(Math.round(pipe.diameter * 1000))
+  const length = pipe.length === undefined ? '—' : String(pipe.length)
+  return `φ${diameter} / ${length} m`
+}
+
 export function OverviewPanel({ project, caseRecord, scenario, runs }: { project: Project; caseRecord: Case; scenario?: Scenario; runs: Run[] }) {
   const metrics = modelMetrics(caseRecord)
+  const schematic = deriveSchematic(caseRecord)
   const latest = runs.at(-1)
   return <div className="panel-stack overview-panel">
     <div className="panel-title-row"><div><span className="eyebrow">CONTROL SHEET / 01</span><h1>設計条件の俯瞰</h1><p>入力・シナリオ・計算証跡を一枚のフィールドノートとして整理します。</p></div><span className={`state-ticket state-ticket--${caseRecord.state}`}>{caseRecord.state}</span></div>
@@ -31,10 +44,10 @@ export function OverviewPanel({ project, caseRecord, scenario, runs }: { project
       </section>
       <section className="notebook-card schematic-card">
         <div className="card-heading"><span>02</span><div><h2>Hydraulic line</h2><p>{scenario?.name ?? 'Scenario not configured'}</p></div></div>
-        <div className="pipe-schematic" aria-label="Hydraulic model schematic">
-          <span className="reservoir-symbol">R</span><i /><b>P—01</b><i /><span className="junction-symbol">J</span>
-          <small>EL 100.00</small><small>φ300 / 500 m</small><small>EL 88.00</small>
-        </div>
+        {schematic ? <div className="pipe-schematic" aria-label="Hydraulic model schematic">
+          <span className="reservoir-symbol" title={schematic.upstream.id}>R</span><i /><b>{schematic.pipe.id ?? '—'}</b><i /><span className="junction-symbol" title={schematic.downstream.id}>J</span>
+          <small>{formatElevation(schematic.upstream.elevation)}</small><small>{formatPipeDimensions(schematic.pipe)}</small><small>{formatElevation(schematic.downstream.elevation)}</small>
+        </div> : <p className="muted">モデル未設定</p>}
       </section>
       <section className="notebook-card activity-card">
         <div className="card-heading"><span>03</span><div><h2>Recent evidence</h2><p>ローカルに保存された Run</p></div></div>
