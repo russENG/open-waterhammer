@@ -214,6 +214,25 @@ describe("deterministic .owhproj bundles", () => {
     await assert.rejects(validateProjectBundle(duplicatedAcrossTypes), /duplicate entity id/i);
   });
 
+  test("imports a bundle whose productVersion differs from the running release (forward/backward compatible)", async () => {
+    // Controller ruling (Task "final review wave" finding I1): productVersion must widen from
+    // an equality gate to a mere non-blank string, so a bundle exported by an older or newer
+    // release stays importable at the next version bump. schemaVersion (and bundleFormatVersion,
+    // exercised above) remain the sole compatibility gates and are untouched by this test.
+    const source = new InMemoryWorkspaceRepository(workspace);
+    const target = new InMemoryWorkspaceRepository();
+    const olderProductVersion = repack(await source.exportBundle(projectFixture.id), (files) => {
+      const manifest = JSON.parse(strFromU8(files["bundle.json"]!));
+      manifest.productVersion = "0.1.0";
+      files["bundle.json"] = strToU8(JSON.stringify(manifest));
+    }, true);
+
+    const importedProject = await target.importBundle(olderProductVersion);
+
+    assert.deepEqual(importedProject, projectFixture);
+    assert.deepEqual(await target.snapshot(), workspace);
+  });
+
   test("rejects traversal and absolute ZIP paths before reading bundle content", async () => {
     for (const unsafeName of ["../escape.json", "/absolute.json", "C:/drive.json", "safe\\..\\escape.json"]) {
       const archive = zipSync({ [unsafeName]: strToU8("{}") }, {

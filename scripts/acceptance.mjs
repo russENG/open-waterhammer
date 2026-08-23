@@ -24,7 +24,7 @@
 //   2. Deterministic bundles  — exportProjectBundle x2 byte-identical; import -> re-export
 //                                 byte-identical.
 //   3. CPython runs via the real CLI — `node packages/cli/dist/bin.js run ...`, once per kind.
-//   4. Numeric parity          — 5 kinds vs literal recorded goldens (tolerance 1e-9).
+//   4. Numeric parity          — 6 kinds vs literal recorded goldens (tolerance 1e-9).
 //   5. Cross-runtime hash consistency — golden joukowsky_allievi calculation hash.
 //   6. Legacy migration idempotence.
 //   7. Worktree cleanliness   — `git status --porcelain` empty at the end.
@@ -236,6 +236,14 @@ const GOLDEN_NUMERICS = {
     // of the input Pipe.id "P-01" — see packages/core-py/open_waterhammer/moc.py), reach index
     // 10 (nReaches=10 -> 11 samples, index 0..10) of Hmax.
     peakHmax: 74.1054816939722,
+  },
+  transient_protection_device: {
+    // summary.protection.reductionRate for the golden PROTECTION_NETWORK + PROTECTION_DEVICE_
+    // SETTINGS above (surge_tank at J-01, tankArea 4, initialLevel 78.7) — matches the ≈46.5%
+    // figure already documented in docs/design-workspace.md §8. Pins the mitigation math
+    // (baseline vs. protected MOC comparison) cross-runtime, the same way every other kind's
+    // numeric goldens do.
+    reductionRate: 0.4653186845288916,
   },
 };
 
@@ -487,6 +495,12 @@ await check("4. Numeric parity — transient_single_pipe", () => {
   assert.ok(pipe, "transient_single_pipe.summary.pipes.pipe_0 must exist");
   assertClose(pipe.vibrationPeriod, expected.vibrationPeriod, "transient_single_pipe.summary.pipes.pipe_0.vibrationPeriod");
   assertClose(pipe.Hmax[10], expected.peakHmax, "transient_single_pipe.summary.pipes.pipe_0.Hmax[10]");
+});
+
+await check("4. Numeric parity — transient_protection_device (mitigation reductionRate)", () => {
+  const { summary } = runsByKind.transient_protection_device;
+  const expected = GOLDEN_NUMERICS.transient_protection_device;
+  assertClose(summary.protection.reductionRate, expected.reductionRate, "transient_protection_device.summary.protection.reductionRate");
 });
 
 // ─── Step 5: cross-runtime hash consistency ─────────────────────────────────────────────────

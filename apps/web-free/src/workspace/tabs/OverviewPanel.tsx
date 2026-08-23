@@ -4,6 +4,7 @@ import { useRef, useState } from 'react'
 import { downloadProjectFile, exportProjectFile, importProjectFile } from '../project-transfer'
 import { deriveSchematic, type SchematicPipe } from '../schematic'
 import { useWorkspaceOptional } from '../workspace-context'
+import { newestCaseIdForProject } from '../workspace-state'
 
 function modelMetrics(caseRecord: Case) {
   const root = caseRecord.modelSnapshot
@@ -29,7 +30,7 @@ function formatPipeDimensions(pipe: SchematicPipe): string {
  * quietly renders nothing for callers that mount `OverviewPanel` bare, such as
  * `../__tests__/schematic.test.ts`.
  */
-function ProjectTransferCard({ project }: { project: Project }) {
+function ProjectTransferCard({ project, onImported }: { project: Project; onImported?: (projectId: string, caseId: string) => void }) {
   const workspace = useWorkspaceOptional()
   const fileInputRef = useRef<HTMLInputElement>(null)
   const [message, setMessage] = useState<string | null>(null)
@@ -63,8 +64,13 @@ function ProjectTransferCard({ project }: { project: Project }) {
     setBusy(true)
     try {
       const summary = await importProjectFile(repository, file)
-      await refresh()
+      // A fresh snapshot, not the (possibly stale) `data` this component's WorkspaceProvider
+      // ancestor was last rendered with — `refresh()` both updates that provider's state AND
+      // returns the same snapshot it just read, so this local use of it is guaranteed current.
+      const next = await refresh()
       setMessage(`${summary.project.name} を読み込みました（Alternative ${summary.alternatives} / Case ${summary.cases} / Scenario ${summary.scenarios} / Run ${summary.runs}）。`)
+      const landingCaseId = newestCaseIdForProject(next, summary.project.id)
+      if (landingCaseId) onImported?.(summary.project.id, landingCaseId)
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : String(caught))
     } finally {
@@ -107,7 +113,7 @@ function ProjectTransferCard({ project }: { project: Project }) {
   </section>
 }
 
-export function OverviewPanel({ project, caseRecord, scenario, runs }: { project: Project; caseRecord: Case; scenario?: Scenario; runs: Run[] }) {
+export function OverviewPanel({ project, caseRecord, scenario, runs, onImported }: { project: Project; caseRecord: Case; scenario?: Scenario; runs: Run[]; onImported?: (projectId: string, caseId: string) => void }) {
   const metrics = modelMetrics(caseRecord)
   const schematic = deriveSchematic(caseRecord)
   const latest = runs.at(-1)
@@ -141,6 +147,6 @@ export function OverviewPanel({ project, caseRecord, scenario, runs }: { project
         {runs.length ? <ol className="run-ledger">{[...runs].reverse().slice(0, 4).map((run) => <li key={run.id}><time>{new Date(run.updatedAt).toLocaleString('ja-JP')}</time><strong>{run.kind}</strong><span className={`assessment assessment--${run.assessment.status}`}>{run.assessment.status}</span></li>)}</ol> : <div className="empty-ledger"><span>∅</span><p>Analysis から計算を実行すると、manifest と結果がここに記録されます。</p></div>}
       </section>
     </div>
-    <ProjectTransferCard project={project} />
+    <ProjectTransferCard project={project} onImported={onImported} />
   </div>
 }

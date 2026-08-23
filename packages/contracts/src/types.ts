@@ -81,7 +81,16 @@ export interface Scenario {
 
 export interface RunManifest {
   schemaVersion: typeof SCHEMA_VERSION;
-  productVersion: typeof PRODUCT_VERSION;
+  // Intentionally a plain string, not `typeof PRODUCT_VERSION`: a RunManifest is read back out
+  // of bundles exported by other releases (older or newer), so pinning this type to the
+  // *current* release's literal would make every previously-exported manifest a type error the
+  // moment PRODUCT_VERSION bumps. PRODUCT_VERSION itself remains the value this release stamps
+  // onto manifests it creates (see packages/runner/src/manifest.ts, runner.ts, and
+  // packages/workspace/src/bundle.ts) — only the *read-side* type is widened. The matching
+  // schema (schemas.ts runManifestSchema.productVersion) is a non-blank string, not a `const`,
+  // and packages/workspace/src/bundle.ts no longer rejects a bundle whose productVersion
+  // differs from PRODUCT_VERSION (schemaVersion remains the compatibility gate).
+  productVersion: string;
   runId: Uuid;
   caseId: Uuid;
   scenarioId: Uuid;

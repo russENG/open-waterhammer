@@ -17,6 +17,7 @@
     "@open-waterhammer/contracts": "*",
     "@open-waterhammer/excel-io": "*",
     "@open-waterhammer/runner": "*",
+    "@open-waterhammer/sample-data": "*",
     "@open-waterhammer/workspace": "*",
     "@types/katex": "^0.16.8",
     "buffer": "^5.7.1",

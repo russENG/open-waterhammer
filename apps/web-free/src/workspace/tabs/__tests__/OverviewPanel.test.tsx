@@ -1,4 +1,4 @@
-import { caseFixture, projectFixture, type Case } from '@open-waterhammer/contracts'
+import { alternativeFixture, caseFixture, projectFixture, type Case } from '@open-waterhammer/contracts'
 import { InMemoryWorkspaceRepository } from '@open-waterhammer/workspace'
 import { render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
@@ -94,6 +94,50 @@ describe('OverviewPanel project bundle card', () => {
     await user.upload(screen.getByTestId('project-bundle-file-input'), file)
 
     expect(await screen.findByRole('status')).toHaveTextContent('Imported harbor line')
+  })
+
+  test('navigates to the imported Project\'s newest Case overview (by createdAt) after a successful import', async () => {
+    const user = userEvent.setup()
+    const base = buildSampleWorkspace('2026-08-23T01:02:03.000Z')
+    // The mocked importProjectFile below never touches the real repository, so `refresh()`
+    // (called after import) reads back whatever this repository was already seeded with —
+    // stand in for "the state right after a real import" by seeding the second Project's
+    // Alternative/Cases up front, exactly as a real importBundle would have written them.
+    const importedProject = { ...projectFixture, id: 'zzzzzzzz-zzzz-4zzz-8zzz-zzzzzzzzzzzz', name: 'Imported harbor line' }
+    const importedAlternative = { ...alternativeFixture, id: 'aaaaaaaa-1111-4111-8111-111111111111', projectId: importedProject.id }
+    // olderCase has the later updatedAt but earlier createdAt — proves navigation follows
+    // createdAt (per the spec), not the app's usual "most recently touched" ordering.
+    const olderCase = caseWith({ runInputs: {}, geoDrafts: [] })
+    const newerCase = {
+      ...olderCase,
+      id: 'aaaaaaaa-2222-4222-8222-222222222222',
+      alternativeId: importedAlternative.id,
+      createdAt: '2021-01-01T00:00:00.000Z',
+      updatedAt: '2019-01-01T00:00:00.000Z',
+    }
+    const seededOlderCase = { ...olderCase, alternativeId: importedAlternative.id, createdAt: '2020-01-01T00:00:00.000Z', updatedAt: '2025-01-01T00:00:00.000Z' }
+    const data = {
+      ...base,
+      projects: [...base.projects, importedProject],
+      alternatives: [...base.alternatives, importedAlternative],
+      cases: [...base.cases, seededOlderCase, newerCase],
+    }
+    const repository = new InMemoryWorkspaceRepository(data)
+    vi.mocked(importProjectFile).mockResolvedValue({
+      project: importedProject, alternatives: 1, cases: 2, scenarios: 0, runs: 0, legacyArtifacts: 0,
+    })
+    const onImported = vi.fn()
+    render(
+      <WorkspaceProvider repository={repository} initialData={data}>
+        <OverviewPanel project={data.projects[0]!} caseRecord={data.cases[0]!} runs={[]} onImported={onImported} />
+      </WorkspaceProvider>,
+    )
+    const file = new File([new Uint8Array([1, 2, 3])], 'ok.owhproj')
+
+    await user.upload(screen.getByTestId('project-bundle-file-input'), file)
+
+    await screen.findByRole('status')
+    expect(onImported).toHaveBeenCalledWith(importedProject.id, newerCase.id)
   })
 
   test('does not render the project bundle card (and does not throw) when rendered outside a WorkspaceProvider', () => {

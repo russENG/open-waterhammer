@@ -101,33 +101,37 @@ Run 単位で機械的に検証する仕組みを導入した。
   Run ID・タイムスタンプは実行のたびに新規生成されるため、正規化比較からは除外する。
 - **決定性バンドルの往復（round-trip）**: 同一内容を `.owhproj` として2回エクスポートするとバイト
   単位で同一になることを検証している（`packages/workspace` のバンドルテスト）。
-- **golden `.owhproj` 受け入れスクリプト（Task 5d、予定）**: 本書執筆時点では未着手。着手後は、
-  production UI のすべての計算が runner を経由していること、成功 Run が完全なマニフェスト/ハッシュ
-  を持つこと、レガシー移行が冪等であること、決定性バンドルが往復すること、ブラウザ/CLI の結果が
-  上記の許容誤差内で一致すること、テスト実行後にワークツリーがクリーンなままであることを、エンド
-  ツーエンドの golden フィクスチャで一括検証する計画である。
+- **golden `.owhproj` 受け入れスクリプト（`scripts/acceptance.mjs`、`npm run acceptance`）**: 着地済み。
+  golden ワークスペース（11 RunKind 全種）を組み立て、決定性バンドルの往復・実 CLI 経由の CPython
+  実行・5種類の数値ゴールデン（1e-9 許容誤差）に加え `transient_protection_device` の防護効果
+  （`reductionRate`）ゴールデン・ハッシュのクロスランタイム一致・レガシー移行の冪等性・実行後の
+  ワークツリークリーン性を、エンドツーエンドの golden フィクスチャで一括検証する。計23件のチェック
+  （うち1件は実行後の `git status --porcelain` が空であることの確認——このリポジトリでの作業中は
+  当然満たされない）。
 
 ---
 
 ## 4. 現在の検証状況
 
-本書執筆時点（コミット `2b043b8`、`feature/design-workspace` ブランチ——Excel 入出力・成果品帳票の
-復元が着地した直後）で確認した、全スイート green の最終値。パッケージ間バージョン統一など進行中の
-リリース工程により件数は今後も動く見込み。正確な最新値は各テストコマンドを実行して確認すること
-（コマンドは [`README.md`](../README.md#開発) を参照）。
+本書執筆時点（コミット `9338a2c` の直後、`feature/design-workspace` ブランチ——CLI 文字コード・
+プロジェクト受け渡し到達性・`productVersion` 互換性緩和・ドキュメント訂正の最終 review wave
+コミットが着地した直後）で確認した、全スイート green の最終値。パッケージ間バージョン統一など
+進行中のリリース工程により件数は今後も動く見込み。正確な最新値は各テストコマンドを実行して確認
+すること（コマンドは [`README.md`](../README.md#開発) を参照）。
 
 | レイヤ | フレームワーク | 件数 |
 |---|---|---|
 | `packages/core-py`（Python） | pytest | 141 件 pass、警告 0件 |
 | `packages/contracts` | node:test | 13 件 |
-| `packages/workspace` | node:test | 22 件 |
-| `packages/runner` | node:test | 22 件 |
-| `packages/cli` | node:test | 7 件 |
+| `packages/workspace` | node:test | 23 件 |
+| `packages/runner` | node:test | 25 件 |
+| `packages/cli` | node:test | 12 件 |
 | `packages/core`（参照/V&V） | node:test | 156 件 |
 | `packages/epanet-adapter` | node:test | 9 件 |
-| `packages/excel-io` | node:test | 24 件 |
-| `apps/web-free`（コンポーネント・統合） | Vitest | 148 件（29ファイル） |
+| `packages/excel-io` | node:test | 25 件 |
+| `apps/web-free`（コンポーネント・統合） | Vitest | 167 件（33ファイル） |
 | `apps/web-free/e2e`（ブラウザ E2E） | Playwright | 4シナリオ（下記） |
+| `scripts/acceptance.mjs`（golden 受け入れ） | 独自スクリプト | 23件のチェック（上記） |
 
 Playwright E2E（`apps/web-free/e2e/workspace.spec.ts`）のシナリオ:
 

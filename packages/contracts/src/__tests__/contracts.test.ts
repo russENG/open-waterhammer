@@ -173,11 +173,16 @@ describe("canonical JSON schema validators", () => {
     assert.equal(validateLegacyArtifact({ ...succeededRun, provenance: "incomplete" }), false);
   });
 
-  test("pins every run manifest to the canonical schema and product versions", () => {
+  test("pins every run manifest to the canonical schema version, while accepting any non-blank product version", () => {
     assert.equal(SCHEMA_VERSION, "1.0.0");
     assert.equal(PRODUCT_VERSION, "0.2.0-alpha.1");
     assert.equal(validateRunManifest({ ...manifest, schemaVersion: "2.0.0" }), false);
-    assert.equal(validateRunManifest({ ...manifest, productVersion: "0.2.0" }), false);
+    // productVersion is intentionally NOT pinned to the current release constant: a bundle
+    // exported by an older or newer release must remain importable at the next version bump
+    // (controller ruling, Task "final review wave" finding I1). schemaVersion above remains the
+    // sole compatibility gate.
+    assert.equal(validateRunManifest({ ...manifest, productVersion: "0.1.0" }), true);
+    assert.equal(validateRunManifest({ ...manifest, productVersion: "" }), false);
   });
 
   test("exports complete literal fixtures for every canonical entity", () => {

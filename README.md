@@ -63,7 +63,9 @@ npm run dev --workspace=apps/web-free
 
 ### CLI（`owh`）
 
-ブラウザなしで `.owhproj` バンドルを検証・検査・再計算できるローカル CLI。
+ブラウザなしで `.owhproj` バンドルを検証・検査できるローカル CLI。`run` は、CLI 自身で組み立てた、
+または golden 受け入れスクリプト（`scripts/acceptance.mjs`）と同じ形の Case/Scenario を持つバンドル
+中の、未実行（draft）Case を実行する。
 
 ```bash
 npm install
@@ -74,10 +76,16 @@ npx owh run      path/to/project.owhproj --case <caseId> --scenario <scenarioId>
 ```
 
 `--python` を省略すると `PATH` 上の `python` を使う。入力バンドルへの上書きは常に拒否し、出力先が
-既存ファイルと衝突する場合も計算前に拒否する。**現時点では、ブラウザワークスペースから
-`.owhproj` を書き出す UI ボタンは未実装**（`@open-waterhammer/workspace` の `exportProjectBundle`
-API 自体はテスト済みで、ブラウザ起動時のサンプル投入にも内部的に使われている）。CLI は主に、
-バンドル化された既存プロジェクトのオフライン検証・バッチ再計算・CI 組み込みを想定している。
+既存ファイルと衝突する場合も計算前に拒否する。Python 未検出・エンジン非対応・ID 不正・チェックサム
+/スキーマ不正・出力衝突・**対象 Case がロック済み**（過去に成功した Run を持つ）の場合は、簡潔な
+メッセージとともに非ゼロ終了する。**本リリースの `run` はブラウザが書き出した `.owhproj` を実行
+できない**——ブラウザの Case は全 RunKind 入力を `modelSnapshot.runInputs` にラップした形状を持ち、
+UI 自体は `Scenario.eventSettings.runKind`（`run` が実行対象の RunKind を選ぶキー）を書き込まない
+ため。ブラウザ製バンドルに対しては `validate` / `inspect` のみ対応する。
+
+ブラウザワークスペース間でプロジェクトを受け渡す場合は、概要タブの「プロジェクトを書き出し」で
+`.owhproj` をダウンロードし、別の環境の概要タブで「プロジェクトを読み込み」から取り込む
+（同じ Project ID が既に存在する環境への読み込みは仕様として拒否される）。
 
 ---
 

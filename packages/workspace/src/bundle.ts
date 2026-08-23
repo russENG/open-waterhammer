@@ -300,8 +300,13 @@ export async function inspectProjectBundle(bytes: Uint8Array): Promise<BundleIns
 
   const manifest = parseManifest(parseJsonMember(files, "bundle.json"));
   if (manifest.bundleFormatVersion !== BUNDLE_FORMAT_VERSION) throw new Error(`Unknown bundle format version: ${manifest.bundleFormatVersion}`);
-  if (manifest.schemaVersion !== SCHEMA_VERSION || manifest.productVersion !== PRODUCT_VERSION) {
-    throw new Error("Unsupported bundle schema or product version");
+  // schemaVersion is the sole compatibility gate here — productVersion is deliberately NOT
+  // compared against the running PRODUCT_VERSION (controller ruling, Task "final review wave"
+  // finding I1): a bundle exported by an older or newer release must stay importable, and an
+  // already-exported workspace must not lose the ability to re-export itself, at the next
+  // version bump. bundleFormatVersion above is unaffected and remains a hard gate.
+  if (manifest.schemaVersion !== SCHEMA_VERSION) {
+    throw new Error("Unsupported bundle schema version");
   }
   const project = parseJsonMember(files, "project.json") as Project;
   assertSchema("Project", validateProject(project));

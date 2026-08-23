@@ -1,9 +1,11 @@
 import assert from "node:assert/strict";
+import { delimiter } from "node:path";
 import { describe, test } from "node:test";
 
 import { caseFixture, RUN_KINDS, scenarioFixture } from "@open-waterhammer/contracts";
 
 import {
+  buildPythonSpawnEnv,
   canonicalSha256,
   createCpythonExecutor,
   createDefaultExecutorRegistry,
@@ -21,6 +23,39 @@ const pipe = {
   length: 100,
   roughnessCoeff: 130,
 };
+
+describe("buildPythonSpawnEnv", () => {
+  test("forces UTF-8 stdio so Japanese text survives piped (non-console) stdio on any locale", () => {
+    // createCpythonExecutor always talks to CPython over piped stdio (spawn's default,
+    // stdio: ["pipe", "pipe", "pipe"]) — with no attached console, CPython falls back to
+    // locale.getpreferredencoding() for stdin/stdout text streams, which is UTF-8 on typical
+    // Ubuntu CI runners but the Windows ANSI codepage (cp932 on a Japanese-locale Windows box)
+    // on Windows, unable to round-trip the JSON protocol payload's Japanese text (pipe names,
+    // case names, ...). Forcing both vars here makes every consumer of createCpythonExecutor
+    // correct by construction instead of relying on the caller to inject them (previously true
+    // only of scripts/acceptance.mjs's own UTF8_SUBPROCESS_ENV).
+    const result = buildPythonSpawnEnv({ PATH: "/usr/bin" }, "/core-py");
+
+    assert.equal(result.PYTHONUTF8, "1");
+    assert.equal(result.PYTHONIOENCODING, "utf-8");
+  });
+
+  test("prepends corePythonPath onto an existing PYTHONPATH without mutating the base env", () => {
+    const base = { PATH: "/usr/bin", PYTHONPATH: "/existing/path" };
+
+    const result = buildPythonSpawnEnv(base, "/core-py");
+
+    assert.equal(result.PYTHONPATH, `/core-py${delimiter}/existing/path`);
+    assert.equal(result.PATH, "/usr/bin");
+    assert.deepEqual(base, { PATH: "/usr/bin", PYTHONPATH: "/existing/path" });
+  });
+
+  test("uses corePythonPath alone when the base env has no PYTHONPATH yet", () => {
+    const result = buildPythonSpawnEnv({}, "/core-py");
+
+    assert.equal(result.PYTHONPATH, "/core-py");
+  });
+});
 
 describe("CPython calculation adapter", () => {
   test("uses JSON stdin/stdout and returns the canonical input hash and numeric result", async () => {

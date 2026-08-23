@@ -123,7 +123,7 @@ fork で新しい `draft` 子 Case を作る。これにより「同じ Case が
 | `runId` / `caseId` / `scenarioId` | 対象の識別子 |
 | `createdAt` / `completedAt` | ISO-8601 UTC |
 | `engine` / `runtime` | 実行エンジン識別（例: `open-waterhammer-python` + `cpython-<version>`、`epanet-js` + `javascript-wasm`） |
-| `gitSha` | ビルドの Git SHA。**現状: ブラウザビルドは Vite の `define` 未配線のため `browser-build` にフォールバックし、CLI 実行は `unknown` になる（実 SHA 埋め込みはリリース工程の別タスクで対応予定、本書執筆時点で未着手）** |
+| `gitSha` | ビルドの Git SHA。ブラウザは Vite の `define`（`apps/web-free/vite.config.ts`）で埋め込む——優先順位は環境変数 `VITE_GIT_SHA`（CI が設定）→ ビルド時の `git rev-parse --short HEAD` → 取得不可なら `unknown`。CLI は環境変数 `OWH_GIT_SHA` → 実行時の `git rev-parse --short HEAD` → `unknown` の優先順位で解決する（`packages/cli/src/git-sha.ts`）。`browser-build` は、この Vite `define` を経由しない文脈（Vitest のユニットテスト環境など）専用のフォールバック値であり、実ブラウザビルドには現れない |
 | `inputHashes` / `outputHashes` | 正準 JSON（`workspace` の `canonicalJson`）を SHA-256 したハッシュ群 |
 | `method` | 手法識別子（例 `moc-network`） |
 | `numericParameters` / `boundaryParameters` | 判定済みの数値入力・境界条件のスナップショット |
@@ -226,8 +226,16 @@ owh run <bundle> --case <id> --scenario <id> --out <new-bundle> [--python <path>
   正規化・実体（inode/device）比較で別名・ハードリンックでも防止）し、既存の出力先パスとの衝突も
   計算前に拒否する。最終書き込みは排他生成（`wx`）で行う。
 - `--python` を指定すればそのパスが優先される。指定がなければ `PATH` 上の `python` を使う。Python
-  未検出・エンジン非対応・ID 不正・チェックサム/スキーマ不正・出力衝突は簡潔なメッセージとともに
+  未検出・エンジン非対応・ID 不正・チェックサム/スキーマ不正・出力衝突・**対象 Case がロック済み**
+  （`WorkspaceRepositoryBase.appendRun` が `"Case is not editable"` を返す——過去に成功 Run を持つ
+  Case は再実行できず、fork して新しい draft Case を作る必要がある）は、簡潔なメッセージとともに
   非ゼロ終了する。エンジン失敗時も失敗 Run を出力バンドルに書き込み、Case はロックしない。
+- **本リリースの `run` はブラウザが書き出した `.owhproj` を実行できない**——ブラウザの Case は全
+  RunKind 入力を1つの `modelSnapshot.runInputs` にラップした形状を持ち、ブラウザ UI 自体は
+  `Scenario.eventSettings.runKind` を書き込まないため（`run` が読む形状と異なる）。ブラウザ製
+  バンドルに対しては `validate` / `inspect` のみ対応する。`run` の対象になるのは、CLI で組み立てた
+  バンドル、または golden 受け入れスクリプト（`scripts/acceptance.mjs`）と同じ形の Case/Scenario を
+  持つバンドル。
 
 ---
 

@@ -39,6 +39,24 @@ function newestByUpdatedAt<T extends { updatedAt: string }>(records: T[]): T | u
   return [...records].sort((left, right) => right.updatedAt.localeCompare(left.updatedAt))[0]
 }
 
+function newestByCreatedAt<T extends { createdAt: string }>(records: T[]): T | undefined {
+  return [...records].sort((left, right) => right.createdAt.localeCompare(left.createdAt))[0]
+}
+
+/**
+ * The given Project's newest Case by createdAt (deliberately not updatedAt — that field drives
+ * this module's own "most recently visited" fallback above). Used to pick a landing Case right
+ * after a Project bundle import, when there is no "recently visited" signal for the
+ * just-imported Project to fall back to.
+ */
+export function newestCaseIdForProject(data: WorkspaceData, projectId: string): string | undefined {
+  const alternativeIds = new Set(
+    data.alternatives.filter(({ projectId: owner }) => owner === projectId).map(({ id }) => id),
+  )
+  const projectCases = data.cases.filter(({ alternativeId }) => alternativeIds.has(alternativeId))
+  return newestByCreatedAt(projectCases)?.id
+}
+
 export function resolveWorkspaceRoute(
   data: WorkspaceData,
   candidate: RouteCandidate,

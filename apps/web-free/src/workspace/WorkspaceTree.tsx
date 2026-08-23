@@ -19,6 +19,7 @@ export function WorkspaceTree({
   onCreate,
   onFork,
   onArchive,
+  onSelectProject,
 }: {
   projectId: string
   caseId: string
@@ -28,6 +29,7 @@ export function WorkspaceTree({
   onCreate(): void
   onFork(): void
   onArchive(): void
+  onSelectProject(projectId: string): void
 }) {
   const { data } = useWorkspace()
   const [open, setOpen] = useState(true)
@@ -36,6 +38,15 @@ export function WorkspaceTree({
   const alternatives = data.alternatives.filter(({ projectId: owner }) => owner === projectId)
   return (
     <aside className="workspace-tree" aria-label="Project Alternative Case tree">
+      {data.projects.length > 1 && <div className="tree-project-switcher">
+        <label htmlFor="workspace-project-switcher">プロジェクト切替</label>
+        <select id="workspace-project-switcher" value={projectId} onChange={(event) => onSelectProject(event.target.value)}>
+          {data.projects.map((candidate) => {
+            const alternativeCount = data.alternatives.filter(({ projectId: owner }) => owner === candidate.id).length
+            return <option key={candidate.id} value={candidate.id}>{candidate.name}（代替案 {alternativeCount}件）</option>
+          })}
+        </select>
+      </div>}
       <div className="tree-project-row">
         <button className="tree-expander" aria-expanded={open} onClick={() => setOpen((value) => !value)}>{open ? '−' : '+'}</button>
         <div><span className="tree-kicker">PROJECT</span><h2>{project.name}</h2><small>{project.crs} · {project.standardSelection.version}</small></div>

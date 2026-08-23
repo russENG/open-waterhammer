@@ -9,10 +9,14 @@ import { PYODIDE_RUNTIME_ASSETS } from './pyodide-assets.ts'
 
 const pyodideDirectory = path.dirname(fileURLToPath(import.meta.resolve('pyodide')))
 
-// Build-time git SHA embedded via `define` below: process.env.VITE_GIT_SHA (e.g. set by
-// CI) takes priority, then a local `git rev-parse`, then 'unknown' if git isn't available
-// (e.g. building from a source tarball). The dev-server fallback ('browser-build', for
-// `vite dev` where this define is skipped) lives in workspace-context.tsx instead.
+// Git SHA embedded via `define` below: process.env.VITE_GIT_SHA (e.g. set by CI) takes
+// priority, then a local `git rev-parse`, then 'unknown' if git isn't available (e.g. building
+// from a source tarball). Vite's `define` is a global constant replacement that applies to
+// `vite dev` exactly as much as `vite build` — it is NOT build-only, so `vite dev` also gets a
+// real (or 'unknown') git SHA from this same resolution, not a skipped one. The 'browser-build'
+// fallback in workspace-context.tsx is for contexts that never load this config at all — e.g.
+// the Vitest unit test environment, which uses its own vitest.config.ts and does not set this
+// define.
 function resolveBuildGitSha(): string {
   if (process.env.VITE_GIT_SHA) return process.env.VITE_GIT_SHA
   try {

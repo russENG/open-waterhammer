@@ -68,6 +68,11 @@ export function WorkspaceLayout() {
     navigate(canonicalPath(selection.projectId, nextCaseId, selection.tab))
   }
 
+  function goToProject(nextProjectId: string) {
+    const target = resolveWorkspaceRoute(data, { projectId: nextProjectId })
+    navigate(canonicalPath(target.projectId, target.caseId, target.tab))
+  }
+
   function toggleComparison(nextCaseId: string) {
     const result = toggleComparisonCase(comparison, nextCaseId)
     setComparison(result.selection)
@@ -97,7 +102,7 @@ export function WorkspaceLayout() {
   }
 
   let panel
-  if (selection.tab === 'overview') panel = <OverviewPanel project={project} caseRecord={caseRecord} scenario={scenario} runs={caseRuns} />
+  if (selection.tab === 'overview') panel = <OverviewPanel project={project} caseRecord={caseRecord} scenario={scenario} runs={caseRuns} onImported={(importedProjectId, importedCaseId) => navigate(canonicalPath(importedProjectId, importedCaseId, 'overview'))} />
   if (selection.tab === 'model-gis') panel = <Suspense fallback={<PanelLoading label="GIS" />}><ExcelIoCard key={`excel-${caseRecord.id}`} caseRecord={caseRecord} /><GisPanel key={caseRecord.id} caseRecord={caseRecord} projectCrs={project.crs} locked={caseRecord.state !== 'draft'} focus={focus} /></Suspense>
   if (selection.tab === 'scenario') panel = <ScenarioPanel key={scenario?.id} scenario={scenario} locked={caseRecord.state !== 'draft'} />
   if (selection.tab === 'analysis') panel = <AnalysisPanel key={caseRecord.id} caseRecord={caseRecord} onRunSelected={(run) => setSelectedRunId(run.id)} />
@@ -113,7 +118,7 @@ export function WorkspaceLayout() {
       <nav aria-label="Documentation"><Link to={canonicalPath(selection.projectId, selection.caseId, 'overview')}>Workspace</Link><a href="#/docs/reference">Reference</a><a href="#/docs/library">Library</a><a href="#/docs/design-flow">設計フロー</a><a href="#/docs/hydraulic">水理設計の視点</a><a href="#/docs/about">Help / About</a></nav>
     </header>
     <div className="workspace-grid">
-      <WorkspaceTree projectId={selection.projectId} caseId={selection.caseId} comparison={comparison} onSelect={goToCase} onToggleComparison={toggleComparison} onCreate={() => void createNew()} onFork={() => setForkDialog(true)} onArchive={() => void archiveSelected()} />
+      <WorkspaceTree projectId={selection.projectId} caseId={selection.caseId} comparison={comparison} onSelect={goToCase} onToggleComparison={toggleComparison} onCreate={() => void createNew()} onFork={() => setForkDialog(true)} onArchive={() => void archiveSelected()} onSelectProject={goToProject} />
       <main id="workspace-main" className="workspace-main">
         <div className="workspace-breadcrumb"><span>{project.name}</span><i>/</i><span>{caseRecord.revisionReason ?? '基準案'}</span><b className={`state-pill state-pill--${caseRecord.state}`}>{caseRecord.state}</b></div>
         <nav className="workspace-tabs" aria-label="Workspace tabs">{WORKSPACE_TABS.map((tab) => <Link key={tab} aria-label={TAB_LABELS[tab]} aria-current={tab === selection.tab ? 'page' : undefined} to={canonicalPath(selection.projectId, selection.caseId, tab)} className={tab === selection.tab ? 'workspace-tab workspace-tab--active' : 'workspace-tab'}><span aria-hidden="true">{String(WORKSPACE_TABS.indexOf(tab) + 1).padStart(2, '0')}</span>{TAB_LABELS[tab]}</Link>)}</nav>

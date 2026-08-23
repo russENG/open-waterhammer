@@ -32,6 +32,37 @@ interface ProcessResult {
   stderr: string;
 }
 
+/**
+ * Builds the subprocess environment for the CPython adapter's own `spawn` call. Exported as a
+ * pure, dependency-free function so this exact merging logic is unit-testable without mocking
+ * `child_process.spawn` (see `__tests__/python-adapter.test.ts`).
+ *
+ * PYTHONUTF8 / PYTHONIOENCODING are forced to UTF-8 because this adapter always talks to
+ * CPython over piped (non-console) stdio (`stdio: ["pipe", "pipe", "pipe"]` below): with no
+ * attached console, CPython falls back to `locale.getpreferredencoding()` for its stdin/stdout
+ * text streams — UTF-8 on typical Ubuntu CI runners, but the Windows ANSI codepage (cp932 on a
+ * Japanese-locale Windows box) on Windows, which cannot round-trip the JSON protocol payload's
+ * Japanese text (pipe names, case names, ...) and crashes with a UnicodeEncodeError on the
+ * response write. Forcing UTF-8 here makes every consumer of `createCpythonExecutor` (the CLI,
+ * this package's own tests, any future caller) correct by construction, instead of relying on
+ * each caller to inject these vars itself — previously true only of scripts/acceptance.mjs's
+ * own UTF8_SUBPROCESS_ENV, which stays in place as a now-redundant defense.
+ */
+export function buildPythonSpawnEnv(
+  baseEnv: NodeJS.ProcessEnv,
+  corePythonPath: string,
+): NodeJS.ProcessEnv {
+  const existingPythonPath = baseEnv.PYTHONPATH;
+  return {
+    ...baseEnv,
+    PYTHONPATH: existingPythonPath
+      ? `${corePythonPath}${delimiter}${existingPythonPath}`
+      : corePythonPath,
+    PYTHONUTF8: "1",
+    PYTHONIOENCODING: "utf-8",
+  };
+}
+
 function runPython(
   pythonPath: string,
   corePythonPath: string,
@@ -39,15 +70,9 @@ function runPython(
   onStderr?: (text: string) => void,
 ): Promise<ProcessResult> {
   return new Promise((resolve, reject) => {
-    const existingPythonPath = process.env.PYTHONPATH;
     const child = spawn(pythonPath, ["-m", "open_waterhammer.protocol"], {
       cwd: corePythonPath,
-      env: {
-        ...process.env,
-        PYTHONPATH: existingPythonPath
-          ? `${corePythonPath}${delimiter}${existingPythonPath}`
-          : corePythonPath,
-      },
+      env: buildPythonSpawnEnv(process.env, corePythonPath),
       stdio: ["pipe", "pipe", "pipe"],
       windowsHide: true,
     });
