@@ -13,5 +13,9 @@
     "composite": true,
     "skipLibCheck": true
   },
+  "files": [],
+  "references": [
+    { "path": "./packages/contracts" }
+  ],
   "exclude": ["**/node_modules", "**/dist"]
 }
