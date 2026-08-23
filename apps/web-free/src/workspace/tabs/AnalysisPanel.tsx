@@ -1,7 +1,6 @@
 import { RUN_KINDS, type Case, type JsonValue, type Run, type RunKind } from '@open-waterhammer/contracts'
 import { useMemo, useState } from 'react'
 
-import { validateHydraulicDrafts, type HydraulicDraft } from '../../gis/import-model'
 import {
   ENGINEERING_COLLECTIONS,
   addEngineeringCollectionItem,
@@ -15,6 +14,7 @@ import {
   type EngineeringField,
   type EngineeringState,
 } from '../engineering-fields'
+import { evaluateRunGate, TOPOLOGY_REQUIRED_KINDS } from '../run-policy'
 import { useWorkspace } from '../workspace-context'
 
 const KIND_COPY: Record<RunKind, { code: string; title: string; note: string }> = {
@@ -50,9 +50,9 @@ export function AnalysisPanel({ caseRecord, onRunSelected }: { caseRecord: Case;
   const [dirty, setDirty] = useState(inputs[kind] === undefined)
   const [recordKeyDrafts, setRecordKeyDrafts] = useState<Record<string, string>>({})
   const hasHydraulicDrafts = Array.isArray(modelRoot.geoDrafts) && modelRoot.geoDrafts.length > 0
-  const validation = useMemo(() => validateHydraulicDrafts(
-    Array.isArray(modelRoot.geoDrafts) ? modelRoot.geoDrafts as unknown as HydraulicDraft[] : [],
-  ), [modelRoot.geoDrafts])
+  const gate = useMemo(() => evaluateRunGate(kind, caseRecord), [caseRecord, kind])
+  const isTopologyKind = TOPOLOGY_REQUIRED_KINDS.has(kind)
+  const draftsBrokenNonBlocking = !isTopologyKind && hasHydraulicDrafts && Object.keys(gate.errorsByFeature).length > 0
   const fields = engineeringFieldsFor(kind, engineering)
   const collections = ENGINEERING_COLLECTIONS[kind]
 
@@ -132,7 +132,7 @@ export function AnalysisPanel({ caseRecord, onRunSelected }: { caseRecord: Case;
       setStatus('Save input before Run')
       return
     }
-    if (!validation.canRun) {
+    if (!gate.canRun) {
       setStatus('Model validation blocks Run')
       return
     }
@@ -160,8 +160,9 @@ export function AnalysisPanel({ caseRecord, onRunSelected }: { caseRecord: Case;
         </label>)}
       </div>
       <section className="analysis-editor notebook-card">
-        <div className="analysis-editor-heading"><div><span className="eyebrow">{KIND_COPY[kind].code} INPUT</span><h2>{KIND_COPY[kind].title}</h2></div><span className={`validation-badge ${validation.canRun ? 'validation-badge--ok' : 'validation-badge--ng'}`}>{validation.canRun ? 'MODEL READY' : hasHydraulicDrafts ? `${Object.keys(validation.errorsByFeature).length} INVALID` : 'GIS / TOPOLOGY REQUIRED'}</span></div>
+        <div className="analysis-editor-heading"><div><span className="eyebrow">{KIND_COPY[kind].code} INPUT</span><h2>{KIND_COPY[kind].title}</h2></div><span className={`validation-badge ${gate.canRun ? 'validation-badge--ok' : 'validation-badge--ng'}`}>{!isTopologyKind ? 'FORM INPUT ONLY' : gate.canRun ? 'MODEL READY' : gate.reason === 'topology_invalid' ? `${Object.keys(gate.errorsByFeature).length} INVALID` : 'GIS / TOPOLOGY REQUIRED'}</span></div>
         <p className="field-help">方式別の主要設計値を単位付きで編集します。Scenario に属する操作条件も同じ保存操作で記録されます。</p>
+        {draftsBrokenNonBlocking && <p className="inline-message">GIS drafts contain {Object.keys(gate.errorsByFeature).length} invalid feature(s) — this Run kind does not read them, so it is not blocked.</p>}
         {collections.length > 0 && <div className="engineering-collections">{collections.map((collection) => {
           const rows = readEngineeringValue(engineering, collection)
           const recordKeys = collection.kind === 'record' && rows && typeof rows === 'object' && !Array.isArray(rows) ? Object.keys(rows) : []
@@ -183,7 +184,7 @@ export function AnalysisPanel({ caseRecord, onRunSelected }: { caseRecord: Case;
               : <input id={id} type={field.kind === 'number' ? 'number' : 'text'} step={field.kind === 'number' ? 'any' : undefined} value={typeof value === 'string' || typeof value === 'number' ? value : ''} onChange={(event) => updateField(field, event.target.value)} disabled={caseRecord.state !== 'draft'} />}</label>
         })}</div>
         <details className="advanced-json"><summary>Advanced · canonical JSON</summary><label className="model-editor"><span>Model input</span><textarea value={modelText} onChange={(event) => { setModelText(event.target.value); setDirty(true); try { setEngineering({ ...engineering, model: JSON.parse(event.target.value) as JsonValue }) } catch { /* Retain invalid draft text until save. */ } }} disabled={caseRecord.state !== 'draft'} spellCheck={false} /></label></details>
-        <div className="analysis-actions"><button onClick={() => void saveInput()} disabled={busy || caseRecord.state !== 'draft'}>Save input</button><button className="run-button" onClick={() => void execute()} disabled={busy || dirty || caseRecord.state !== 'draft' || !validation.canRun} aria-label="Run calculation"><span>▶</span>{busy ? 'Running…' : dirty ? 'Save before Run' : 'Run calculation'}</button></div>
+        <div className="analysis-actions"><button onClick={() => void saveInput()} disabled={busy || caseRecord.state !== 'draft'}>Save input</button><button className="run-button" onClick={() => void execute()} disabled={busy || dirty || caseRecord.state !== 'draft' || !gate.canRun} aria-label="Run calculation"><span>▶</span>{busy ? 'Running…' : dirty ? 'Save before Run' : 'Run calculation'}</button></div>
         {(status || lastError) && <p className="inline-message" role="status">{status ?? lastError}</p>}
       </section>
     </div>

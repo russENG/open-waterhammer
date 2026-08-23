@@ -1,21 +1,10 @@
 import AxeBuilder from '@axe-core/playwright'
 import { expect, test, type Page } from '@playwright/test'
 
-async function createBlankCaseWithValidGis(page: Page) {
+// Form-only Run kinds never read GIS drafts (per-RunKind topology gate), so a blank Case
+// can go straight to Analysis without importing any GIS topology first.
+async function createBlankCase(page: Page) {
   await page.getByRole('button', { name: 'New Case' }).click()
-  await page.getByRole('link', { name: 'Model＋GIS' }).click()
-  await page.getByRole('button', { name: 'Import GeoJSON' }).click()
-  const dialog = page.getByRole('dialog', { name: 'GeoJSON import wizard' })
-  await dialog.getByLabel('GeoJSON').fill(JSON.stringify({
-    type: 'FeatureCollection',
-    features: [
-      { type: 'Feature', properties: { id: 'R-01', elevation: 100 }, geometry: { type: 'Point', coordinates: [139.7, 35.68] } },
-      { type: 'Feature', properties: { id: 'J-01', elevation: 88 }, geometry: { type: 'Point', coordinates: [139.708, 35.684] } },
-      { type: 'Feature', properties: { id: 'P-01', startNodeId: 'R-01', endNodeId: 'J-01', innerDiameter: 0.3 }, geometry: { type: 'LineString', coordinates: [[139.7, 35.68], [139.708, 35.684]] } },
-    ],
-  }))
-  await dialog.getByRole('button', { name: 'Import as drafts' }).click()
-  await expect(page.getByText('HYDRAULICS VALID', { exact: true })).toBeVisible()
   await page.getByRole('link', { name: 'Analysis' }).click()
 }
 
@@ -32,13 +21,27 @@ test('create, edit, execute, lock, fork, compare, reload, export, and import', a
   await page.getByRole('button', { name: 'New Case' }).click()
   await expect.poll(() => page.locator('.case-row').count()).toBe(5)
   await page.getByRole('link', { name: 'Analysis' }).click()
+  await expect(page.getByText('FORM INPUT ONLY')).toBeVisible()
+
+  // A topology-required kind on this untouched Case stays blocked: no GIS drafts and no
+  // saved network input for this kind exist yet.
+  await page.getByRole('radio', { name: /Steady network \/ Python/ }).check()
   await expect(page.getByText('GIS / TOPOLOGY REQUIRED')).toBeVisible()
   await expect(page.getByRole('button', { name: 'Run calculation' })).toBeDisabled()
-  await page.getByRole('radio', { name: /Steady network \/ Python/ }).check()
   await expect(page.getByLabel('解析ケース名')).toHaveValue('取水支線 定常解析')
   await page.getByLabel('解析ケース名').fill('E2E form-only blank Case')
   await page.getByRole('button', { name: 'Save input' }).click()
   await expect(page.getByRole('status')).toHaveText('Input saved')
+
+  // A form-only kind on the very same Case needs no GIS topology at all: save its input and
+  // Run succeeds immediately (reachability regression fixed by the per-RunKind topology gate).
+  await page.getByRole('radio', { name: /Wave speed/ }).check()
+  await expect(page.getByText('FORM INPUT ONLY')).toBeVisible()
+  await page.getByRole('button', { name: 'Save input' }).click()
+  await expect(page.getByRole('status')).toHaveText('Input saved')
+  await expect(page.getByRole('button', { name: 'Run calculation' })).toBeEnabled()
+  await page.getByRole('button', { name: 'Run calculation' }).click()
+  await expect(page.getByRole('status')).toHaveText('Run succeeded', { timeout: 60_000 })
 
   await page.locator('.case-row').filter({ hasText: '基準案' }).getByRole('button').click()
 
@@ -88,7 +91,9 @@ test('create, edit, execute, lock, fork, compare, reload, export, and import', a
   await page.getByRole('link', { name: 'Model＋GIS' }).click()
   await expect(page.getByText('N-E2E')).toBeVisible()
 
-  await page.locator('.case-row').filter({ hasText: 'locked' }).getByRole('button').click()
+  // Disambiguated by label: the blank Case (from the wave_speed Run earlier in this test) is
+  // also locked by now, so 'locked' alone would match two rows.
+  await page.locator('.case-row').filter({ hasText: 'locked' }).filter({ hasText: '基準案' }).getByRole('button').click()
   await expect(page.locator('.state-pill')).toHaveText('locked')
   await page.getByRole('link', { name: 'Reports' }).click()
   const jsonDownload = page.waitForEvent('download')
@@ -212,7 +217,7 @@ test('blank form-only Darcy and pump-start branches execute through the real pro
   })
   await page.goto('/')
 
-  await createBlankCaseWithValidGis(page)
+  await createBlankCase(page)
   await page.locator('input[type="radio"][value="steady_single_pipe"]').check()
   await page.getByLabel('計算方式').selectOption('darcy-weisbach')
   await expect(page.getByLabel(/Darcy 摩擦係数/)).toHaveValue('0.02')
@@ -224,7 +229,7 @@ test('blank form-only Darcy and pump-start branches execute through the real pro
   await expect(page.getByRole('status')).toHaveText('Run succeeded', { timeout: 120_000 })
   await expect(page.getByRole('complementary', { name: 'Run Inspector' })).toContainText('steady_single_pipe')
 
-  await createBlankCaseWithValidGis(page)
+  await createBlankCase(page)
   await page.locator('input[type="radio"][value="transient_pump"]').check()
   await page.getByLabel('ポンプ操作').selectOption('start')
   await expect(page.getByLabel(/定格流量/)).toHaveValue('0.07')

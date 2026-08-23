@@ -13,9 +13,9 @@ import {
 import type { WorkspaceData, WorkspaceRepository } from '@open-waterhammer/workspace'
 import { createContext, useCallback, useContext, useMemo, useState, type ReactNode } from 'react'
 
-import { validateHydraulicDrafts, type HydraulicDraft } from '../gis/import-model'
 import type { LocalTransformDefinition } from '../gis/projections'
 import type { BrowserProtocolCaller } from '../runner/browser-runner'
+import { evaluateRunGate } from './run-policy'
 
 export interface WorkspaceRepositoryClient extends WorkspaceRepository {
   snapshot(): Promise<WorkspaceData>
@@ -105,10 +105,12 @@ export function WorkspaceProvider({
     const project = data.projects.find(({ id }) => id === alternative?.projectId)
     if (!caseRecord || !scenario || !project) throw new Error('Run context is incomplete')
     if (caseRecord.state !== 'draft') throw new Error('Locked or archived Case must be forked before execution')
-    const snapshot = caseRecord.modelSnapshot
-    const geoDrafts = snapshot && typeof snapshot === 'object' && !Array.isArray(snapshot) && Array.isArray(snapshot.geoDrafts)
-      ? snapshot.geoDrafts as unknown as HydraulicDraft[] : []
-    if (!validateHydraulicDrafts(geoDrafts).canRun) throw new Error('A persisted valid GIS topology is required before Run')
+    const gate = evaluateRunGate(kind, caseRecord)
+    if (!gate.canRun) {
+      throw new Error(gate.reason === 'topology_invalid'
+        ? 'The persisted GIS topology has validation errors; fix it or save a complete network input for this Run kind'
+        : 'A persisted valid GIS topology or a complete network input is required before Run')
+    }
     const model = modelsFrom(caseRecord)[kind]
     if (model === undefined) throw new Error(`Run input is missing: ${kind}`)
     const registry = executors ?? await defaultExecutors(callProtocol)

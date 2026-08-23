@@ -110,8 +110,41 @@ describe('full workspace application', () => {
     })
 
     await user.click(within(tabs).getByRole('link', { name: 'Analysis' }))
-    expect(await screen.findByText('GIS / TOPOLOGY REQUIRED')).toBeVisible()
+    expect(await screen.findByText('FORM INPUT ONLY', {}, { timeout: 5_000 })).toBeVisible()
     expect(screen.getByRole('button', { name: 'Run calculation' })).toBeDisabled()
+
+    await user.click(screen.getByRole('radio', { name: /Steady network \/ Python/ }))
+    expect(await screen.findByText('GIS / TOPOLOGY REQUIRED', {}, { timeout: 5_000 })).toBeVisible()
+    expect(screen.getByRole('button', { name: 'Run calculation' })).toBeDisabled()
+  })
+
+  test('a blank Case with no GIS topology runs a form-only kind end-to-end while a topology kind stays blocked', async () => {
+    const user = userEvent.setup()
+    const { repository } = setup()
+    const tabs = screen.getByRole('navigation', { name: 'Workspace tabs' })
+    await user.click(screen.getByRole('button', { name: 'New Case' }))
+    await user.click(within(tabs).getByRole('link', { name: 'Analysis' }))
+
+    // Default kind (wave_speed) is a form-only calculation: no GIS topology needed at all.
+    expect(await screen.findByText('FORM INPUT ONLY', {}, { timeout: 5_000 })).toBeVisible()
+
+    // A network kind on the very same untouched Case is correctly identified as topology-required
+    // and stays blocked — it is not yet saved and there is no persisted GIS topology.
+    await user.click(screen.getByRole('radio', { name: /Transient network/ }))
+    expect(await screen.findByText('GIS / TOPOLOGY REQUIRED', {}, { timeout: 5_000 })).toBeVisible()
+    expect(screen.getByRole('button', { name: 'Run calculation' })).toBeDisabled()
+
+    // Switching back to the form-only kind, saving its (prefilled) input, and running it succeeds
+    // end-to-end through the common runner — this used to throw regardless of kind (reachability
+    // regression fixed by the per-RunKind topology gate).
+    await user.click(screen.getByRole('radio', { name: /Wave speed/ }))
+    expect(await screen.findByText('FORM INPUT ONLY', {}, { timeout: 5_000 })).toBeVisible()
+    await user.click(screen.getByRole('button', { name: 'Save input' }))
+    expect(await screen.findByRole('status')).toHaveTextContent('Input saved')
+    expect(screen.getByRole('button', { name: 'Run calculation' })).toBeEnabled()
+    await user.click(screen.getByRole('button', { name: 'Run calculation' }))
+    expect(await screen.findByRole('status')).toHaveTextContent('Run succeeded')
+    expect((await repository.snapshot()).cases.some(({ state }) => state === 'locked')).toBe(true)
   })
 
   test('initializes and saves a complete blank-Case network template using only visible form controls', async () => {
