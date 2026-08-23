@@ -60,6 +60,20 @@ function cursorRatio(location: string | undefined, length: number): number | und
   return Number.isFinite(distance) ? Math.max(0, Math.min(1, distance / length)) : undefined
 }
 
+function interpolateSpatialValue(values: number[], ratio: number | undefined): number {
+  if (ratio === undefined || values.length === 1) return values.at(-1)!
+  const position = ratio * (values.length - 1)
+  const lower = Math.floor(position)
+  const upper = Math.ceil(position)
+  const weight = position - lower
+  return values[lower]! + (values[upper]! - values[lower]!) * weight
+}
+
+function nodeTrace(id: string, output: RecordValue, dt: number): RunVisuals['timeSeries'] {
+  const values = numbers(output.H)
+  return values.length ? { id, seconds: values.map((_, index) => index * dt), values } : undefined
+}
+
 export function deriveRunVisuals(run: Run, focus?: LinkedFocus): RunVisuals {
   const summary = record(run.summary)
   const selectedPipe = selectedRecord(record(summary?.pipes), focus?.envelopeSeriesId)
@@ -81,11 +95,17 @@ export function deriveRunVisuals(run: Run, focus?: LinkedFocus): RunVisuals {
 
   const timeSeries = record(run.timeSeries)
   let derivedTimeSeries: RunVisuals['timeSeries']
+  const nodeSeriesContainer = record(timeSeries?.nodes)
+  const exactNode = focus?.timeSeriesId ? record(nodeSeriesContainer?.[focus.timeSeriesId]) : undefined
+  const dt = typeof summary?.dt === 'number' ? summary.dt : 1
+  if (focus?.timeSeriesId && exactNode) {
+    derivedTimeSeries = nodeTrace(focus.timeSeriesId, exactNode, dt)
+  }
   const pipeSeriesContainer = record(timeSeries?.pipes)
   const pipeSeriesId = focus?.timeSeriesId && Array.isArray(pipeSeriesContainer?.[focus.timeSeriesId])
     ? focus.timeSeriesId
     : Object.keys(pipeSeriesContainer ?? {}).sort().find((id) => Array.isArray(pipeSeriesContainer?.[id]))
-  if (pipeSeriesId) {
+  if (!derivedTimeSeries && pipeSeriesId) {
     const id = pipeSeriesId
     const snapshots = pipeSeriesContainer![id] as JsonValue[]
     const seconds: number[] = []
@@ -95,18 +115,16 @@ export function deriveRunVisuals(run: Run, focus?: LinkedFocus): RunVisuals {
       const heads = numbers(snapshot?.H)
       if (typeof snapshot?.t === 'number' && heads.length) {
         seconds.push(snapshot.t)
-        values.push(heads.at(-1)!)
+        values.push(interpolateSpatialValue(heads, cursorRatio(focus?.location, pipeLength(run, id, heads.length))))
       }
     }
     if (seconds.length) derivedTimeSeries = { id, seconds, values }
   }
   if (!derivedTimeSeries) {
-    const nodeSeries = selectedRecord(record(timeSeries?.nodes), focus?.timeSeriesId)
+    const nodeSeries = selectedRecord(nodeSeriesContainer, focus?.timeSeriesId)
     if (nodeSeries) {
       const [id, output] = nodeSeries
-      const values = numbers(output.H)
-      const dt = typeof summary?.dt === 'number' ? summary.dt : 1
-      if (values.length) derivedTimeSeries = { id, seconds: values.map((_, index) => index * dt), values }
+      derivedTimeSeries = nodeTrace(id, output, dt)
     }
   }
   if (!derivedTimeSeries) {

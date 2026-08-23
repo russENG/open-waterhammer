@@ -1,6 +1,6 @@
 import type { Case, JsonValue, Run, Scenario } from '@open-waterhammer/contracts'
 
-import { buildComparisonRows } from '../comparison'
+import { buildComparisonRows, formatComparisonNumber } from '../comparison'
 
 function label(caseRecord: Case): string {
   const root = caseRecord.modelSnapshot
@@ -10,7 +10,7 @@ function label(caseRecord: Case): string {
 function valueText(value: JsonValue | undefined): string {
   if (value === undefined) return '—'
   if (typeof value === 'string') return value
-  if (typeof value === 'number') return value.toPrecision(6).replace(/\.?0+$/, '')
+  if (typeof value === 'number') return formatComparisonNumber(value)
   return JSON.stringify(value)
 }
 
@@ -28,7 +28,7 @@ export function ComparePanel({ cases, scenarios, runs }: { cases: Case[]; scenar
       <tr className="comparison-group"><th colSpan={cases.length + 1}>Condition differences · model + Scenario</th></tr>
       {rows.conditionRows.map((row) => <tr key={row.path}><th>{row.path}</th>{row.values.map((value, index) => <td key={cases[index]!.id}>{valueText(value)}</td>)}</tr>)}
       <tr className="comparison-group"><th colSpan={cases.length + 1}>Persisted result deltas · nested numeric summary</th></tr>
-      {rows.resultRows.map((row) => <tr key={row.path}><th>{row.path}</th>{row.values.map((value, index) => <td key={cases[index]!.id}><strong>{value === undefined ? '—' : value.toPrecision(6)}</strong>{index > 0 && row.deltas[index] !== undefined ? <small className={row.deltas[index]! > 0 ? 'delta-up' : 'delta-down'}>{row.deltas[index]! >= 0 ? '+' : ''}{row.deltas[index]!.toPrecision(4)}</small> : null}</td>)}</tr>)}
+      {rows.resultRows.map((row) => <tr key={row.path}><th>{row.path}</th>{row.values.map((value, index) => <td key={cases[index]!.id}><strong>{value === undefined ? '—' : formatComparisonNumber(value)}</strong>{index > 0 && row.deltas[index] !== undefined ? <small className={row.deltas[index]! > 0 ? 'delta-up' : 'delta-down'}>{row.deltas[index]! >= 0 ? '+' : ''}{formatComparisonNumber(row.deltas[index]!)}</small> : null}</td>)}</tr>)}
     </tbody></table></div>
   </div>
 }

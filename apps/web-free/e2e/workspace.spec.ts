@@ -16,6 +16,11 @@ test('create, edit, execute, lock, fork, compare, reload, export, and import', a
   await page.getByRole('link', { name: 'Analysis' }).click()
   await expect(page.getByText('GIS / TOPOLOGY REQUIRED')).toBeVisible()
   await expect(page.getByRole('button', { name: 'Run calculation' })).toBeDisabled()
+  await page.getByRole('radio', { name: /Steady network \/ Python/ }).check()
+  await expect(page.getByLabel('解析ケース名')).toHaveValue('取水支線 定常解析')
+  await page.getByLabel('解析ケース名').fill('E2E form-only blank Case')
+  await page.getByRole('button', { name: 'Save input' }).click()
+  await expect(page.getByRole('status')).toHaveText('Input saved')
 
   await page.locator('.case-row').filter({ hasText: '基準案' }).getByRole('button').click()
 
@@ -83,6 +88,9 @@ test('desktop and narrow workspace keep semantic landmarks without serious acces
   const desktop = await new AxeBuilder({ page }).analyze()
   expect(desktop.violations.filter(({ impact }) => impact === 'critical' || impact === 'serious')).toEqual([])
 
+  await page.getByRole('link', { name: 'Analysis' }).click()
+  await page.getByRole('radio', { name: /Steady network \/ Python/ }).check()
+  await expect(page.getByLabel('解析ケース名')).toBeVisible()
   await page.setViewportSize({ width: 390, height: 844 })
   await expect(page.getByRole('complementary', { name: 'Project Alternative Case tree' })).toBeVisible()
   await expect(page.getByRole('complementary', { name: 'Run Inspector' })).toBeVisible()

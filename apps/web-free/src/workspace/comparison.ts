@@ -5,6 +5,10 @@ export interface ComparisonRow<T> {
   values: Array<T | undefined>
 }
 
+export function formatComparisonNumber(value: number): string {
+  return String(value)
+}
+
 function flatten(value: JsonValue, prefix = ''): Array<[string, JsonValue]> {
   if (Array.isArray(value)) return value.flatMap((child, index) => flatten(child, `${prefix}[${index}]`))
   if (value && typeof value === 'object') return Object.keys(value).sort().flatMap((key) => flatten(value[key]!, prefix ? `${prefix}.${key}` : key))

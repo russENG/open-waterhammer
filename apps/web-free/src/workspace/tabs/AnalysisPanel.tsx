@@ -3,9 +3,13 @@ import { useMemo, useState } from 'react'
 
 import { validateHydraulicDrafts, type HydraulicDraft } from '../../gis/import-model'
 import {
-  ENGINEERING_FIELDS,
+  ENGINEERING_COLLECTIONS,
+  addEngineeringCollectionItem,
+  createEngineeringState,
+  engineeringFieldsFor,
   readEngineeringValue,
-  updateEngineeringValue,
+  removeEngineeringCollectionItem,
+  updateEngineeringFieldFromInput,
   validateEngineeringState,
   type EngineeringField,
   type EngineeringState,
@@ -38,36 +42,43 @@ export function AnalysisPanel({ caseRecord, onRunSelected }: { caseRecord: Case;
   const modelRoot = root(caseRecord)
   const inputs = modelRoot.runInputs && typeof modelRoot.runInputs === 'object' && !Array.isArray(modelRoot.runInputs)
     ? modelRoot.runInputs as Record<string, JsonValue> : {}
-  const initialEngineering = (): EngineeringState => ({
-    model: inputs[kind] ?? {},
-    event: scenario?.eventSettings ?? {},
-    boundary: scenario?.boundaryConditions ?? {},
-    protection: scenario?.protectionSettings ?? {},
-  })
+  const initialEngineering = (): EngineeringState => createEngineeringState(kind, inputs[kind], scenario)
   const [engineering, setEngineering] = useState<EngineeringState>(initialEngineering)
   const [modelText, setModelText] = useState(() => JSON.stringify(engineering.model, null, 2))
   const [status, setStatus] = useState<string | null>(null)
-  const [dirty, setDirty] = useState(false)
+  const [dirty, setDirty] = useState(inputs[kind] === undefined)
   const hasHydraulicDrafts = Array.isArray(modelRoot.geoDrafts) && modelRoot.geoDrafts.length > 0
   const validation = useMemo(() => validateHydraulicDrafts(
     Array.isArray(modelRoot.geoDrafts) ? modelRoot.geoDrafts as unknown as HydraulicDraft[] : [],
   ), [modelRoot.geoDrafts])
+  const fields = engineeringFieldsFor(kind, engineering)
+  const collections = ENGINEERING_COLLECTIONS[kind]
 
   function selectKind(next: RunKind) {
     setKind(next)
-    const nextEngineering: EngineeringState = {
-      model: inputs[next] ?? {}, event: scenario?.eventSettings ?? {},
-      boundary: scenario?.boundaryConditions ?? {}, protection: scenario?.protectionSettings ?? {},
-    }
+    const nextEngineering = createEngineeringState(next, inputs[next], scenario)
     setEngineering(nextEngineering)
     setModelText(JSON.stringify(nextEngineering.model, null, 2))
-    setDirty(false)
+    setDirty(inputs[next] === undefined)
     setStatus(null)
   }
 
-  function updateField(field: EngineeringField, raw: string) {
-    const value: JsonValue = field.kind === 'number' ? (raw === '' ? '' : Number(raw)) : raw
-    const next = updateEngineeringValue(engineering, field, value)
+  function updateField(field: EngineeringField, raw: string | boolean) {
+    const next = updateEngineeringFieldFromInput(engineering, field, raw)
+    setEngineering(next)
+    setModelText(JSON.stringify(next.model, null, 2))
+    setDirty(true)
+  }
+
+  function addCollection(collection: typeof collections[number]) {
+    const next = addEngineeringCollectionItem(engineering, collection)
+    setEngineering(next)
+    setModelText(JSON.stringify(next.model, null, 2))
+    setDirty(true)
+  }
+
+  function removeCollection(collection: typeof collections[number], index: number) {
+    const next = removeEngineeringCollectionItem(engineering, collection, index)
     setEngineering(next)
     setModelText(JSON.stringify(next.model, null, 2))
     setDirty(true)
@@ -128,12 +139,19 @@ export function AnalysisPanel({ caseRecord, onRunSelected }: { caseRecord: Case;
       <section className="analysis-editor notebook-card">
         <div className="analysis-editor-heading"><div><span className="eyebrow">{KIND_COPY[kind].code} INPUT</span><h2>{KIND_COPY[kind].title}</h2></div><span className={`validation-badge ${validation.canRun ? 'validation-badge--ok' : 'validation-badge--ng'}`}>{validation.canRun ? 'MODEL READY' : hasHydraulicDrafts ? `${Object.keys(validation.errorsByFeature).length} INVALID` : 'GIS / TOPOLOGY REQUIRED'}</span></div>
         <p className="field-help">方式別の主要設計値を単位付きで編集します。Scenario に属する操作条件も同じ保存操作で記録されます。</p>
-        <div className="engineering-field-grid">{ENGINEERING_FIELDS[kind].map((field) => {
+        {collections.length > 0 && <div className="engineering-collections">{collections.map((collection) => {
+          const rows = readEngineeringValue(engineering, collection)
+          const count = Array.isArray(rows) ? rows.length : 0
+          return <section key={`${collection.target}.${collection.path}`} className="engineering-collection"><div><strong>{collection.label}</strong><span>{count} entries</span><button type="button" onClick={() => addCollection(collection)} disabled={caseRecord.state !== 'draft'} aria-label={`Add ${collection.label}`}>＋ Add</button></div><ol>{Array.from({ length: count }, (_, index) => <li key={index}><span>{collection.label} {index + 1}</span><button type="button" onClick={() => removeCollection(collection, index)} disabled={caseRecord.state !== 'draft' || count <= collection.minimumItems} aria-label={`Remove ${collection.label} ${index + 1}`}>Remove</button></li>)}</ol></section>
+        })}</div>}
+        <div className="engineering-field-grid">{fields.map((field) => {
           const value = readEngineeringValue(engineering, field)
           const id = `engineering-${field.target}-${field.path.replace(/[^a-zA-Z0-9]/g, '-')}`
           return <label key={`${field.target}.${field.path}`} htmlFor={id}><span>{field.label}{field.unit && <b>{field.unit}</b>}</span>{field.kind === 'select'
-            ? <select id={id} value={typeof value === 'string' ? value : ''} onChange={(event) => updateField(field, event.target.value)} disabled={caseRecord.state !== 'draft'}>{field.options?.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}</select>
-            : <input id={id} type={field.kind === 'number' ? 'number' : 'text'} step={field.kind === 'number' ? 'any' : undefined} value={typeof value === 'string' || typeof value === 'number' ? value : ''} onChange={(event) => updateField(field, event.target.value)} disabled={caseRecord.state !== 'draft'} />}</label>
+            ? <select id={id} value={typeof value === 'string' ? value : ''} onChange={(event) => updateField(field, event.target.value)} disabled={caseRecord.state !== 'draft'}><option value="">選択してください</option>{field.options?.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}</select>
+            : field.kind === 'boolean'
+              ? <input id={id} type="checkbox" checked={value === true} onChange={(event) => updateField(field, event.target.checked)} disabled={caseRecord.state !== 'draft'} />
+              : <input id={id} type={field.kind === 'number' ? 'number' : 'text'} step={field.kind === 'number' ? 'any' : undefined} value={typeof value === 'string' || typeof value === 'number' ? value : ''} onChange={(event) => updateField(field, event.target.value)} disabled={caseRecord.state !== 'draft'} />}</label>
         })}</div>
         <details className="advanced-json"><summary>Advanced · canonical JSON</summary><label className="model-editor"><span>Model input</span><textarea value={modelText} onChange={(event) => { setModelText(event.target.value); setDirty(true); try { setEngineering({ ...engineering, model: JSON.parse(event.target.value) as JsonValue }) } catch { /* Retain invalid draft text until save. */ } }} disabled={caseRecord.state !== 'draft'} spellCheck={false} /></label></details>
         <div className="analysis-actions"><button onClick={() => void saveInput()} disabled={busy || caseRecord.state !== 'draft'}>Save input</button><button className="run-button" onClick={() => void execute()} disabled={busy || dirty || caseRecord.state !== 'draft' || !validation.canRun} aria-label="Run calculation"><span>▶</span>{busy ? 'Running…' : dirty ? 'Save before Run' : 'Run calculation'}</button></div>

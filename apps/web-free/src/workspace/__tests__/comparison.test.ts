@@ -1,10 +1,21 @@
 import { runFixture } from '@open-waterhammer/contracts'
 import { describe, expect, test } from 'vitest'
 
-import { buildComparisonRows } from '../comparison'
+import { buildComparisonRows, formatComparisonNumber } from '../comparison'
 import { buildSampleWorkspace } from '../sample-workspace'
 
 describe('deterministic nested Case comparison', () => {
+  test('formats integers, decimals, negatives, and exponent-scale values without changing magnitude', () => {
+    expect([
+      formatComparisonNumber(100000),
+      formatComparisonNumber(120000),
+      formatComparisonNumber(12.34),
+      formatComparisonNumber(-120000),
+      formatComparisonNumber(1.2e-7),
+      formatComparisonNumber(1.2e21),
+    ]).toEqual(['100000', '120000', '12.34', '-120000', '1.2e-7', '1.2e+21'])
+  })
+
   test('flattens model and Scenario conditions plus numeric persisted result deltas', () => {
     const data = buildSampleWorkspace('2026-08-23T01:02:03.000Z')
     const cases = data.cases.slice(0, 2)

@@ -22,6 +22,10 @@ const transientRun: Run = {
         { t: 0, H: [30, 29, 28], Q: [0.1, 0.1, 0.1] },
         { t: 0.25, H: [31, 32, 34], Q: [0.1, 0.08, 0.04] },
       ],
+      'N-17': [
+        { t: 0, H: [99, 99, 99], Q: [0, 0, 0] },
+        { t: 0.25, H: [98, 98, 98], Q: [0, 0, 0] },
+      ],
     },
     nodes: { 'N-17': { H: [30, 34] } },
   },
@@ -37,8 +41,17 @@ describe('persisted Run visualization model', () => {
     expect(visuals.envelope).toEqual({
       id: 'P-17', distance: [0, 250, 500], steady: [30, 29, 28], maximum: [31, 34, 36], minimum: [28, 25, 24],
     })
-    expect(visuals.timeSeries).toEqual({ id: 'P-17', seconds: [0, 0.25], values: [28, 34] })
+    expect(visuals.timeSeries).toEqual({ id: 'P-17', seconds: [0, 0.25], values: [29, 32] })
     expect(visuals.profileCursorRatio).toBeCloseTo(0.5)
     expect(visuals.summaryMetrics).toEqual(expect.arrayContaining([{ path: 'dt', value: 0.25 }]))
+  })
+
+  test('prefers an exact persisted node trace before a same-id pipe fallback', () => {
+    const visuals = deriveRunVisuals(transientRun, {
+      targetRef: 'N-17', mapFeatureId: 'N-17', profileCursor: 'N-17',
+      envelopeSeriesId: 'N-17', timeSeriesId: 'N-17',
+    })
+
+    expect(visuals.timeSeries).toEqual({ id: 'N-17', seconds: [0, 0.25], values: [30, 34] })
   })
 })

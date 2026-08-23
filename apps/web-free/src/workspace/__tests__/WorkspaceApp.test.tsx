@@ -100,6 +100,35 @@ describe('full workspace application', () => {
     expect(screen.getByRole('button', { name: 'Run calculation' })).toBeDisabled()
   })
 
+  test('initializes and saves a complete blank-Case network template using only visible form controls', async () => {
+    const user = userEvent.setup()
+    const { data, repository } = setup()
+    const tabs = screen.getByRole('navigation', { name: 'Workspace tabs' })
+    await user.click(screen.getByRole('button', { name: 'New Case' }))
+    await user.click(within(tabs).getByRole('link', { name: 'Analysis' }))
+    await user.click(await screen.findByRole('radio', { name: /Steady network \/ Python/ }))
+
+    const caseName = screen.getByLabelText('解析ケース名')
+    expect(caseName).toHaveValue('取水支線 定常解析')
+    expect(screen.getAllByLabelText(/管路 1 · 管路 ID/)).toHaveLength(1)
+    expect(screen.getAllByLabelText(/節点 1 · 節点 ID/)).toHaveLength(1)
+    await user.click(screen.getByRole('button', { name: 'Add 管路' }))
+    expect(screen.getAllByLabelText(/管路 \d+ · 管路 ID/)).toHaveLength(2)
+    await user.click(screen.getByRole('button', { name: 'Remove 管路 2' }))
+    expect(screen.getAllByLabelText(/管路 \d+ · 管路 ID/)).toHaveLength(1)
+    await user.clear(caseName)
+    await user.type(caseName, 'フォーム入力のみ')
+    await user.click(screen.getByRole('button', { name: 'Save input' }))
+    expect(await screen.findByText('Input saved')).toBeVisible()
+
+    const snapshot = await repository.snapshot()
+    const created = snapshot.cases.find(({ id }) => !data.cases.some((record) => record.id === id))!
+    const input = (created.modelSnapshot as { runInputs: Record<string, { caseName: string; pipes: unknown[]; nodes: unknown[] }> }).runInputs.steady_network_python!
+    expect(input.caseName).toBe('フォーム入力のみ')
+    expect(input.pipes).toHaveLength(1)
+    expect(input.nodes).toHaveLength(2)
+  })
+
   test('executes through the common runner, locks the Case, and requires a reason to fork', async () => {
     const user = userEvent.setup()
     const { repository } = setup()
@@ -126,6 +155,31 @@ describe('full workspace application', () => {
 
     await waitFor(async () => expect((await repository.snapshot()).cases).toHaveLength(5))
     expect(await screen.findByRole('button', { name: /空気室容量を比較するため/ })).toBeVisible()
+  })
+
+  test('removes a cleared optional numeric input and refuses to persist a cleared required numeric input', async () => {
+    const user = userEvent.setup()
+    const { data, repository } = setup()
+    const tabs = screen.getByRole('navigation', { name: 'Workspace tabs' })
+    await user.click(within(tabs).getByRole('link', { name: 'Analysis' }))
+    await user.click(await screen.findByRole('radio', { name: /Empirical pressure/ }))
+
+    const optional = screen.getByLabelText(/通水圧/)
+    await user.type(optional, '0.3')
+    await user.clear(optional)
+    await user.click(screen.getByRole('button', { name: 'Save input' }))
+    expect(await screen.findByText('Input saved')).toBeVisible()
+    let current = (await repository.snapshot()).cases.find(({ id }) => id === data.cases.at(-1)!.id)!
+    let empirical = (current.modelSnapshot as { runInputs: Record<string, Record<string, unknown>> }).runInputs.empirical_pressure!
+    expect(empirical).not.toHaveProperty('operatingPressureMpa')
+
+    const required = screen.getByLabelText(/静水圧/)
+    await user.clear(required)
+    await user.click(screen.getByRole('button', { name: 'Save input' }))
+    expect(await screen.findByRole('status')).toHaveTextContent('静水圧は必須です。')
+    current = (await repository.snapshot()).cases.find(({ id }) => id === data.cases.at(-1)!.id)!
+    empirical = (current.modelSnapshot as { runInputs: Record<string, Record<string, unknown>> }).runInputs.empirical_pressure!
+    expect(empirical.staticPressureMpa).toBe(0.42)
   })
 
   test('persists explicitly mapped GeoJSON drafts into the selected Case', async () => {
