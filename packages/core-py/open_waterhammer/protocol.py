@@ -147,6 +147,20 @@ def _positive_number(value: Any) -> float | None:
     return float(value)
 
 
+def _skipped_assessment_warning(reason: str) -> str:
+    """Warning surfaced when allowablePressureMpa was supplied but could not be judged.
+
+    Distinct from the silent needs_review default used when the field is absent
+    entirely (Finding 2, fix round 1): an engineer who typed a threshold and got
+    no assessment needs to see *why*, not just a Run Inspector that looks
+    identical to "nothing entered".
+    """
+    return f"許容圧力が指定されていますが判定できませんでした（{reason}）。"
+
+
+_ALLOWABLE_PRESSURE_INVALID_REASON = "許容圧力は正の数値で指定してください"
+
+
 def _design_pressure_finding(
     target_ref: str,
     observed_value: float,
@@ -224,8 +238,9 @@ def _joukowsky_allievi(model: dict[str, Any], scenario: dict[str, Any]) -> dict[
 
     warnings = list(output.warnings)
     assessment = None
+    allowable_present = "allowablePressureMpa" in model
     allowable_pressure_mpa = _positive_number(model.get("allowablePressureMpa"))
-    if allowable_pressure_mpa is not None and output.closure_type != "numerical_required":
+    if allowable_pressure_mpa is not None:
         # 旧UI導出ロジックを踏襲 (git show master:.../WaterhammerCalculator.tsx 前後 467-474):
         # ハンマー水頭は「急閉塞ならジューコフスキー水頭、緩閉塞ならアリエビ最大水頭-H0」。
         initial_head = calculation_case.initial_head
@@ -241,6 +256,12 @@ def _joukowsky_allievi(model: dict[str, Any], scenario: dict[str, Any]) -> dict[
                 [(pipe.id, design_pressure_mpa, allowable_pressure_mpa, None)]
             )
             warnings += messages
+        else:
+            # closure_type == "numerical_required" のときのみ両方 None になる:
+            # 急/緩閉そくいずれの近似式も適用できず設計水圧を算定できない。
+            warnings.append(_skipped_assessment_warning("急閉そく・緩閉そくの近似式が適用できないため"))
+    elif allowable_present:
+        warnings.append(_skipped_assessment_warning(_ALLOWABLE_PRESSURE_INVALID_REASON))
 
     return _result("joukowsky-allievi", model, scenario, summary, warnings, assessment=assessment)
 
@@ -257,6 +278,7 @@ def _empirical_pressure(model: dict[str, Any], scenario: dict[str, Any]) -> dict
 
     warnings = list(output.warnings)
     assessment = None
+    allowable_present = "allowablePressureMpa" in model
     allowable_pressure_mpa = _positive_number(model.get("allowablePressureMpa"))
     if allowable_pressure_mpa is not None:
         design_pressure_mpa = static_pressure_mpa + output.waterhammer_mpa
@@ -264,6 +286,8 @@ def _empirical_pressure(model: dict[str, Any], scenario: dict[str, Any]) -> dict
             [(system_type, design_pressure_mpa, allowable_pressure_mpa, None)]
         )
         warnings += messages
+    elif allowable_present:
+        warnings.append(_skipped_assessment_warning(_ALLOWABLE_PRESSURE_INVALID_REASON))
 
     return _result("empirical-pressure", model, scenario, _json_value(output), warnings, assessment=assessment)
 
@@ -346,6 +370,7 @@ def _longitudinal(model: dict[str, Any], scenario: dict[str, Any]) -> dict[str, 
 
     warnings = list(output.warnings)
     assessment = None
+    allowable_present = "allowablePressureMpa" in model
     allowable_pressure_mpa = _positive_number(model.get("allowablePressureMpa"))
     if allowable_pressure_mpa is not None:
         # 各測点の設計内圧 (Pp) を個別に判定し、最悪ステータスを全体判定とする。
@@ -356,6 +381,8 @@ def _longitudinal(model: dict[str, Any], scenario: dict[str, Any]) -> dict[str, 
         ]
         assessment, messages = _assess_design_pressure_targets(targets)
         warnings += messages
+    elif allowable_present:
+        warnings.append(_skipped_assessment_warning(_ALLOWABLE_PRESSURE_INVALID_REASON))
 
     return _result("longitudinal-hydraulics", model, scenario, _json_value(output), warnings, assessment=assessment)
 

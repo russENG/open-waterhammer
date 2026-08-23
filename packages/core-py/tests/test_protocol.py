@@ -365,6 +365,7 @@ def test_joukowsky_allievi_assessment_stays_needs_review_for_numerical_required_
 
     assert result["summary"]["closureType"] == "numerical_required"
     assert result["assessment"] == {"status": "needs_review", "findings": []}
+    assert any("許容圧力が指定されていますが判定できませんでした" in warning for warning in result["warnings"])
 
 
 def test_empirical_pressure_assessment_fails_when_design_pressure_exceeds_allowable():
@@ -435,3 +436,36 @@ def test_design_pressure_assessment_kinds_stay_needs_review_when_allowable_press
     for kind in ("joukowsky_allievi", "empirical_pressure", "longitudinal_hydraulics"):
         result = execute_request(requests_by_kind()[kind])["result"]
         assert result["assessment"] == {"status": "needs_review", "findings": []}, kind
+        # No allowablePressureMpa was supplied at all, so this is the silent default —
+        # distinct from "supplied but unusable", which must surface a warning (below).
+        assert not any("許容圧力が指定されていますが判定できませんでした" in warning for warning in result["warnings"]), kind
+
+
+def test_joukowsky_allievi_assessment_surfaces_a_warning_when_the_allowable_pressure_is_negative():
+    calculation_request = requests_by_kind()["joukowsky_allievi"]
+    calculation_request["model"]["allowablePressureMpa"] = -1.0
+
+    result = execute_request(calculation_request)["result"]
+
+    assert result["assessment"] == {"status": "needs_review", "findings": []}
+    assert any("許容圧力が指定されていますが判定できませんでした" in warning for warning in result["warnings"])
+
+
+def test_empirical_pressure_assessment_surfaces_a_warning_when_the_allowable_pressure_is_not_a_number():
+    calculation_request = requests_by_kind()["empirical_pressure"]
+    calculation_request["model"]["allowablePressureMpa"] = "not-a-number"
+
+    result = execute_request(calculation_request)["result"]
+
+    assert result["assessment"] == {"status": "needs_review", "findings": []}
+    assert any("許容圧力が指定されていますが判定できませんでした" in warning for warning in result["warnings"])
+
+
+def test_longitudinal_hydraulics_assessment_surfaces_a_warning_when_the_allowable_pressure_is_zero():
+    calculation_request = requests_by_kind()["longitudinal_hydraulics"]
+    calculation_request["model"]["allowablePressureMpa"] = 0
+
+    result = execute_request(calculation_request)["result"]
+
+    assert result["assessment"] == {"status": "needs_review", "findings": []}
+    assert any("許容圧力が指定されていますが判定できませんでした" in warning for warning in result["warnings"])

@@ -165,8 +165,21 @@ const PROTECTION_TEMPLATES: Record<RunKind, JsonValue> = Object.fromEntries(RUN_
   ? { devices: [{ id: 'V-01', type: 'surge_tank', enabled: true, tankArea: 4, initialLevel: 30 }] }
   : {}])) as Record<RunKind, JsonValue>
 
+// allowablePressureMpa is demo-only seasoning on SAMPLE_RUN_INPUTS (sample-workspace.ts) so
+// the seeded demo workspace shows real pass/warning/fail assessments out of the box. It must
+// NOT leak into fresh-draft templates: createEngineeringState() clones template.model whenever
+// a Case has no runInputs yet for a kind, so every brand-new draft would otherwise silently
+// carry a judgment threshold the engineer never entered. The demo workspace is unaffected
+// because its seeded Cases persist SAMPLE_RUN_INPUTS directly as their own runInputs, bypassing
+// this template entirely.
+function withoutDemoOnlyAllowablePressure(model: JsonValue): JsonValue {
+  if (!model || typeof model !== 'object' || Array.isArray(model)) return model
+  const { allowablePressureMpa, ...rest } = model as Record<string, JsonValue>
+  return allowablePressureMpa === undefined ? model : rest
+}
+
 export const ENGINEERING_TEMPLATES = Object.fromEntries(RUN_KINDS.map((kind) => [kind, {
-  model: structuredClone(SAMPLE_RUN_INPUTS[kind]),
+  model: structuredClone(withoutDemoOnlyAllowablePressure(SAMPLE_RUN_INPUTS[kind])),
   event: structuredClone(EVENT_TEMPLATES[kind]),
   boundary: {},
   protection: structuredClone(PROTECTION_TEMPLATES[kind]),

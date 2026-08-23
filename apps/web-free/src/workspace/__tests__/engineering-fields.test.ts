@@ -7,6 +7,7 @@ import {
   ENGINEERING_FIELDS,
   ENGINEERING_TEMPLATES,
   addEngineeringCollectionItem,
+  createEngineeringState,
   engineeringFieldsFor,
   readEngineeringValue,
   removeEngineeringCollectionItem,
@@ -19,8 +20,8 @@ import { SAMPLE_RUN_INPUTS } from '../sample-workspace'
 
 const OPTIONAL_CANONICAL_PATHS: Record<(typeof RUN_KINDS)[number], string[]> = {
   wave_speed: ['model.pipe.name', 'model.pipe.startNodeId', 'model.pipe.endNodeId', 'event.closeTime'],
-  joukowsky_allievi: ['model.pipe.name', 'model.pipe.startNodeId', 'model.pipe.endNodeId', 'model.allowablePressureMpa'],
-  empirical_pressure: ['model.allowablePressureMpa'],
+  joukowsky_allievi: ['model.pipe.name', 'model.pipe.startNodeId', 'model.pipe.endNodeId'],
+  empirical_pressure: [],
   steady_single_pipe: ['model.method'],
   steady_network_python: [
     'model.caseName', 'model.pipes.0.minorLossCoeff', 'model.nodes.0.head', 'model.nodes.1.demand',
@@ -28,7 +29,7 @@ const OPTIONAL_CANONICAL_PATHS: Record<(typeof RUN_KINDS)[number], string[]> = {
   steady_network_epanet: [
     'model.caseName', 'model.pipes.0.minorLossCoeff', 'model.nodes.0.head', 'model.nodes.1.demand',
   ],
-  longitudinal_hydraulics: ['model.caseName', 'model.waterhammerRatio', 'model.allowablePressureMpa'],
+  longitudinal_hydraulics: ['model.caseName', 'model.waterhammerRatio'],
   transient_single_pipe: [
     'model.pipe.name', 'model.pipe.startNodeId', 'model.pipe.endNodeId',
     'event.nReaches', 'event.tMax', 'event.operation',
@@ -72,7 +73,14 @@ describe('RunKind engineering field catalog', () => {
 
   test('covers every scalar leaf in every canonical RunKind template with an editable descriptor', () => {
     for (const kind of RUN_KINDS) {
-      expect(ENGINEERING_TEMPLATES[kind].model, kind).toEqual(SAMPLE_RUN_INPUTS[kind])
+      // allowablePressureMpa is demo-only seasoning on SAMPLE_RUN_INPUTS (Finding 1, fix
+      // round 1): fresh-draft templates must not carry it, so compare against the sample
+      // with that one key stripped rather than the raw sample.
+      const sample = SAMPLE_RUN_INPUTS[kind]
+      const expectedTemplateModel = sample && typeof sample === 'object' && !Array.isArray(sample)
+        ? Object.fromEntries(Object.entries(sample).filter(([key]) => key !== 'allowablePressureMpa'))
+        : sample
+      expect(ENGINEERING_TEMPLATES[kind].model, kind).toEqual(expectedTemplateModel)
       const descriptors = engineeringFieldsFor(kind, ENGINEERING_TEMPLATES[kind])
       const described = new Set(descriptors.map(({ target, path }) => `${target}.${path}`))
       const expected = (['model', 'event', 'boundary', 'protection'] as const).flatMap((target) =>
@@ -400,6 +408,32 @@ describe('RunKind engineering field catalog', () => {
       const cleared = updateEngineeringFieldFromInput(ENGINEERING_TEMPLATES[kind], field!, '')
       expect(cleared.model).not.toHaveProperty('allowablePressureMpa')
       expect(validateEngineeringState(kind, cleared), kind).toEqual([])
+    }
+  })
+
+  test('creates a fresh draft without the demo-only allowablePressureMpa threshold pre-filled', () => {
+    // Finding 1 (fix round 1): SAMPLE_RUN_INPUTS seeds allowablePressureMpa: 0.75 so the demo
+    // workspace shows real assessments, but createEngineeringState(kind, undefined) is exactly
+    // what a brand-new Case's Analysis form uses for a kind it has never saved runInputs for —
+    // that fresh draft must start needs_review, not silently pre-judged against a threshold the
+    // engineer never entered.
+    for (const kind of ['joukowsky_allievi', 'empirical_pressure', 'longitudinal_hydraulics'] as const) {
+      const fresh = createEngineeringState(kind, undefined)
+      expect(fresh.model, kind).not.toHaveProperty('allowablePressureMpa')
+      expect(validateEngineeringState(kind, fresh), kind).toEqual([])
+
+      // The field must still be reachable and fillable — only the pre-filled default is gone.
+      const field = engineeringFieldsFor(kind, fresh).find(({ target, path }) => target === 'model' && path === 'allowablePressureMpa')
+      expect(field, kind).toMatchObject({ label: '許容圧力', unit: 'MPa', kind: 'number', required: false })
+      const typed = updateEngineeringValue(fresh, { target: 'model', path: 'allowablePressureMpa' }, 0.6)
+      expect(readEngineeringValue(typed, { target: 'model', path: 'allowablePressureMpa' })).toBe(0.6)
+    }
+
+    // The seeded demo workspace's own Cases still carry the sample value directly (not through
+    // the template fallback), so passing that persisted model straight through keeps it intact.
+    for (const kind of ['joukowsky_allievi', 'empirical_pressure', 'longitudinal_hydraulics'] as const) {
+      const seeded = createEngineeringState(kind, SAMPLE_RUN_INPUTS[kind])
+      expect(readEngineeringValue(seeded, { target: 'model', path: 'allowablePressureMpa' }), kind).toBe(0.75)
     }
   })
 
