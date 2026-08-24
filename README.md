@@ -94,8 +94,16 @@ UI 自体は `Scenario.eventSettings.runKind`（`run` が実行対象の RunKind
 - プロジェクトデータは **ブラウザの IndexedDB**、または **ローカルの `.owhproj` ZIP バンドル**
   にのみ保存される。外部サーバーへの送信は行わない。
 - ベースマップ（OpenStreetMap タイル）は**既定 OFF**。有効化した場合のみ `tile.openstreetmap.org`
-  への通信が発生する——それ以外に、計算実行中を含めて外部ネットワークアクセスは発生しない
-  （CSP は `script-src 'self' 'wasm-unsafe-eval'` のみで、CDN からのスクリプト読み込みは行わない）。
+  への通信が発生する。
+- **計算・入力データの外部送信は一切行わない。** 計算はブラウザ内の Pyodide で実行され、管路諸元・
+  シナリオ・計算結果がネットワークに出ることはない（E2E テストで、全 RunKind の実行中に自己オリジン
+  以外への通信が発生しないことを機械的に検証している）。
+- 例外として公開サイト（GitHub Pages 版）のみ、**匿名のアクセス計測**（Cloudflare Web Analytics）を
+  実行する。収集されるのはページ単位の閲覧数・参照元・大まかな地域のみで、**クッキーを使用せず、
+  個人を識別する ID も持たない**。計測対象はページの閲覧そのものであり、入力値・計算結果は対象外。
+  ソースからビルドした場合・フォークした場合は計測コードは含まれない（ビルド時に
+  `VITE_CF_BEACON_TOKEN` が設定されたときのみ、ビーコンと対応する CSP 許可の双方が注入される。
+  実装は [`apps/web-free/web-analytics.ts`](./apps/web-free/web-analytics.ts)）。
 - クラウドバックエンド・公開 HTTP API・認証・アカウントは存在しない（「[繰延事項](#繰延事項)」参照）。
 
 ---
@@ -195,11 +203,6 @@ OpenLayers + Proj4（遅延ロード）。EPSG:4326・EPSG:3857・JGD2011 平面
 - 電子署名・人間による承認（Decision / Approval）記録——本リリースの判定は自動評価のみで、
   人が承認した記録という概念自体が存在しない
 - 追加の Level 2（参照例）／Level 3（実務・商用比較）V&V ベンチマークプログラム
-
-進行中のリリース工程（本リリースのスコープ内・別タスクで対応）として、パッケージ間のバージョン
-文字列統一、ビルド Git SHA の Run manifest への実値埋め込み、CI でのフルテストマトリクス（CLI・
-Python・typecheck・E2E を含む）実行がある。現状は [`docs/validation-plan.md`](./docs/validation-plan.md)
-を参照。
 
 ---
 
@@ -303,8 +306,8 @@ WNTR・EPANET（USEPA/OWA いずれも）は定常・EPS 水理/水質解析が�
 [**AGPL-3.0-or-later**](https://www.gnu.org/licenses/agpl-3.0.html)
 
 商用・非商用を問わず利用可能。ただし**改変・ネットワーク提供を行う場合はソースコードの公開**が必要。
-全文は [`docs/license.md`](./docs/license.md) を参照（リポジトリルートの `LICENSE` ファイルへの
-正文収録は別タスクで対応中）。
+正文はリポジトリルートの [`LICENSE`](./LICENSE)、採用理由・適用範囲の解説は
+[`docs/license.md`](./docs/license.md) を参照。
 
 ### Why AGPL?
 

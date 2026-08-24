@@ -57,6 +57,9 @@ jobs:
         run: npm run build --workspace=apps/web-free
         env:
           VITE_BASE_PATH: /open-waterhammer/
+          # Public-site-only, cookie-less page-view counting. Unset (e.g. in forks) => the beacon
+          # and its CSP allowance are both omitted and the build stays strictly self-origin.
+          VITE_CF_BEACON_TOKEN: ${{ vars.CF_BEACON_TOKEN }}
 
       - name: Setup Pages
         uses: actions/configure-pages@v5

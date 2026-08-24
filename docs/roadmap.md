@@ -1,6 +1,6 @@
 # open-waterhammer ロードマップ
 
-最終更新: 2026-08-24
+最終更新: 2026-08-25
 
 本プロジェクトの実装済み機能、既知の制約、今後の課題を整理する。
 要旨『設計実務者を対象とした水路非定常計算機能へのOSS適用と限界』(JSIDRE2026)
@@ -58,6 +58,8 @@
 - ✅ 決定性 `.owhproj` バンドル（同一内容のエクスポートはバイト単位で再現）と、`owh` CLI による
   ブラウザなしの検証・検査（`run` の実行対象は本リリースでは CLI 作成形式のドラフト Case。
   ブラウザ書き出しバンドルは validate / inspect に対応）
+- ✅ ブラウザからの `.owhproj` 書き出し・読み込み（概要タブのボタン。同じ Project ID が既に存在する
+  環境への読み込みは仕様として拒否）
 - ✅ 2〜4件の Case 比較（条件・結果の差分）
 - ✅ Run Inspector（マニフェスト・自動評価・警告・来歴の再帰的差分表示）
 - ✅ RunKind 別のトポロジゲート（ネットワークを消費する4種別のみ GIS/構造完結を要求し、残り7種別は
@@ -71,6 +73,9 @@
 - ✅ 学習用 Marimo notebook 3本（再編の影響を受けず維持）
 - ✅ CSP（`script-src 'self' 'wasm-unsafe-eval'`、外部 CDN 不使用）・AGPL-3.0
 - ✅ GitHub Pages 自動デプロイ
+- ✅ リリース工程の統一（全ワークスペースの `package.json` を `0.2.0-alpha.1` に統一、ビルド Git SHA の
+  Run manifest への実値埋め込み（`VITE_GIT_SHA` / `OWH_GIT_SHA`）、CI のフルテストマトリクス
+  （build・CLI 含む全テスト・typecheck・lint・pytest・golden `.owhproj` 受け入れ・E2E））
 - ✅ pytest 141 + Node/Vitest 系 300件超（詳細・現在の正確な内訳は
   [`docs/validation-plan.md`](./validation-plan.md)）
 - 🟡 npm audit: 3件（低1・中2、いずれも `exceljs`/開発用 `esbuild` の間接依存。修正には破壊的な
@@ -125,8 +130,6 @@
 | **JSIDRE2026 発表準備** | スライド・デモシナリオ・Q&A 想定 | 高 |
 | **複数の検証事例追加** | 実プロジェクトデータでの相互検証 | 中 |
 | **エラーメッセージ改善** | ユーザー入力ミスへの具体的サジェスト | 中 |
-| **リリース工程の仕上げ** | パッケージ間バージョン文字列の統一、ビルド Git SHA の実値埋め込み、CI でのフルテストマトリクス（CLI・Python・typecheck・E2E）実行、golden `.owhproj` 受け入れスクリプト | 高 |
-| **ブラウザからのプロジェクトエクスポート UI** | `.owhproj` の export/import API 自体は実装・テスト済みだが、ブラウザワークスペースからのボタン操作は未配線 | 中 |
 
 ### 中期（v1.0 へ）
 
