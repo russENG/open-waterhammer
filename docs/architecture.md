@@ -167,10 +167,9 @@ UI ソースから検出）を実行する。検証状況の詳細な件数・�
 ## 6. バージョニング・識別子
 
 - 製品バージョン: `0.2.0-alpha.1`（`@open-waterhammer/contracts` の `PRODUCT_VERSION` が正準値）。
-  `contracts`/`workspace`/`runner`/`cli`/`core-py` の各パッケージ定義には既に反映済み。ルート
-  `package.json` と `core`/`epanet-adapter`/`excel-io`/`sample-data`/`standards`/`report-basic`/
-  `web-free` の各 `package.json` はバージョン統一の別タスクが対象で、本書執筆時点では旧プレース
-  ホルダ値のままの箇所がある——UI の表示・ドキュメント記載は一貫して `0.2.0-alpha.1` を使う。
+  ルート `package.json` と全ワークスペースパッケージ（`contracts`/`workspace`/`runner`/`cli`/`core`/
+  `epanet-adapter`/`excel-io`/`sample-data`/`standards`/`report-basic`/`web-free`）の `package.json`
+  にも同じ値を反映済みで、UI の表示・ドキュメント記載も一貫して `0.2.0-alpha.1` を使う。
 - 契約スキーマバージョン: `1.0.0`。
 - バンドル形式バージョン: `1`。
 - Python プロトコルバージョン: `1`。

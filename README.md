@@ -196,11 +196,6 @@ OpenLayers + Proj4（遅延ロード）。EPSG:4326・EPSG:3857・JGD2011 平面
   人が承認した記録という概念自体が存在しない
 - 追加の Level 2（参照例）／Level 3（実務・商用比較）V&V ベンチマークプログラム
 
-進行中のリリース工程（本リリースのスコープ内・別タスクで対応）として、パッケージ間のバージョン
-文字列統一、ビルド Git SHA の Run manifest への実値埋め込み、CI でのフルテストマトリクス（CLI・
-Python・typecheck・E2E を含む）実行がある。現状は [`docs/validation-plan.md`](./docs/validation-plan.md)
-を参照。
-
 ---
 
 ## 開発
@@ -303,8 +298,8 @@ WNTR・EPANET（USEPA/OWA いずれも）は定常・EPS 水理/水質解析が�
 [**AGPL-3.0-or-later**](https://www.gnu.org/licenses/agpl-3.0.html)
 
 商用・非商用を問わず利用可能。ただし**改変・ネットワーク提供を行う場合はソースコードの公開**が必要。
-全文は [`docs/license.md`](./docs/license.md) を参照（リポジトリルートの `LICENSE` ファイルへの
-正文収録は別タスクで対応中）。
+正文はリポジトリルートの [`LICENSE`](./LICENSE)、採用理由・適用範囲の解説は
+[`docs/license.md`](./docs/license.md) を参照。
 
 ### Why AGPL?
 
