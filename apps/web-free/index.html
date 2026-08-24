@@ -4,8 +4,20 @@
     <meta charset="UTF-8" />
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <!--
+      Content Security Policy (defense in depth)
+      - default-src 'self': 同一オリジン以外からの読込を遮断
+      - script-src 'self': 自己ホストしたスクリプトとローカル WASM のみ許可
+      - style-src 'self' 'unsafe-inline': KaTeX が style 属性を生成するため inline 許可
+      - img-src 'self' data: blob:: 生成画像と、利用者が明示的に有効化した OSM basemap tile を許可
+      - connect-src: 同一オリジンと、明示的に有効化した OSM basemap のみ許可
+      - object-src 'none': プラグイン/embed を禁止
+      - base-uri 'self': base タグ注入を禁止
+      - frame-ancestors 'none': クリックジャッキング防止
+    -->
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline'; font-src 'self' data:; img-src 'self' data: blob: https://tile.openstreetmap.org; connect-src 'self' https://tile.openstreetmap.org; object-src 'none'; base-uri 'self'; frame-ancestors 'none';" />
     <title>open-waterhammer — 農業用パイプライン水撃圧計算 OSS</title>
-    <meta name="description" content="土地改良事業計画設計基準 設計「パイプライン」（令和3年改定）準拠の水撃圧計算オープンソースツール。定常流・特性曲線法・成果品様式帳票出力に対応。" />
+    <meta name="description" content="土地改良事業計画設計基準 設計「パイプライン」（令和3年改定）を参照する水撃圧計算オープンソースツール。定常流・特性曲線法・成果品様式帳票出力に対応。" />
   </head>
   <body>
     <div id="root"></div>

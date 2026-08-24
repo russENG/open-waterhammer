@@ -1,6 +1,6 @@
 {
   "name": "@open-waterhammer/sample-data",
-  "version": "0.0.1",
+  "version": "0.2.0-alpha.1",
   "description": "サンプルデータ・デモデータ・検証データ（ダウンロード可能）",
   "type": "module",
   "main": "./dist/index.js",

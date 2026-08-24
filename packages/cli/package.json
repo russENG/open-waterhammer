@@ -1,0 +1,32 @@
+{
+  "name": "@open-waterhammer/cli",
+  "version": "0.2.0-alpha.1",
+  "description": "Local offline Open Waterhammer command-line interface",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "bin": {
+    "owh": "./dist/bin.js"
+  },
+  "exports": {
+    ".": {
+      "import": "./dist/index.js",
+      "types": "./dist/index.d.ts"
+    }
+  },
+  "scripts": {
+    "build": "tsc --build",
+    "typecheck": "tsc --noEmit",
+    "test": "node --test --test-force-exit --import tsx/esm src/__tests__/*.test.ts"
+  },
+  "license": "AGPL-3.0-or-later",
+  "dependencies": {
+    "@open-waterhammer/contracts": "0.2.0-alpha.1",
+    "@open-waterhammer/runner": "0.2.0-alpha.1",
+    "@open-waterhammer/workspace": "0.2.0-alpha.1"
+  },
+  "devDependencies": {
+    "@types/node": "^25.5.0",
+    "tsx": "^4.21.0"
+  }
+}

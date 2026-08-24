@@ -3,3 +3,4 @@ export * from "./reader.js";
 export * from "./template.js";
 export * from "./report.js";
 export * from "./session-report.js";
+export * from "./run-report.js";

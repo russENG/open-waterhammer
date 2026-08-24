@@ -1,6 +1,6 @@
 {
   "name": "@open-waterhammer/excel-io",
-  "version": "0.0.1",
+  "version": "0.2.0-alpha.1",
   "type": "module",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
@@ -16,9 +16,10 @@
     "test": "node --import tsx/esm --test src/__tests__/*.test.ts"
   },
   "dependencies": {
+    "@open-waterhammer/contracts": "0.2.0-alpha.1",
     "@open-waterhammer/core": "*",
     "@types/node": "^25.5.0",
-    "xlsx": "^0.18.5"
+    "exceljs": "^4.4.0"
   },
   "license": "AGPL-3.0-or-later"
 }

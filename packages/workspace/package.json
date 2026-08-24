@@ -1,0 +1,30 @@
+{
+  "name": "@open-waterhammer/workspace",
+  "version": "0.2.0-alpha.1",
+  "description": "Local-first workspace persistence and deterministic project bundles",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "import": "./dist/index.js",
+      "types": "./dist/index.d.ts"
+    }
+  },
+  "scripts": {
+    "build": "tsc --build",
+    "typecheck": "tsc --noEmit",
+    "test": "node --test --test-force-exit --import tsx/esm src/__tests__/*.test.ts"
+  },
+  "license": "AGPL-3.0-or-later",
+  "dependencies": {
+    "@open-waterhammer/contracts": "0.2.0-alpha.1",
+    "fflate": "^0.8.3",
+    "idb": "^8.0.3"
+  },
+  "devDependencies": {
+    "@types/node": "^25.5.0",
+    "fake-indexeddb": "^6.2.5",
+    "tsx": "^4.21.0"
+  }
+}

@@ -4,6 +4,7 @@
 
 import assert from "node:assert/strict";
 import { describe, test } from "node:test";
+import { PRODUCT_VERSION } from "@open-waterhammer/contracts";
 import { generateTemplate } from "../template.js";
 import { parseWorkbook } from "../reader.js";
 import type { Pipe, Node, CalculationCase } from "@open-waterhammer/core";
@@ -70,10 +71,10 @@ const testCases: CalculationCase[] = [
 
 // ─── ラウンドトリップテスト ────────────────────────────────────────────────────
 
-describe("Excel ラウンドトリップ（generateTemplate → parseWorkbook）", () => {
+describe("Excel ラウンドトリップ（generateTemplate → parseWorkbook）", async () => {
   // 1回だけ生成・パースして使い回す
-  const buf = generateTemplate({ meta: testMeta, pipes: testPipes, nodes: testNodes, cases: testCases });
-  const result = parseWorkbook(buf);
+  const buf = await generateTemplate({ meta: testMeta, pipes: testPipes, nodes: testNodes, cases: testCases });
+  const result = await parseWorkbook(buf);
 
   test("パースエラーが 0 件", () => {
     assert.equal(result.errors.length, 0, JSON.stringify(result.errors));
@@ -90,6 +91,9 @@ describe("Excel ラウンドトリップ（generateTemplate → parseWorkbook）
     });
     test("基準IDが一致", () => {
       assert.equal(result.data.meta.standardId, testMeta.standardId);
+    });
+    test("バージョン未指定時は PRODUCT_VERSION が既定値になる", () => {
+      assert.equal(result.data.meta.version, PRODUCT_VERSION);
     });
   });
 
@@ -160,8 +164,8 @@ describe("Excel ラウンドトリップ（generateTemplate → parseWorkbook）
 // ─── エラー検出テスト ────────────────────────────────────────────────────────
 
 describe("parseWorkbook エラー検出", () => {
-  test("空バッファを渡すとエラーが返る", () => {
-    const result = parseWorkbook(new ArrayBuffer(0));
+  test("空バッファを渡すとエラーが返る", async () => {
+    const result = await parseWorkbook(new ArrayBuffer(0));
     assert.ok(result.errors.length > 0);
   });
 });

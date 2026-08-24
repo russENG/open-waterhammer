@@ -1,106 +1,93 @@
-import { useState, useEffect } from 'react'
-import { AboutPage } from './pages/AboutPage'
-import { DesignFlowPage } from './pages/DesignFlowPage'
-import { HydraulicOverviewPage } from './pages/HydraulicOverviewPage'
-import { WaterHammerPage } from './pages/WaterHammerPage'
-import { ReferencePage } from './pages/ReferencePage'
+import { lazy, Suspense, useEffect, useState } from 'react'
+import type { WorkspaceData } from '@open-waterhammer/workspace'
+
 import { onNavigate, type AppPage } from './lib/navigation'
+import { resolveLegacyHash } from './lib/legacy-hash'
+import { WorkspaceApp } from './workspace/WorkspaceApp'
+import { initializeBrowserWorkspace } from './workspace/bootstrap'
+import type { WorkspaceRepositoryClient } from './workspace/workspace-context'
 import './App.css'
 
-export default function App() {
-  const [page, setPage] = useState<AppPage>('water-hammer')
-  const [refTopicId, setRefTopicId] = useState<string | undefined>(undefined)
+const AboutPage = lazy(() => import('./pages/AboutPage').then((module) => ({ default: module.AboutPage })))
+const DesignFlowPage = lazy(() => import('./pages/DesignFlowPage').then((module) => ({ default: module.DesignFlowPage })))
+const HydraulicOverviewPage = lazy(() => import('./pages/HydraulicOverviewPage').then((module) => ({ default: module.HydraulicOverviewPage })))
+const LibraryPage = lazy(() => import('./pages/LibraryPage').then((module) => ({ default: module.LibraryPage })))
+const ReferencePage = lazy(() => import('./pages/ReferencePage').then((module) => ({ default: module.ReferencePage })))
 
-  // 子コンポーネントからの「基準照会の特定トピックを開いて」要求を受信
+interface BrowserWorkspace {
+  repository: WorkspaceRepositoryClient
+  data: WorkspaceData
+}
+
+function documentationPage(hash: string): AppPage | null {
+  const value = hash.replace(/^#\/?docs\/?/, '').split(/[?/]/)[0]
+  if (value === 'reference' || value === 'library' || value === 'design-flow' || value === 'hydraulic' || value === 'about') return value
+  return null
+}
+
+export default function App() {
+  const [hash, setHash] = useState(() => resolveLegacyHash(window.location.hash) ?? window.location.hash)
+  const [workspace, setWorkspace] = useState<BrowserWorkspace | null>(null)
+  const [bootError, setBootError] = useState<string | null>(null)
+  const docsPage = documentationPage(hash)
+
+  // レガシー式アンカー URL（#joukowsky 等）を #/docs/library へ書き換える。
+  // 初期表示・hashchange の両方をこの1エフェクトでカバーする（マウント時に一度手動実行）。
+  // `location.hash = target` は使わない — それは新しい履歴エントリを push してしまい、
+  // 「外部引用リンクから着地 → 補正後の URL」という2エントリの間に元の #joukowsky が
+  // 残り続け、Back を押すたびに hashchange が再発火してまた push し直す
+  // （Back で参照元まで戻れなくなる）罠になる。replaceState は現在のエントリを
+  // その場で書き換えるだけなので履歴は増えず、hashchange も飛ばないため state は
+  // 明示的に setHash で揃える。
   useEffect(() => {
-    return onNavigate((detail) => {
-      setPage(detail.page)
-      if (detail.page === 'reference') {
-        setRefTopicId(detail.topicId)
+    const update = () => {
+      const raw = window.location.hash
+      const legacyTarget = resolveLegacyHash(raw)
+      if (legacyTarget) {
+        history.replaceState(null, '', legacyTarget)
+        setHash(legacyTarget)
+        return
       }
-      window.scrollTo({ top: 0, behavior: 'smooth' })
-    })
+      setHash(raw)
+    }
+    update()
+    window.addEventListener('hashchange', update)
+    return () => window.removeEventListener('hashchange', update)
   }, [])
 
-  function navigate(target: AppPage) {
-    setPage(target)
-    if (target !== 'reference') setRefTopicId(undefined)
-  }
+  useEffect(() => onNavigate(({ page, topicId }) => {
+    window.location.hash = `#/docs/${page}${topicId ? `?topic=${encodeURIComponent(topicId)}` : ''}`
+  }), [])
 
-  return (
-    <div className="app">
-      <header className="header">
-        <div className="header-inner">
-          <div className="header-title">
-            <span className="header-badge">OSS</span>
-            <h1>水撃圧計算</h1>
-            <span className="header-sub">農業用パイプライン設計</span>
-          </div>
-          <div className="header-actions">
-            <button
-              className={`header-nav-btn${page === 'water-hammer' ? ' header-nav-btn--active' : ''}`}
-              onClick={() => navigate('water-hammer')}
-            >
-              計算
-            </button>
-            <button
-              className={`header-nav-btn${page === 'reference' ? ' header-nav-btn--active' : ''}`}
-              onClick={() => navigate('reference')}
-            >
-              基準照会
-            </button>
-            <button
-              className={`header-nav-btn${page === 'design-flow' ? ' header-nav-btn--active' : ''}`}
-              onClick={() => navigate('design-flow')}
-            >
-              設計フロー
-            </button>
-            <button
-              className={`header-nav-btn${page === 'hydraulic' ? ' header-nav-btn--active' : ''}`}
-              onClick={() => navigate('hydraulic')}
-            >
-              水理俯瞰
-            </button>
-            <button
-              className={`header-nav-btn${page === 'about' ? ' header-nav-btn--active' : ''}`}
-              onClick={() => navigate('about')}
-            >
-              about
-            </button>
-          </div>
-        </div>
-      </header>
-      <main className={page === 'reference' ? 'main main--fullwidth' : 'main'}>
-        {page === 'about' && <AboutPage />}
-        {page === 'design-flow' && <DesignFlowPage />}
-        {page === 'hydraulic' && <HydraulicOverviewPage />}
-        {page === 'water-hammer' && <WaterHammerPage />}
-        {page === 'reference' && <ReferencePage initialTopicId={refTopicId} />}
-      </main>
-      <footer className="footer">
-        <p>計算ロジックはオープンソース（AGPL-3.0）。結果には採用基準・手法・前提条件を明示。</p>
-        <div className="footer-links">
-          <button className="footer-link" onClick={() => navigate('water-hammer')}>
-            水撃圧計算
-          </button>
-          <span className="footer-sep">|</span>
-          <button className="footer-link" onClick={() => navigate('reference')}>
-            基準照会
-          </button>
-          <span className="footer-sep">|</span>
-          <button className="footer-link" onClick={() => navigate('design-flow')}>
-            パイプライン設計フロー
-          </button>
-          <span className="footer-sep">|</span>
-          <button className="footer-link" onClick={() => navigate('hydraulic')}>
-            水理計算俯瞰
-          </button>
-          <span className="footer-sep">|</span>
-          <button className="footer-link" onClick={() => navigate('about')}>
-            社会基盤設計コモンズとは
-          </button>
-        </div>
-      </footer>
-    </div>
-  )
+  useEffect(() => {
+    if (docsPage || workspace) return
+    let active = true
+    initializeBrowserWorkspace().then((opened) => {
+      if (active) setWorkspace(opened)
+      else opened.repository.close()
+    }).catch((error) => {
+      if (active) setBootError(error instanceof Error ? error.message : String(error))
+    })
+    return () => { active = false }
+  }, [docsPage, workspace])
+
+  if (docsPage) return <DocumentationShell page={docsPage} />
+  if (bootError) return <div className="boot-screen boot-screen--error" role="alert"><span>WORKSPACE ERROR</span><h1>ローカル Workspace を開けませんでした</h1><p>{bootError}</p><button onClick={() => window.location.reload()}>Reload</button></div>
+  if (!workspace) return <div className="boot-screen" role="status"><div className="boot-mark"><i /><i /><i /></div><span>OPEN WATERHAMMER / alpha</span><h1>Local workspace</h1><p>IndexedDB と設計証跡を確認しています…</p></div>
+  return <WorkspaceApp repository={workspace.repository} initialData={workspace.data} />
+}
+
+function DocumentationShell({ page }: { page: AppPage }) {
+  const topic = new URLSearchParams(window.location.hash.split('?')[1] ?? '').get('topic') ?? undefined
+  return <div className="docs-app">
+    <header className="docs-header"><a className="docs-brand" href="#/"><span>OWH</span><div><strong>OPEN WATERHAMMER</strong><small>documentation & design references</small></div></a><div className="product-context"><span className="alpha-label">alpha</span><span className="support-label">設計比較支援</span></div><nav aria-label="Documentation sections"><a href="#/">Workspace</a><a className={page === 'reference' ? 'active' : ''} href="#/docs/reference">Reference</a><a className={page === 'library' ? 'active' : ''} href="#/docs/library">Library</a><a className={page === 'design-flow' ? 'active' : ''} href="#/docs/design-flow">設計フロー</a><a className={page === 'hydraulic' ? 'active' : ''} href="#/docs/hydraulic">水理設計の視点</a><a className={page === 'about' ? 'active' : ''} href="#/docs/about">About</a></nav></header>
+    <main className="docs-main"><Suspense fallback={<div className="panel-loading" role="status"><span /><p>Loading documentation…</p></div>}>
+      {page === 'reference' && <ReferencePage initialTopicId={topic} />}
+      {page === 'library' && <LibraryPage initialAnchor={topic} />}
+      {page === 'design-flow' && <DesignFlowPage />}
+      {page === 'hydraulic' && <HydraulicOverviewPage />}
+      {page === 'about' && <AboutPage />}
+    </Suspense></main>
+    <footer className="product-footer"><div><strong>alpha · 設計比較支援</strong><span>documentation preserved</span></div><p><b>適用限界：</b>自動評価は設計比較支援のための参考情報です。入力条件、適用基準、数値解法の妥当性は設計者が個別に確認してください。</p></footer>
+  </div>
 }

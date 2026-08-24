@@ -1,6 +1,6 @@
 {
   "name": "open-waterhammer",
-  "version": "0.0.1",
+  "version": "0.2.0-alpha.1",
   "private": true,
   "description": "水撃圧計算 OSS — Open Civil Design / 社会基盤設計コモンズ",
   "workspaces": [
@@ -12,7 +12,8 @@
     "test": "npm run test --workspaces --if-present",
     "typecheck": "npm run typecheck --workspaces --if-present",
     "lint": "npm run lint --workspaces --if-present && npm run lint:wording",
-    "lint:wording": "node scripts/check-ui-wording.mjs"
+    "lint:wording": "node scripts/check-ui-wording.mjs",
+    "acceptance": "node scripts/acceptance.mjs"
   },
   "engines": {
     "node": ">=20"

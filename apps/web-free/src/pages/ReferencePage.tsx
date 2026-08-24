@@ -1,3 +1,4 @@
+/* eslint-disable react-hooks/set-state-in-effect -- initial topic synchronizes the preserved PDF viewer */
 /**
  * 基準照会ページ
  *

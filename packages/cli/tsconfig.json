@@ -1,0 +1,17 @@
+{
+  "extends": "../../tsconfig.json",
+  "compilerOptions": {
+    "rootDir": "src",
+    "outDir": "dist",
+    "types": ["node"],
+    "paths": {
+      "@open-waterhammer/runner": ["../runner/src/index.ts"]
+    }
+  },
+  "include": ["src"],
+  "references": [
+    { "path": "../contracts" },
+    { "path": "../workspace" },
+    { "path": "../runner" }
+  ]
+}

@@ -20,7 +20,7 @@ export function rowsToCsv(rows: Cell[][]): string {
 
 export function downloadCsv(filename: string, rows: Cell[][]): void {
   const csv = rowsToCsv(rows);
-  const BOM = "\uFEFF";
+  const BOM = String.fromCharCode(0xfeff);
   const blob = new Blob([BOM + csv], { type: "text/csv;charset=utf-8" });
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a");

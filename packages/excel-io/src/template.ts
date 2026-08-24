@@ -1,9 +1,12 @@
 /**
  * Excel帳票テンプレート生成
  * デモケースを初期値として入力済みテンプレートを出力する
+ *
+ * exceljs ベース実装（xlsx/SheetJS から移行: 2026-05-08）
  */
 
-import * as XLSX from "xlsx";
+import ExcelJS from "exceljs";
+import { PRODUCT_VERSION } from "@open-waterhammer/contracts";
 import type { Pipe, Node, CalculationCase, MeasurementPoint } from "@open-waterhammer/core";
 import type { ProjectMeta } from "./types.js";
 
@@ -17,18 +20,20 @@ interface TemplateOptions {
 
 // ─── シート生成ヘルパー ───────────────────────────────────────────────────────
 
-function makeMetaSheet(meta: Partial<ProjectMeta>): XLSX.WorkSheet {
+function addMetaSheet(wb: ExcelJS.Workbook, meta: Partial<ProjectMeta>): ExcelJS.Worksheet {
+  const ws = wb.addWorksheet("案件情報");
   const rows = [
     ["フィールドID", "値", "説明"],
     ["project_name", meta.projectName ?? "", "案件名（必須）"],
     ["designer", meta.designer ?? "", "設計者名"],
     ["date", meta.date ?? new Date().toISOString().slice(0, 10), "設計年月日"],
     ["standard_id", meta.standardId ?? "nochi_pipeline_2021", "採用基準ID"],
-    ["version", meta.version ?? "0.0.1", "ソフトウェアバージョン（自動）"],
+    ["version", meta.version ?? PRODUCT_VERSION, "ソフトウェアバージョン（自動）"],
     ["method_id", meta.methodId ?? "joukowsky_v1", "手法識別子"],
     ["notes", meta.notes ?? "", "備考"],
   ];
-  return XLSX.utils.aoa_to_sheet(rows);
+  ws.addRows(rows);
+  return ws;
 }
 
 function makePipeRows(pipes: Pipe[]): unknown[][] {
@@ -59,7 +64,8 @@ function makeNodeRows(nodes: Node[]): unknown[][] {
   return [header, ...dataRows];
 }
 
-function makeNetworkSheet(pipes: Pipe[], nodes: Node[]): XLSX.WorkSheet {
+function addNetworkSheet(wb: ExcelJS.Workbook, pipes: Pipe[], nodes: Node[]): ExcelJS.Worksheet {
+  const ws = wb.addWorksheet("管路・節点");
   const rows: unknown[][] = [
     // --- 管路テーブル ---
     ["# 管路区間（Pipe）"],
@@ -69,10 +75,12 @@ function makeNetworkSheet(pipes: Pipe[], nodes: Node[]): XLSX.WorkSheet {
     ["# 節点（Node）"],
     ...makeNodeRows(nodes),
   ];
-  return XLSX.utils.aoa_to_sheet(rows);
+  ws.addRows(rows);
+  return ws;
 }
 
-function makeCasesSheet(cases: CalculationCase[]): XLSX.WorkSheet {
+function addCasesSheet(wb: ExcelJS.Workbook, cases: CalculationCase[]): ExcelJS.Worksheet {
+  const ws = wb.addWorksheet("ケース設定");
   const header = [
     "case_id\n(ケースID)", "case_name\n(ケース名)", "description\n(説明)",
     "operation_type\n(操作種別)", "target_facility_id\n(対象施設ID)",
@@ -83,10 +91,12 @@ function makeCasesSheet(cases: CalculationCase[]): XLSX.WorkSheet {
     c.operationType, c.targetFacilityId,
     c.initialVelocity, c.initialHead,
   ]);
-  return XLSX.utils.aoa_to_sheet([header, ...dataRows]);
+  ws.addRows([header, ...dataRows]);
+  return ws;
 }
 
-function makeMeasurementPointsSheet(points: MeasurementPoint[]): XLSX.WorkSheet {
+function addMeasurementPointsSheet(wb: ExcelJS.Workbook, points: MeasurementPoint[]): ExcelJS.Worksheet {
+  const ws = wb.addWorksheet("測点データ");
   const header = [
     "point_id\n(測点ID)", "point_name\n(測点名)",
     "horizontal_distance\n(単距離 Lh [m])", "ground_level\n(地盤高 GL [m])", "pipe_center_height\n(管中心高 FH [m])",
@@ -103,18 +113,19 @@ function makeMeasurementPointsSheet(points: MeasurementPoint[]): XLSX.WorkSheet 
     pt.otherLoss ?? "",
   ]);
 
-  const rows = [header, ...dataRows];
-  return XLSX.utils.aoa_to_sheet(rows);
+  ws.addRows([header, ...dataRows]);
+  return ws;
 }
 
-function makeInstructionSheet(): XLSX.WorkSheet {
+function addInstructionSheet(wb: ExcelJS.Workbook): ExcelJS.Worksheet {
+  const ws = wb.addWorksheet("使い方");
   const rows = [
     ["open-waterhammer 入力帳票"],
     [""],
     ["■ シート構成"],
     ["案件情報", "プロジェクト名・採用基準などのメタ情報"],
     ["管路・節点", "管路区間と節点の諸元（Pipeテーブル・Nodeテーブル）"],
-    ["測点データ", "水理計算書用の測点データ（成果品様式準拠）"],
+    ["測点データ", "水理計算書用の測点データ（成果品参照様式）"],
     ["ケース設定", "計算ケースの一覧（操作種別・初期条件）"],
     [""],
     ["■ 管種コード一覧（pipe_type 欄に入力）"],
@@ -151,10 +162,11 @@ function makeInstructionSheet(): XLSX.WorkSheet {
     ["直角分流損失係数 fβ", "分水工の損失係数 [-]"],
     ["その他損失", "上記以外の局部損失水頭 [m]（直接入力）"],
     [""],
-    ["準拠: 土地改良設計基準パイプライン（令和3年6月改訂）"],
+    ["参照: 土地改良設計基準パイプライン（令和3年6月改訂）"],
     ["ライセンス: AGPL-3.0-or-later"],
   ];
-  return XLSX.utils.aoa_to_sheet(rows);
+  ws.addRows(rows);
+  return ws;
 }
 
 // ─── メイン ──────────────────────────────────────────────────────────────────
@@ -164,7 +176,7 @@ function makeInstructionSheet(): XLSX.WorkSheet {
  *
  * ブラウザでのダウンロード例:
  * ```typescript
- * const buf = generateTemplate({ meta, pipes, nodes, cases });
+ * const buf = await generateTemplate({ meta, pipes, nodes, cases });
  * const blob = new Blob([buf], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" });
  * const url = URL.createObjectURL(blob);
  * const a = document.createElement("a");
@@ -173,14 +185,17 @@ function makeInstructionSheet(): XLSX.WorkSheet {
  * a.click();
  * ```
  */
-export function generateTemplate(options: TemplateOptions = {}): ArrayBuffer {
-  const wb = XLSX.utils.book_new();
+export async function generateTemplate(options: TemplateOptions = {}): Promise<ArrayBuffer> {
+  const wb = new ExcelJS.Workbook();
 
-  XLSX.utils.book_append_sheet(wb, makeInstructionSheet(), "使い方");
-  XLSX.utils.book_append_sheet(wb, makeMetaSheet(options.meta ?? {}), "案件情報");
-  XLSX.utils.book_append_sheet(wb, makeNetworkSheet(options.pipes ?? [], options.nodes ?? []), "管路・節点");
-  XLSX.utils.book_append_sheet(wb, makeMeasurementPointsSheet(options.measurementPoints ?? []), "測点データ");
-  XLSX.utils.book_append_sheet(wb, makeCasesSheet(options.cases ?? []), "ケース設定");
+  addInstructionSheet(wb);
+  addMetaSheet(wb, options.meta ?? {});
+  addNetworkSheet(wb, options.pipes ?? [], options.nodes ?? []);
+  addMeasurementPointsSheet(wb, options.measurementPoints ?? []);
+  addCasesSheet(wb, options.cases ?? []);
 
-  return XLSX.write(wb, { type: "array", bookType: "xlsx" }) as ArrayBuffer;
+  // exceljs writeBuffer は Node.js では Buffer、ブラウザでは ArrayBuffer 互換 (Uint8Array)
+  // 呼び出し側は Blob() に渡せるのでどちらでも動く
+  const buf = await wb.xlsx.writeBuffer();
+  return buf as ArrayBuffer;
 }

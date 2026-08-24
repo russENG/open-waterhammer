@@ -20,7 +20,7 @@ export function HydraulicOverviewPage() {
               <tr>
                 <th>計算カテゴリ</th>
                 <th>手法 / 機能</th>
-                <th>準拠条文</th>
+                <th>参照条文</th>
                 <th>状態</th>
               </tr>
             </thead>

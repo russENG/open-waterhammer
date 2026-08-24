@@ -1,3 +1,4 @@
+/* eslint-disable no-irregular-whitespace -- preserved Japanese documentation contains intentional full-width spacing */
 /**
  * 農業用パイプライン設計フロー説明ページ
  * 土地改良設計基準　設計「パイプライン」技術書（令和3年6月改訂）に基づく設計手順の俯瞰
@@ -184,8 +185,8 @@ export function DesignFlowPage() {
             同技術書は農林水産省のウェブサイトで公開されています。
           </p>
           <p>
-            本ツールの水撃圧計算（ステップ3）は、同技術書 §8（水撃作用）の規定に準拠して実装されています。
-            各計算画面には準拠条文を明示しています。
+            本ツールの水撃圧計算（ステップ3）は、同技術書 §8（水撃作用）を参照して実装されています。
+            各計算画面には参照条文と適用限界を明示しています。
           </p>
         </div>
       </section>
