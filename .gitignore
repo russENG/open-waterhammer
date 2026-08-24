@@ -18,8 +18,10 @@ venv/
 # Marimo notebook ビルド成果物（scripts/build-notebooks.mjs で再生成可能、CI でビルド）
 apps/web-free/public/notebooks/
 
-# 学会発表関連（非公開）
-docs/jsidre2026/
+# 学会発表関連（非公開。ポスター原稿と紙面用図版のみ追跡・公開）
+docs/jsidre2026/*
+!docs/jsidre2026/poster-content.md
+!docs/jsidre2026/fig2-ui-overview.png
 
 # Claude Code 内部
 .claude/launch.json
