@@ -56,7 +56,8 @@
 - ✅ Project → Alternative → Case のツリー、draft/locked/archived と派生（fork）系譜
 - ✅ 成功 Run による Case の自動ロック、理由必須の fork による派生編集
 - ✅ 決定性 `.owhproj` バンドル（同一内容のエクスポートはバイト単位で再現）と、`owh` CLI による
-  ブラウザなしの検証・検査・再計算
+  ブラウザなしの検証・検査（`run` の実行対象は本リリースでは CLI 作成形式のドラフト Case。
+  ブラウザ書き出しバンドルは validate / inspect に対応）
 - ✅ 2〜4件の Case 比較（条件・結果の差分）
 - ✅ Run Inspector（マニフェスト・自動評価・警告・来歴の再帰的差分表示）
 - ✅ RunKind 別のトポロジゲート（ネットワークを消費する4種別のみ GIS/構造完結を要求し、残り7種別は
