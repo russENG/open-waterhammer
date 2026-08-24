@@ -6,6 +6,7 @@ import { fileURLToPath } from 'node:url'
 import path from 'path'
 
 import { PYODIDE_RUNTIME_ASSETS } from './pyodide-assets.ts'
+import { cloudflareWebAnalytics } from './web-analytics.ts'
 
 const pyodideDirectory = path.dirname(fileURLToPath(import.meta.resolve('pyodide')))
 
@@ -52,7 +53,7 @@ function selfHostedPyodide() {
 
 // https://vite.dev/config/
 export default defineConfig({
-  plugins: [react(), selfHostedPyodide()],
+  plugins: [react(), selfHostedPyodide(), cloudflareWebAnalytics()],
   base: process.env.VITE_BASE_PATH ?? "/",
   define: {
     'import.meta.env.VITE_GIT_SHA': JSON.stringify(resolveBuildGitSha()),
