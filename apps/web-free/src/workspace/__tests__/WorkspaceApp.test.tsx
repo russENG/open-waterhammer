@@ -83,6 +83,15 @@ describe('full workspace application', () => {
     await waitFor(() => expect(window.location.hash).toContain(`/projects/${data.projects[0]!.id}/cases/`))
   })
 
+  test('hands documentation routes to the parent app without redirecting back to the workspace', async () => {
+    const user = userEvent.setup()
+    setup()
+
+    await user.click(await screen.findByRole('link', { name: '設計基準' }))
+
+    await waitFor(() => expect(window.location.hash).toBe('#/docs/reference'))
+  })
+
   test('shows the seven approved workspace tabs and enforces a two-to-four Case comparison', async () => {
     const user = userEvent.setup()
     setup()

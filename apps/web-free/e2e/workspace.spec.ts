@@ -8,6 +8,21 @@ async function createBlankCase(page: Page) {
   await page.getByRole('link', { name: 'Analysis' }).click()
 }
 
+test('global navigation moves between the workspace and documentation pages', async ({ page }) => {
+  await page.goto('/')
+
+  await page.getByRole('link', { name: '設計基準' }).click()
+  await expect(page).toHaveURL(/#\/docs\/reference$/)
+  await expect(page.getByRole('heading', { name: '基準照会' })).toBeVisible()
+
+  await page.getByRole('link', { name: '計算ライブラリ' }).click()
+  await expect(page).toHaveURL(/#\/docs\/library$/)
+  await expect(page.getByRole('heading', { name: '計算ライブラリ' })).toBeVisible()
+
+  await page.getByRole('link', { name: '作業画面' }).click()
+  await expect(page.getByRole('navigation', { name: 'Workspace tabs' })).toBeVisible()
+})
+
 test('create, edit, execute, lock, fork, compare, reload, export, and import', async ({ page }) => {
   await page.goto('/')
   await expect(page.getByRole('heading', { name: '東部幹線 水撃圧比較' })).toBeVisible()

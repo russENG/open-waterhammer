@@ -1,7 +1,7 @@
 import type { CalculationExecutorRegistry } from '@open-waterhammer/runner'
 import type { WorkspaceData } from '@open-waterhammer/workspace'
 import { useEffect } from 'react'
-import { HashRouter, Navigate, Route, Routes } from 'react-router-dom'
+import { HashRouter, Navigate, Route, Routes, useLocation } from 'react-router-dom'
 
 import { prefetchPyodide } from '../lib/pyodide-bridge'
 import type { BrowserProtocolCaller } from '../runner/browser-runner'
@@ -40,8 +40,20 @@ export function WorkspaceApp({
     <HashRouter>
       <Routes>
         <Route path="/projects/:projectId/cases/:caseId/:tab" element={<WorkspaceLayout />} />
-        <Route path="*" element={<Navigate replace to={fallbackPath} />} />
+        <Route path="*" element={<WorkspaceRouteFallback fallbackPath={fallbackPath} />} />
       </Routes>
     </HashRouter>
   </WorkspaceProvider>
+}
+
+function WorkspaceRouteFallback({ fallbackPath }: { fallbackPath: string }) {
+  const location = useLocation()
+
+  // `#/docs/...` is owned by App.tsx. Rendering nothing for that brief transition lets the
+  // parent hashchange listener unmount WorkspaceApp and open DocumentationShell. Redirecting
+  // here would race the parent and silently replace the requested documentation URL with the
+  // most recent Workspace route.
+  if (location.pathname.startsWith('/docs/')) return null
+
+  return <Navigate replace to={fallbackPath} />
 }
