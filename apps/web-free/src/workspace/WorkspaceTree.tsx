@@ -18,6 +18,7 @@ export function WorkspaceTree({
   onCreate,
   onFork,
   onCreateProject,
+  onCreateProjectFromExcel,
   onImportProject,
   onExportProject,
   projectActionDisabled = false,
@@ -30,6 +31,7 @@ export function WorkspaceTree({
   onCreate(): void
   onFork(): void
   onCreateProject(name: string): Promise<void>
+  onCreateProjectFromExcel(file: File): Promise<string>
   onImportProject(file: File): Promise<string>
   onExportProject(): Promise<string>
   projectActionDisabled?: boolean
@@ -38,6 +40,7 @@ export function WorkspaceTree({
   const [open, setOpen] = useState(true)
   const [createProjectOpen, setCreateProjectOpen] = useState(false)
   const [projectName, setProjectName] = useState('')
+  const [excelProjectFile, setExcelProjectFile] = useState<File | null>(null)
   const [projectActionBusy, setProjectActionBusy] = useState(false)
   const [projectActionError, setProjectActionError] = useState<string | null>(null)
   const [projectActionMessage, setProjectActionMessage] = useState<string | null>(null)
@@ -56,6 +59,22 @@ export function WorkspaceTree({
     try {
       await onCreateProject(projectName)
       setProjectName('')
+      setCreateProjectOpen(false)
+    } catch (error) {
+      setProjectActionError(error instanceof Error ? error.message : String(error))
+    } finally {
+      setProjectActionBusy(false)
+    }
+  }
+
+  async function submitExcelProject() {
+    if (!excelProjectFile) return
+    setProjectActionBusy(true)
+    setProjectActionError(null)
+    setProjectActionMessage(null)
+    try {
+      setProjectActionMessage(await onCreateProjectFromExcel(excelProjectFile))
+      setExcelProjectFile(null)
       setCreateProjectOpen(false)
     } catch (error) {
       setProjectActionError(error instanceof Error ? error.message : String(error))
@@ -109,6 +128,7 @@ export function WorkspaceTree({
           <button type="button" disabled={actionsDisabled} onClick={() => {
             setProjectActionError(null)
             setProjectActionMessage(null)
+            setExcelProjectFile(null)
             setCreateProjectOpen(true)
           }}>新規プロジェクト</button>
           <button type="button" disabled={actionsDisabled} onClick={() => projectFileInputRef.current?.click()}>プロジェクトを開く</button>
@@ -156,12 +176,25 @@ export function WorkspaceTree({
       <div className="tree-legend"><span><i className="state-dot state-dot--draft" />編集中</span><span><i className="state-dot state-dot--locked" />計算済み・固定</span><span><i className="state-dot state-dot--archived" />保管済み</span></div>
     </aside>
     {createProjectOpen && <div className="modal-backdrop"><section className="modal-sheet project-dialog" role="dialog" aria-modal="true" aria-label="新規プロジェクト">
-      <div className="modal-heading"><div><span className="eyebrow">プロジェクト管理</span><h2>新規プロジェクト</h2></div><button className="icon-button" aria-label="新規プロジェクトを閉じる" onClick={() => setCreateProjectOpen(false)}>×</button></div>
-      <p>このブラウザで開けるプロジェクトは1件です。現在の「{projectDisplayName(project)}」を閉じ、空のプロジェクトで置き換えます。必要な場合は先に書き出してください。</p>
-      <label><span>プロジェクト名</span><input value={projectName} onChange={(event) => setProjectName(event.target.value)} placeholder="例：○○幹線 水撃圧検討" autoFocus /></label>
+      <div className="modal-heading"><div><span className="eyebrow">プロジェクト管理</span><h2>新しいプロジェクトを開始</h2></div><button className="icon-button" aria-label="新規プロジェクトを閉じる" onClick={() => setCreateProjectOpen(false)}>×</button></div>
+      <p>このブラウザで開けるプロジェクトは1件です。開始すると、現在の「{projectDisplayName(project)}」を閉じて置き換えます。必要な場合は先に書き出してください。</p>
+      <section className="project-start-choice project-start-choice--primary" aria-labelledby="excel-project-start-heading">
+        <span className="eyebrow">実案件の推奨導線</span>
+        <h3 id="excel-project-start-heading">Excelから開始</h3>
+        <p>Excelを検証し、成功した場合だけ案件名、最初の比較案、シナリオ、計算入力を作成します。入力エラー時は現在のプロジェクトを残します。</p>
+        <label><span>入力済みExcel</span><input type="file" accept=".xlsx" data-testid="tree-excel-project-file-input" onChange={(event) => { setExcelProjectFile(event.target.files?.[0] ?? null); event.currentTarget.value = '' }} disabled={actionsDisabled} /></label>
+        {excelProjectFile && <p className="project-start-file">選択中：{excelProjectFile.name}</p>}
+        <button type="button" className="primary-button" disabled={actionsDisabled || !excelProjectFile} onClick={() => void submitExcelProject()}>Excelで置き換えて開始</button>
+      </section>
+      <section className="project-start-choice" aria-labelledby="blank-project-start-heading">
+        <span className="eyebrow">補助導線</span>
+        <h3 id="blank-project-start-heading">空から始める</h3>
+        <label><span>プロジェクト名</span><input value={projectName} onChange={(event) => setProjectName(event.target.value)} placeholder="例：○○幹線 水撃圧検討" /></label>
+        <button type="button" disabled={actionsDisabled || !projectName.trim()} onClick={() => void submitNewProject()}>空のプロジェクトで置き換える</button>
+      </section>
       {projectActionMessage && <p role="status" className="tree-project-message">{projectActionMessage}</p>}
       {projectActionError && <p role="alert" className="form-error">{projectActionError}</p>}
-      <div className="modal-actions"><button type="button" disabled={projectActionBusy} onClick={() => setCreateProjectOpen(false)}>キャンセル</button><button type="button" disabled={actionsDisabled} onClick={() => void exportCurrentProject()}>現在のプロジェクトを書き出す</button><button type="button" className="primary-button" disabled={actionsDisabled || !projectName.trim()} onClick={() => void submitNewProject()}>置き換えて作成</button></div>
+      <div className="modal-actions"><button type="button" disabled={projectActionBusy} onClick={() => setCreateProjectOpen(false)}>キャンセル</button><button type="button" disabled={actionsDisabled} onClick={() => void exportCurrentProject()}>現在のプロジェクトを書き出す</button></div>
     </section></div>}
     {pendingProjectFile && <div className="modal-backdrop"><section className="modal-sheet project-dialog" role="dialog" aria-modal="true" aria-label="プロジェクトを開く">
       <div className="modal-heading"><div><span className="eyebrow">プロジェクト管理</span><h2>プロジェクトを開く</h2></div><button className="icon-button" aria-label="プロジェクトを開く画面を閉じる" onClick={() => setPendingProjectFile(null)}>×</button></div>

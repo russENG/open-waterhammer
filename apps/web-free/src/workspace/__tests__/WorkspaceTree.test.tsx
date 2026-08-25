@@ -14,6 +14,7 @@ const data: WorkspaceData = {
 
 function renderTree({
   onCreateProject = vi.fn(async () => {}),
+  onCreateProjectFromExcel = vi.fn(async () => 'Excelから開始しました。'),
   onImportProject = vi.fn(async () => '読み込みました。'),
   onExportProject = vi.fn(async () => '書き出しました。'),
 } = {}) {
@@ -23,11 +24,11 @@ function renderTree({
       <WorkspaceTree
         projectId={projectFixture.id} caseId={caseFixture.id} comparison={[]}
         onSelect={() => {}} onToggleComparison={() => {}} onCreate={() => {}} onFork={() => {}}
-        onCreateProject={onCreateProject} onImportProject={onImportProject} onExportProject={onExportProject}
+        onCreateProject={onCreateProject} onCreateProjectFromExcel={onCreateProjectFromExcel} onImportProject={onImportProject} onExportProject={onExportProject}
       />
     </WorkspaceProvider>,
   )
-  return { onCreateProject, onImportProject, onExportProject }
+  return { onCreateProject, onCreateProjectFromExcel, onImportProject, onExportProject }
 }
 
 describe('WorkspaceTree Project management', () => {
@@ -45,8 +46,40 @@ describe('WorkspaceTree Project management', () => {
     const dialog = screen.getByRole('dialog', { name: '新規プロジェクト' })
     expect(dialog).toHaveTextContent('このブラウザで開けるプロジェクトは1件です')
     await user.type(screen.getByLabelText('プロジェクト名'), '西部支線')
-    await user.click(within(dialog).getByRole('button', { name: '置き換えて作成' }))
+    await user.click(within(dialog).getByRole('button', { name: '空のプロジェクトで置き換える' }))
     expect(onCreateProject).toHaveBeenCalledWith('西部支線')
+  })
+
+  test('offers Excel as the primary replacement path and waits for confirmation', async () => {
+    const user = userEvent.setup()
+    const onCreateProjectFromExcel = vi.fn(async () => '東部幹線をExcelから開始しました。')
+    renderTree({ onCreateProjectFromExcel })
+    await user.click(screen.getByRole('button', { name: '新規プロジェクト' }))
+    const dialog = screen.getByRole('dialog', { name: '新規プロジェクト' })
+    expect(within(dialog).getByRole('heading', { name: 'Excelから開始' })).toBeVisible()
+    expect(dialog).toHaveTextContent('入力エラー時は現在のプロジェクトを残します')
+
+    const file = new File([new Uint8Array([1, 2, 3])], 'east.xlsx', { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' })
+    await user.upload(screen.getByTestId('tree-excel-project-file-input'), file)
+    expect(onCreateProjectFromExcel).not.toHaveBeenCalled()
+    expect(dialog).toHaveTextContent('選択中：east.xlsx')
+
+    await user.click(within(dialog).getByRole('button', { name: 'Excelで置き換えて開始' }))
+    expect(onCreateProjectFromExcel).toHaveBeenCalledWith(file)
+    expect(await screen.findByRole('status')).toHaveTextContent('東部幹線をExcelから開始しました。')
+  })
+
+  test('keeps the replacement dialog open when Excel validation fails', async () => {
+    const user = userEvent.setup()
+    const onCreateProjectFromExcel = vi.fn(async () => { throw new Error('Excelに入力エラーがあるため、現在のプロジェクトは置き換えていません。') })
+    renderTree({ onCreateProjectFromExcel })
+    await user.click(screen.getByRole('button', { name: '新規プロジェクト' }))
+    const dialog = screen.getByRole('dialog', { name: '新規プロジェクト' })
+    await user.upload(screen.getByTestId('tree-excel-project-file-input'), new File(['invalid'], 'invalid.xlsx'))
+    await user.click(within(dialog).getByRole('button', { name: 'Excelで置き換えて開始' }))
+
+    expect(await within(dialog).findByRole('alert')).toHaveTextContent('現在のプロジェクトは置き換えていません')
+    expect(screen.getByRole('dialog', { name: '新規プロジェクト' })).toBeVisible()
   })
 
   test('waits for confirmation before replacing the current Project with a file', async () => {

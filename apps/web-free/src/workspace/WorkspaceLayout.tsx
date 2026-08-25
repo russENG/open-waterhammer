@@ -1,9 +1,11 @@
 import type { Run } from '@open-waterhammer/contracts'
+import type { ParseResult } from '@open-waterhammer/excel-io'
 import { lazy, Suspense, useEffect, useMemo, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 
 import { SITE_TITLE } from '../branding'
 import type { LinkedFocus } from './focus'
+import { ensureBrowserBuffer } from '../reports/browser-buffer'
 import { downloadProjectFile, exportProjectFile, replaceProjectFile } from './project-transfer'
 import { PyodideStatusChip } from './PyodideStatusChip'
 import { RunInspector } from './RunInspector'
@@ -41,7 +43,7 @@ function recentSelection() {
 }
 
 export function WorkspaceLayout() {
-  const { data, repository, busy, refresh, replaceProject, createFrom, fork } = useWorkspace()
+  const { data, repository, busy, refresh, replaceProject, replaceProjectFromExcel, createFrom, fork } = useWorkspace()
   const params = useParams()
   const navigate = useNavigate()
   const selection = resolveWorkspaceRoute(data, params, recentSelection())
@@ -89,6 +91,28 @@ export function WorkspaceLayout() {
     navigate(canonicalPath(created.project.id, created.caseRecord.id, 'overview'))
   }
 
+  async function createProjectFromExcelFile(file: File): Promise<string> {
+    let parsed: ParseResult
+    try {
+      await ensureBrowserBuffer()
+      const { parseWorkbook } = await import('@open-waterhammer/excel-io')
+      parsed = await parseWorkbook(await file.arrayBuffer())
+    } catch (error) {
+      const reason = error instanceof Error ? error.message : String(error)
+      throw new Error(`Excelを検証できなかったため、現在のプロジェクトは置き換えていません。${reason ? ` ${reason}` : ''}`, { cause: error })
+    }
+    if (parsed.errors.length > 0) {
+      const details = parsed.errors.map((item) => `[${item.sheet}${item.row != null ? ` 行${item.row}` : ''}${item.field ? ` / ${item.field}` : ''}] ${item.message}`)
+      throw new Error(`Excelに入力エラーがあるため、現在のプロジェクトは置き換えていません。 ${details.join(' / ')}`)
+    }
+    const created = await replaceProjectFromExcel(parsed.data)
+    navigate(canonicalPath(created.project.id, created.caseRecord.id, 'overview'))
+    const warnings = [...parsed.warnings, ...created.warnings]
+    return warnings.length > 0
+      ? `${created.project.name} をExcelから開始しました。注意 ${warnings.length}件：${warnings.join(' / ')}`
+      : `${created.project.name} をExcelから開始しました。`
+  }
+
   async function importProject(file: File): Promise<string> {
     const summary = await replaceProjectFile(repository, file)
     const next = await refresh()
@@ -134,7 +158,7 @@ export function WorkspaceLayout() {
       <nav aria-label="サービス内メニュー"><Link to={canonicalPath(selection.projectId, selection.caseId, 'overview')}>作業画面</Link><a href="#/docs/reference">設計基準</a><a href="#/docs/library">計算ライブラリ</a><a href="#/docs/design-flow">設計フロー</a><a href="#/docs/hydraulic">水理設計の視点</a><a href="#/docs/about">このサイトについて</a><a href="demo/">デモ手順</a></nav>
     </header>
     <div className="workspace-grid">
-      <WorkspaceTree projectId={selection.projectId} caseId={selection.caseId} comparison={comparison} onSelect={goToCase} onToggleComparison={toggleComparison} onCreate={() => void createNew()} onFork={() => setForkDialog(true)} onCreateProject={createProject} onImportProject={importProject} onExportProject={exportProject} projectActionDisabled={busy} />
+      <WorkspaceTree projectId={selection.projectId} caseId={selection.caseId} comparison={comparison} onSelect={goToCase} onToggleComparison={toggleComparison} onCreate={() => void createNew()} onFork={() => setForkDialog(true)} onCreateProject={createProject} onCreateProjectFromExcel={createProjectFromExcelFile} onImportProject={importProject} onExportProject={exportProject} projectActionDisabled={busy} />
       <main id="workspace-main" className="workspace-main">
         <div className="workspace-breadcrumb"><span>{projectDisplayName(project)}</span><i>/</i><span>{caseRecord.revisionReason ?? '基準案'}</span><b className={`state-pill state-pill--${caseRecord.state}`}>{caseStateLabel(caseRecord.state)}</b></div>
         <nav className="workspace-tabs" aria-label="作業タブ">{WORKSPACE_TABS.map((tab) => <Link key={tab} aria-label={TAB_LABELS[tab]} aria-current={tab === selection.tab ? 'page' : undefined} to={canonicalPath(selection.projectId, selection.caseId, tab)} className={tab === selection.tab ? 'workspace-tab workspace-tab--active' : 'workspace-tab'}><span aria-hidden="true">{String(WORKSPACE_TABS.indexOf(tab) + 1).padStart(2, '0')}</span>{TAB_LABELS[tab]}</Link>)}</nav>

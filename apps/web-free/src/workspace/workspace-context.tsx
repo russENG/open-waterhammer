@@ -13,12 +13,13 @@ import {
   type CalculationExecutorRegistry,
 } from '@open-waterhammer/runner/browser'
 import type { WorkspaceData, WorkspaceRepository } from '@open-waterhammer/workspace'
+import type { WorkbookData } from '@open-waterhammer/excel-io'
 import { createContext, useCallback, useContext, useMemo, useState, type ReactNode } from 'react'
 
 import type { LocalTransformDefinition } from '../gis/projections'
 import { mergeDraftGeometryIntoCanonicalModel, type HydraulicDraft } from '../gis/import-model'
 import type { BrowserProtocolCaller } from '../runner/browser-runner'
-import { replaceWithBlankProject } from './bootstrap'
+import { replaceProjectFromExcel as replaceProjectFromExcelWorkspace, replaceWithBlankProject } from './bootstrap'
 import type { ExcelScenarioInput } from './excel-import'
 import { evaluateRunGate } from './run-policy'
 
@@ -36,6 +37,7 @@ export interface WorkspaceContextValue {
   refresh(): Promise<WorkspaceData>
   run(caseId: string, kind: RunKind, scenarioId?: string): Promise<Run>
   replaceProject(name: string): Promise<{ project: Project; caseRecord: Case }>
+  replaceProjectFromExcel(workbook: WorkbookData): Promise<{ project: Project; caseRecord: Case; warnings: string[] }>
   createFrom(caseId: string): Promise<Case>
   fork(caseId: string, reason: string): Promise<Case>
   archive(caseId: string): Promise<Case>
@@ -181,6 +183,16 @@ export function WorkspaceProvider({
     if (!project || !caseRecord) throw new Error('新しいプロジェクトを開けませんでした。')
     setData(next)
     return { project, caseRecord }
+  }), [guarded, repository])
+
+  const replaceProjectFromExcel = useCallback((workbook: WorkbookData) => guarded(async () => {
+    const replaced = await replaceProjectFromExcelWorkspace(repository, workbook)
+    const project = replaced.data.projects[0]
+    const alternative = replaced.data.alternatives.find(({ projectId }) => projectId === project?.id)
+    const caseRecord = replaced.data.cases.find(({ alternativeId }) => alternativeId === alternative?.id)
+    if (!project || !caseRecord) throw new Error('Excelから新しいプロジェクトを開けませんでした。')
+    setData(replaced.data)
+    return { project, caseRecord, warnings: replaced.warnings }
   }), [guarded, repository])
 
   const createFrom = useCallback((caseId: string) => guarded(async () => {
@@ -353,8 +365,8 @@ export function WorkspaceProvider({
   }), [data.cases, guarded, refresh, repository])
 
   const value = useMemo<WorkspaceContextValue>(() => ({
-    data, repository, busy, lastError, refresh, run, replaceProject, createFrom, fork, archive, saveModel, saveGeoDrafts, saveScenario, createScenario, importExcelInputs,
-  }), [archive, busy, createFrom, createScenario, data, fork, importExcelInputs, lastError, refresh, replaceProject, repository, run, saveGeoDrafts, saveModel, saveScenario])
+    data, repository, busy, lastError, refresh, run, replaceProject, replaceProjectFromExcel, createFrom, fork, archive, saveModel, saveGeoDrafts, saveScenario, createScenario, importExcelInputs,
+  }), [archive, busy, createFrom, createScenario, data, fork, importExcelInputs, lastError, refresh, replaceProject, replaceProjectFromExcel, repository, run, saveGeoDrafts, saveModel, saveScenario])
 
   return <WorkspaceContext value={value}>{children}</WorkspaceContext>
 }

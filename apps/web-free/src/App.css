@@ -3364,10 +3364,18 @@ select.input--narrow {
 
 .modal-backdrop { position: fixed; z-index: 100; inset: 0; display: grid; place-items: center; padding: 20px; background: rgba(8,18,32,.72); backdrop-filter: blur(3px); }
 .modal-sheet { width: min(720px, 100%); max-height: calc(100vh - 40px); overflow: auto; padding: 24px; color: var(--ink); background: var(--paper); border: 1px solid var(--orange); box-shadow: 12px 12px 0 rgba(0,0,0,.25); }
-.fork-dialog, .project-dialog { width: min(520px, 100%); }
+.fork-dialog { width: min(520px, 100%); }
+.project-dialog { width: min(640px, 100%); }
 .fork-dialog > p, .project-dialog > p { margin: 16px 0; color: var(--ink-soft); font-size: .68rem; line-height: 1.7; }
 .project-dialog label { display: grid; gap: 7px; color: var(--ink-soft); font: 700 .56rem var(--mono); letter-spacing: .04em; }
 .project-dialog input { width: 100%; min-height: 42px; padding: 9px 11px; color: var(--ink); background: var(--white); border: 1px solid var(--ink); font: .72rem var(--sans, sans-serif); }
+.project-start-choice { display: grid; gap: 10px; margin-top: 12px; padding: 14px; border: 1px solid var(--line); background: var(--paper); }
+.project-start-choice--primary { border-color: var(--ink); background: var(--white); }
+.project-start-choice h3 { margin: 0; font-size: .92rem; }
+.project-start-choice p { margin: 0; color: var(--ink-soft); font-size: .66rem; line-height: 1.65; }
+.project-start-choice > button { justify-self: end; min-height: 36px; padding: 8px 10px; color: var(--ink); background: transparent; border: 1px solid var(--ink); font: 700 .62rem var(--mono); letter-spacing: .03em; cursor: pointer; }
+.project-start-choice > button:disabled { cursor: not-allowed; opacity: .45; }
+.project-start-choice .project-start-file { color: var(--ink); font-weight: 700; overflow-wrap: anywhere; }
 .fork-dialog textarea { min-height: 100px; }
 .modal-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 18px; }
 .form-error { margin: 10px 0 0; color: var(--red); font-size: .65rem; }

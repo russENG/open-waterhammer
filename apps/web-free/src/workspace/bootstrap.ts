@@ -75,25 +75,7 @@ async function replaceWithBlankWorkspace(repository: InitializableWorkspaceRepos
   return repository.snapshot()
 }
 
-export function createBlankProject(repository: InitializableWorkspaceRepository, projectName: string): Promise<WorkspaceData> {
-  const name = projectName.trim()
-  if (!name) return Promise.reject(new Error('プロジェクト名を入力してください。'))
-  return importIntoEmptyWorkspace(repository, buildBlankWorkspace(name))
-}
-
-/** 現在の保存内容を、編集可能な空のプロジェクト1件で置き換える。 */
-export function replaceWithBlankProject(repository: InitializableWorkspaceRepository, projectName: string): Promise<WorkspaceData> {
-  return replaceWithBlankWorkspace(repository, projectName)
-}
-
-export function installSampleWorkspace(repository: InitializableWorkspaceRepository): Promise<WorkspaceData> {
-  return importIntoEmptyWorkspace(repository, buildSampleWorkspace())
-}
-
-export async function createProjectFromExcel(
-  repository: InitializableWorkspaceRepository,
-  workbook: WorkbookData,
-): Promise<{ data: WorkspaceData; warnings: string[] }> {
+function buildWorkspaceFromExcel(workbook: WorkbookData): { data: WorkspaceData; warnings: string[] } {
   const projectName = workbook.meta.projectName.trim()
   if (!projectName) {
     throw new Error('Excelの「案件情報」B2セル（project_name）に案件名を入力してください。')
@@ -109,9 +91,6 @@ export async function createProjectFromExcel(
     ? ['案件名がテンプレートの既定値のままです。実案件では「案件情報」シートの案件名を書き換えてください。']
     : []
 
-  // Parse/validation is completed by the caller before this function. Build the complete
-  // workspace in memory first, then commit it as one validated bundle so a failed import never
-  // leaves an empty Project behind in IndexedDB.
   const mapped = mapWorkbookToRunInputs(workbook)
   const data = buildBlankWorkspace(projectName)
   const project = data.projects[0]!
@@ -144,7 +123,47 @@ export async function createProjectFromExcel(
     data.scenarios[0]!.eventSettings = mapped.eventSettings as JsonValue
   }
 
-  return { data: await importIntoEmptyWorkspace(repository, data), warnings: [...nameWarnings, ...mapped.warnings] }
+  return { data, warnings: [...nameWarnings, ...mapped.warnings] }
+}
+
+export function createBlankProject(repository: InitializableWorkspaceRepository, projectName: string): Promise<WorkspaceData> {
+  const name = projectName.trim()
+  if (!name) return Promise.reject(new Error('プロジェクト名を入力してください。'))
+  return importIntoEmptyWorkspace(repository, buildBlankWorkspace(name))
+}
+
+/** 現在の保存内容を、編集可能な空のプロジェクト1件で置き換える。 */
+export function replaceWithBlankProject(repository: InitializableWorkspaceRepository, projectName: string): Promise<WorkspaceData> {
+  return replaceWithBlankWorkspace(repository, projectName)
+}
+
+export function installSampleWorkspace(repository: InitializableWorkspaceRepository): Promise<WorkspaceData> {
+  return importIntoEmptyWorkspace(repository, buildSampleWorkspace())
+}
+
+export async function createProjectFromExcel(
+  repository: InitializableWorkspaceRepository,
+  workbook: WorkbookData,
+): Promise<{ data: WorkspaceData; warnings: string[] }> {
+  // Parse/validation is completed by the caller before this function. Build the complete
+  // workspace in memory first, then commit it as one validated bundle so a failed import never
+  // leaves an empty Project behind in IndexedDB.
+  const prepared = buildWorkspaceFromExcel(workbook)
+  return { ...prepared, data: await importIntoEmptyWorkspace(repository, prepared.data) }
+}
+
+/**
+ * 検証済みExcelから作った完全なプロジェクトで、現在の保存内容を原子的に置き換える。
+ * Excelの解析・検証は呼び出し側で先に完了させるため、不正なExcelではこの関数を呼ばない。
+ */
+export async function replaceProjectFromExcel(
+  repository: InitializableWorkspaceRepository,
+  workbook: WorkbookData,
+): Promise<{ data: WorkspaceData; warnings: string[] }> {
+  const prepared = buildWorkspaceFromExcel(workbook)
+  const bytes = await exportProjectBundle(prepared.data, prepared.data.projects[0]!.id)
+  await repository.replaceBundle(bytes)
+  return { ...prepared, data: await repository.snapshot() }
 }
 
 export async function initializeBrowserWorkspace(options: OpenIndexedDBWorkspaceOptions = {}): Promise<{

@@ -7,7 +7,7 @@ import {
 import { deleteDB } from 'idb'
 import { afterEach, describe, expect, test } from 'vitest'
 
-import { createBlankProject, createProjectFromExcel, initializeBrowserWorkspace, installSampleWorkspace, replaceWithBlankProject } from '../bootstrap'
+import { createBlankProject, createProjectFromExcel, initializeBrowserWorkspace, installSampleWorkspace, replaceProjectFromExcel, replaceWithBlankProject } from '../bootstrap'
 
 const names: string[] = []
 
@@ -69,6 +69,45 @@ describe('browser workspace bootstrap', () => {
     expect(added.projects.map(({ name }) => name)).toEqual(['西部支線'])
     expect(added.cases).toHaveLength(1)
     expect(added.scenarios).toHaveLength(1)
+    opened.repository.close()
+  })
+
+  test('atomically replaces a persisted legacy sample with a validated Excel project', async () => {
+    const databaseName = `owh-ui-bootstrap-${crypto.randomUUID()}`
+    names.push(databaseName)
+    const opened = await initializeBrowserWorkspace({ databaseName })
+    await installSampleWorkspace(opened.repository)
+    const workbook = {
+      meta: { projectName: '東部幹線 Excel案件', standardId: 'nochi_pipeline_2021' },
+      pipes: [{
+        id: 'P-01', name: '幹線', startNodeId: 'N-01', endNodeId: 'N-02', pipeType: 'ductile_iron' as const,
+        innerDiameter: 0.5, wallThickness: 0.008, length: 800, roughnessCoeff: 130,
+      }],
+      nodes: [], cases: [], measurementPoints: [],
+    }
+
+    const replaced = await replaceProjectFromExcel(opened.repository, workbook)
+
+    expect(replaced.data.projects.map(({ name }) => name)).toEqual(['東部幹線 Excel案件'])
+    expect(replaced.data.cases).toHaveLength(1)
+    expect(replaced.data.cases[0]?.state).toBe('draft')
+    expect((replaced.data.cases[0]?.modelSnapshot as Record<string, unknown>).excelImport).toEqual(workbook)
+    opened.repository.close()
+  })
+
+  test('preserves the current project when Excel project construction fails', async () => {
+    const databaseName = `owh-ui-bootstrap-${crypto.randomUUID()}`
+    names.push(databaseName)
+    const opened = await initializeBrowserWorkspace({ databaseName })
+    await installSampleWorkspace(opened.repository)
+    const before = await opened.repository.snapshot()
+
+    await expect(replaceProjectFromExcel(opened.repository, {
+      meta: { projectName: ' ', standardId: 'nochi_pipeline_2021' },
+      pipes: [], nodes: [], cases: [], measurementPoints: [],
+    })).rejects.toThrow(/案件名/)
+
+    expect(await opened.repository.snapshot()).toEqual(before)
     opened.repository.close()
   })
 

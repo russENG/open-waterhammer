@@ -121,7 +121,7 @@ describe('full workspace application', () => {
 
     await user.click(await screen.findByRole('button', { name: '新規プロジェクト' }))
     await user.type(screen.getByLabelText('プロジェクト名'), '西部支線 水撃圧検討')
-    await user.click(screen.getByRole('button', { name: '置き換えて作成' }))
+    await user.click(screen.getByRole('button', { name: '空のプロジェクトで置き換える' }))
 
     let createdProjectId = ''
     await waitFor(async () => {

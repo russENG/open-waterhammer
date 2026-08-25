@@ -31,6 +31,40 @@ test('global navigation moves between the workspace and documentation pages', as
   await expect(page.getByRole('navigation', { name: '作業タブ' })).toBeVisible()
 })
 
+test('a persisted sample can be safely replaced by starting from Excel', async ({ page }, testInfo) => {
+  await page.goto('/')
+  const templateDownload = page.waitForEvent('download')
+  await page.getByRole('button', { name: '入力テンプレートをダウンロード' }).click()
+  const template = await templateDownload
+  const templatePath = testInfo.outputPath(template.suggestedFilename())
+  await template.saveAs(templatePath)
+
+  await page.getByRole('button', { name: 'このサンプルを開く' }).click()
+  await expect(page.getByRole('heading', { name: 'サンプル：N地区東部幹線水路' })).toBeVisible()
+  const sampleUrl = page.url()
+
+  await page.getByRole('button', { name: '新規プロジェクト' }).click()
+  const dialog = page.getByRole('dialog', { name: '新規プロジェクト' })
+  await expect(dialog.getByRole('heading', { name: 'Excelから開始' })).toBeVisible()
+  await dialog.getByTestId('tree-excel-project-file-input').setInputFiles({
+    name: 'invalid.xlsx',
+    mimeType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    buffer: Buffer.from('invalid workbook'),
+  })
+  await dialog.getByRole('button', { name: 'Excelで置き換えて開始' }).click()
+  await expect(dialog.getByRole('alert')).toContainText('現在のプロジェクトは置き換えていません')
+  await expect(page.getByRole('heading', { name: 'サンプル：N地区東部幹線水路' })).toBeVisible()
+  expect(page.url()).toBe(sampleUrl)
+
+  await dialog.getByTestId('tree-excel-project-file-input').setInputFiles(templatePath)
+  await dialog.getByRole('button', { name: 'Excelで置き換えて開始' }).click()
+  await expect(dialog).toBeHidden()
+  await expect(page.getByRole('heading', { name: 'サンプル：幹線用水路 水撃圧検討' })).toBeVisible()
+  await expect(page.locator('.case-row')).toHaveCount(1)
+  await expect(page.locator('.tree-project-message')).toContainText('Excelから開始しました')
+  expect(page.url()).not.toBe(sampleUrl)
+})
+
 test('create, edit, execute, lock, fork, compare, reload, export, and import', async ({ page }) => {
   await openSample(page)
   await expect(page.getByRole('banner')).not.toContainText('alpha')

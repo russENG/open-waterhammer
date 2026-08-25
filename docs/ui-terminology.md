@@ -83,7 +83,7 @@ Excel・計算記録JSONに記載する。ヘッダー、フッター、通常�
 | 避ける表記 | 画面で使う表記 |
 |---|---|
 | New Case | 新しい比較案 |
-| Start from Excel | Excelから開始（実案件の主操作） |
+| Start from Excel | Excelから開始（実案件の主操作） / Excelで置き換えて開始（既存プロジェクトがある場合） |
 | Save input | 入力条件を保存 |
 | Run calculation | 計算を実行 |
 | Import as drafts | 編集中データとして読み込む |
