@@ -13,6 +13,7 @@
 
 import { useState, useRef, useEffect } from 'react'
 import { TOPICS, type Topic, type TopicRef } from '../data/referenceTopics'
+import { buildPdfViewUrl } from '../lib/pdf-view-url'
 
 // ─── PDF ソース定義 ──────────────────────────────────────────────────────────
 
@@ -135,8 +136,7 @@ export function ReferencePage({ initialTopicId }: { initialTopicId?: string } = 
   const pdfViewUrl = (() => {
     const url = chapterOverrideUrl ?? getSourceUrl(activeSource)
     if (!url) return null
-    if (pdfPage) return `${url}#page=${pdfPage}`
-    return url
+    return buildPdfViewUrl(url, pdfPage)
   })()
 
   const categories = groupByCategory(TOPICS)

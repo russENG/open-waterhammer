@@ -5,7 +5,8 @@
 
 export interface TopicRef {
   pdfId: string;
-  page?: number;
+  /** PDFファイル内の物理ページ番号 */
+  page: number;
   note: string;
   /** 技術書（章別PDF）の場合、章ごとに異なるURLを直接指定 */
   chapterUrl?: string;
@@ -37,9 +38,9 @@ export const TOPICS: Topic[] = [
     category: '総論',
     title: 'パイプラインの設計フロー',
     refs: [
-      { pdfId: 'kijun', note: '第1章 総論・設計の基本' },
-      { pdfId: 'gijutsusho', chapterUrl: GIJUTSUSHO_CHAPTERS.ch3, note: '第3章 設計の標準的手順' },
-      { pdfId: 'gijutsusho', chapterUrl: GIJUTSUSHO_CHAPTERS.ch1, note: '第1章 導入の経緯と役割' },
+      { pdfId: 'kijun', page: 18, note: '5 設計の手順' },
+      { pdfId: 'gijutsusho', chapterUrl: GIJUTSUSHO_CHAPTERS.ch3, page: 1, note: '第3章 設計の標準的手順' },
+      { pdfId: 'gijutsusho', chapterUrl: GIJUTSUSHO_CHAPTERS.ch1, page: 1, note: '第1章 導入の経緯と役割' },
       { pdfId: 'seikahinyoshiki', page: 9, note: '目次・章構成' },
     ],
   },
@@ -48,8 +49,8 @@ export const TOPICS: Topic[] = [
     category: '管体工',
     title: '管種・管径の決定',
     refs: [
-      { pdfId: 'kijun', note: '第3章 管種の選定' },
-      { pdfId: 'gijutsusho', chapterUrl: GIJUTSUSHO_CHAPTERS.ch14, note: '第14章 既製管の管体及び継手' },
+      { pdfId: 'kijun', page: 32, note: '7-9 管体及び継手等の選定' },
+      { pdfId: 'gijutsusho', chapterUrl: GIJUTSUSHO_CHAPTERS.ch14, page: 1, note: '第14章 既製管の管体及び継手' },
       { pdfId: 'seikahinyoshiki', page: 35, note: '4.2 管種管径（管種の決定・管径の決定）' },
     ],
   },
@@ -58,8 +59,8 @@ export const TOPICS: Topic[] = [
     category: '水理計算',
     title: '定常時の水理計算',
     refs: [
-      { pdfId: 'kijun', note: '第4章 管路の水理' },
-      { pdfId: 'gijutsusho', chapterUrl: GIJUTSUSHO_CHAPTERS.ch7, note: '第7章 定常的な水理現象の解析（摩擦・局部損失）' },
+      { pdfId: 'kijun', page: 36, note: '9-1 定常的な水理現象の解析' },
+      { pdfId: 'gijutsusho', chapterUrl: GIJUTSUSHO_CHAPTERS.ch7, page: 1, note: '第7章 定常的な水理現象の解析（摩擦・局部損失）' },
       { pdfId: 'seikahinyoshiki', page: 44, note: '5.1 定常時の水理計算（手法・式・条件）' },
     ],
   },
@@ -77,8 +78,8 @@ export const TOPICS: Topic[] = [
     category: '水撃圧',
     title: '伝播速度の算定',
     refs: [
-      { pdfId: 'kijun', note: '§8.2 圧力波の伝播' },
-      { pdfId: 'gijutsusho', chapterUrl: GIJUTSUSHO_CHAPTERS.ch8, note: '第8章 §8.2 圧力波の伝播速度・§8.3.1 波速算定' },
+      { pdfId: 'kijun', page: 40, note: '9-2 非定常的な水理現象の解析' },
+      { pdfId: 'gijutsusho', chapterUrl: GIJUTSUSHO_CHAPTERS.ch8, page: 7, note: '8.2.2 圧力波の伝播速度と圧力振動周期' },
     ],
   },
   {
@@ -86,8 +87,8 @@ export const TOPICS: Topic[] = [
     category: '水撃圧',
     title: '水撃圧の推定（計算法・経験則）',
     refs: [
-      { pdfId: 'kijun', note: '§8.3 水撃圧の推定' },
-      { pdfId: 'gijutsusho', chapterUrl: GIJUTSUSHO_CHAPTERS.ch8, note: '第8章 §8.3 ジューコフスキー式・アリエビ式・経験則' },
+      { pdfId: 'kijun', page: 40, note: '9-2 (1) 水撃圧の計算' },
+      { pdfId: 'gijutsusho', chapterUrl: GIJUTSUSHO_CHAPTERS.ch8, page: 14, note: '8.3.2 水撃圧の推定方法（理論解法・数値解法・経験則）' },
       { pdfId: 'seikahinyoshiki', page: 47, note: '5.2.1 検討必要区間と推定方法' },
     ],
   },
@@ -96,7 +97,9 @@ export const TOPICS: Topic[] = [
     category: '水撃圧',
     title: '水撃圧の推定結果と対策',
     refs: [
-      { pdfId: 'gijutsusho', chapterUrl: GIJUTSUSHO_CHAPTERS.ch8, note: '第8章 §8.3.5 経験則 / §8.4.6 防護工' },
+      { pdfId: 'gijutsusho', chapterUrl: GIJUTSUSHO_CHAPTERS.ch8, page: 20, note: '8.3.5 経験則による水撃圧の推定' },
+      { pdfId: 'gijutsusho', chapterUrl: GIJUTSUSHO_CHAPTERS.ch8, page: 25, note: '8.3.6 水撃圧対策' },
+      { pdfId: 'gijutsusho', chapterUrl: GIJUTSUSHO_CHAPTERS.ch8, page: 43, note: '8.4.4 結果の評価及び設計への利用' },
       { pdfId: 'seikahinyoshiki', page: 48, note: '5.2.2 推定結果と対策（許容内圧判定）' },
     ],
   },
@@ -105,8 +108,8 @@ export const TOPICS: Topic[] = [
     category: '水撃圧',
     title: '水撃圧の数値解析（特性曲線法）',
     refs: [
-      { pdfId: 'kijun', note: '§8.4 水撃圧の数値解析' },
-      { pdfId: 'gijutsusho', chapterUrl: GIJUTSUSHO_CHAPTERS.ch8, note: '第8章 §8.4 特性曲線法の基礎理論・境界条件' },
+      { pdfId: 'kijun', page: 40, note: '9-2 (1) 水撃圧の計算' },
+      { pdfId: 'gijutsusho', chapterUrl: GIJUTSUSHO_CHAPTERS.ch8, page: 31, note: '8.4.2 数理モデル（特性曲線法）' },
       { pdfId: 'seikahinyoshiki', page: 13, note: '添付資料: 水撃圧計算' },
     ],
   },
@@ -115,8 +118,8 @@ export const TOPICS: Topic[] = [
     category: '水撃圧',
     title: 'ポンプ過渡解析',
     refs: [
-      { pdfId: 'kijun', note: '§8.4 ポンプ急停止・起動' },
-      { pdfId: 'gijutsusho', chapterUrl: GIJUTSUSHO_CHAPTERS.ch8, note: '第8章 §8.4.4 ポンプ急停止 / §8.4.5 ポンプ起動' },
+      { pdfId: 'kijun', page: 40, note: '9-2 (1) 水撃圧の計算' },
+      { pdfId: 'gijutsusho', chapterUrl: GIJUTSUSHO_CHAPTERS.ch8, page: 38, note: '8.4.2 ポンプ境界（急停止後の回転速度）' },
       { pdfId: 'seikahinyoshiki', page: 49, note: '5.4 その他の非定常時の検討' },
     ],
   },
@@ -125,8 +128,8 @@ export const TOPICS: Topic[] = [
     category: '非定常',
     title: 'サージングの検討',
     refs: [
-      { pdfId: 'kijun', note: '§9 サージング' },
-      { pdfId: 'gijutsusho', chapterUrl: GIJUTSUSHO_CHAPTERS.ch8, note: '第8章 サージングの基礎・解析' },
+      { pdfId: 'kijun', page: 40, note: '9-2 (2) サージングの計算' },
+      { pdfId: 'gijutsusho', chapterUrl: GIJUTSUSHO_CHAPTERS.ch8, page: 45, note: '8.5.1 剛体理論による非定常流況解析' },
       { pdfId: 'seikahinyoshiki', page: 49, note: '5.3 サージングの検討' },
     ],
   },
@@ -135,8 +138,8 @@ export const TOPICS: Topic[] = [
     category: '構造',
     title: '管体の構造計算',
     refs: [
-      { pdfId: 'kijun', note: '第5章 管体の構造計算' },
-      { pdfId: 'gijutsusho', chapterUrl: GIJUTSUSHO_CHAPTERS.ch9, note: '第9章 管路の構造設計' },
+      { pdfId: 'kijun', page: 42, note: '10 管路の構造設計' },
+      { pdfId: 'gijutsusho', chapterUrl: GIJUTSUSHO_CHAPTERS.ch9, page: 1, note: '第9章 管路の構造設計' },
       { pdfId: 'seikahinyoshiki', page: 50, note: '第6章 管体の構造計算' },
     ],
   },
