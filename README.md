@@ -105,6 +105,8 @@ UI 自体は `Scenario.eventSettings.runKind`（`run` が実行対象の RunKind
   ソースからビルドした場合・フォークした場合は計測コードは含まれない（ビルド時に
   `VITE_CF_BEACON_TOKEN` が設定されたときのみ、ビーコンと対応する CSP 許可の双方が注入される。
   実装は [`apps/web-free/web-analytics.ts`](./apps/web-free/web-analytics.ts)）。
+  有効化手順と、Cloudflare ダッシュボードでの日次アクセス数の確認方法は
+  [`docs/operations-analytics.md`](./docs/operations-analytics.md) を参照。
 - クラウドバックエンド・公開 HTTP API・認証・アカウントは存在しない（「[繰延事項](#繰延事項)」参照）。
 
 ---
