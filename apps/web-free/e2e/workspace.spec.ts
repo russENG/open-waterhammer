@@ -157,15 +157,12 @@ test('create, edit, execute, lock, fork, compare, reload, export, and import', a
   const bundlePath = await download.path()
   expect(bundlePath).toBeTruthy()
 
-  // Re-importing the same bundle into this very same live workspace collides on the Project's
-  // own id (every fresh workspace in this app seeds the same fixed sample Project id, and
-  // nothing in this test deletes it) — the repository's existing duplicate-id rejection
-  // (packages/workspace/src/repository.ts importBundle) must surface here as a readable message
-  // in the UI, not a console error or an invented merge. A genuine cross-repository success
-  // round trip (distinct target, no id collision) is covered at the unit level in
-  // apps/web-free/src/workspace/__tests__/project-transfer.test.ts.
+  // The browser opens one Project at a time. Re-opening this exported file therefore asks for
+  // explicit confirmation and atomically replaces (rather than merges with) the current data.
+  page.once('dialog', (dialog) => void dialog.accept())
   await page.locator('.project-transfer-card input[type="file"]').setInputFiles(bundlePath!)
-  await expect(page.locator('.project-transfer-card [role="alert"]')).toContainText('Duplicate workspace entity id')
+  await expect(page.locator('.project-transfer-card [role="status"]')).toContainText('を読み込みました')
+  await expect(page.getByRole('heading', { name: 'サンプル：N地区東部幹線水路' })).toBeVisible()
 })
 
 test('desktop and narrow workspace keep semantic landmarks without serious accessibility violations', async ({ page }, testInfo) => {
