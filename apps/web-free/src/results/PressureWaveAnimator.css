@@ -1,0 +1,53 @@
+.pressure-wave { display: grid; gap: 14px; grid-column: 1 / -1; padding: 18px; border: 1px solid color-mix(in srgb, var(--navy) 22%, transparent); background: color-mix(in srgb, #fff 92%, var(--blue-pale)); }
+.wave-heading, .wave-subheading, .wave-bottom-row { display: flex; align-items: center; justify-content: space-between; gap: 14px; }
+.wave-heading h2 { margin: 2px 0 0; }
+.wave-heading output { padding: 6px 9px; border: 1px solid var(--line); background: #fff; color: var(--navy); font: 700 .7rem var(--mono); }
+.wave-controls { display: grid; grid-template-columns: auto minmax(220px, 1fr) auto auto; align-items: end; gap: 10px; }
+.wave-controls label { display: grid; gap: 4px; color: var(--ink-soft); font-size: .62rem; }
+.wave-controls select { min-height: 34px; }
+.wave-slider { grid-template-columns: auto minmax(120px, 1fr) 72px; align-items: center; }
+.wave-slider span { grid-column: 1 / -1; }
+.wave-slider input { width: 100%; accent-color: var(--orange); }
+.wave-slider b { color: var(--ink); font: 700 .65rem var(--mono); text-align: right; }
+.wave-metrics { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
+.wave-metrics article { display: grid; gap: 3px; padding: 10px; border: 1px solid var(--line); background: #fff; }
+.wave-metrics span, .wave-metrics small { color: var(--ink-soft); font-size: .6rem; }
+.wave-metrics strong { font: 700 .78rem var(--mono); }
+.wave-visual-grid { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 10px; }
+.wave-plan-card, .wave-profile-card { min-width: 0; padding: 10px; border: 1px solid var(--line); background: #fbfaf4; }
+.wave-subheading { margin-bottom: 6px; font-size: .68rem; }
+.wave-subheading span { color: var(--ink-soft); font: .6rem var(--mono); }
+.wave-plan-card svg, .wave-profile-card svg { display: block; width: 100%; height: 270px; overflow: visible; }
+.wave-plan-pipe, .wave-plan-node { cursor: pointer; }
+.wave-plan-pipe polyline { fill: none; stroke-width: 9; stroke-linecap: round; stroke-linejoin: round; vector-effect: non-scaling-stroke; }
+.wave-plan-pipe text, .wave-plan-node text { fill: var(--ink); font: 700 10px var(--mono); text-anchor: middle; paint-order: stroke; stroke: #fbfaf4; stroke-width: 3px; }
+.wave-plan-node circle { stroke: #fff; stroke-width: 3; vector-effect: non-scaling-stroke; }
+.wave-selected polyline, .wave-selected circle { filter: drop-shadow(0 0 4px var(--orange)); stroke: var(--orange); }
+.wave-profile-line { fill: none; stroke: var(--orange); stroke-width: 4; stroke-linecap: round; stroke-linejoin: round; vector-effect: non-scaling-stroke; }
+.wave-profile-card circle { fill: #fff; stroke: var(--orange); stroke-width: 2; vector-effect: non-scaling-stroke; }
+.wave-profile-card text { fill: var(--ink-soft); font: 9px var(--mono); text-anchor: middle; }
+.wave-axis { stroke: var(--line); stroke-width: 1; vector-effect: non-scaling-stroke; }
+.wave-legend { display: flex; align-items: center; gap: 7px; color: var(--ink-soft); font: .62rem var(--mono); }
+.wave-legend span { width: 18px; height: 10px; }
+.wave-legend i { display: block; width: 84px; height: 10px; background: linear-gradient(90deg, hsl(220 72% 43%), hsl(110 72% 43%), hsl(0 72% 43%)); }
+.wave-trace { display: grid; grid-template-columns: auto 220px; align-items: center; gap: 8px; font-size: .62rem; }
+.wave-trace svg { width: 220px; height: 66px; border: 1px solid var(--line); background: #fff; }
+.wave-trace path { fill: none; stroke: var(--navy); stroke-width: 2; }
+.wave-trace circle { fill: var(--orange); }
+.wave-source { margin: 0; color: var(--ink-soft); font: .59rem/1.6 var(--mono); }
+.wave-empty { display: flex; align-items: center; gap: 10px; min-height: 100px; color: var(--ink-soft); }
+.wave-empty > span { font-size: 1.8rem; }
+
+@media (max-width: 880px) {
+  .wave-controls { grid-template-columns: auto 1fr; }
+  .wave-visual-grid, .wave-metrics { grid-template-columns: 1fr; }
+  .wave-bottom-row { align-items: stretch; flex-direction: column; }
+}
+
+@media (max-width: 560px) {
+  .wave-controls { grid-template-columns: 1fr; }
+  .wave-slider { grid-template-columns: minmax(120px, 1fr) 68px; }
+  .wave-plan-card svg, .wave-profile-card svg { height: 220px; }
+  .wave-trace { grid-template-columns: 1fr; }
+  .wave-trace svg { width: 100%; }
+}

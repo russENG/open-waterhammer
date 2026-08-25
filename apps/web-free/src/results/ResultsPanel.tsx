@@ -7,6 +7,7 @@ import { createLinkedFocus, type LinkedFocus } from '../workspace/focus'
 import { deriveLongitudinalProfile } from '../workspace/longitudinal-profile'
 import { LongitudinalProfile } from '../workspace/LongitudinalProfile'
 import { assessmentStatusLabel, runKindLabel, runStatusLabel } from '../workspace/run-display-labels'
+import { PressureWaveAnimator } from './PressureWaveAnimator'
 import { deriveRunVisuals, type PlotLine } from './run-visuals'
 
 type Series = { id: string; seconds: number[]; values: number[] }
@@ -107,6 +108,7 @@ export function ResultsPanel({ caseRecord, runs, selectedRun, focus, onSelectRun
     {!run ? <div className="comparison-empty"><span>R—00</span><p>解析で計算を実行してください。</p></div> : <>
       <div className="result-summary-strip"><article><span>計算状態</span><strong>{runStatusLabel(run.status)}</strong></article><article><span>評価</span><strong>{assessmentStatusLabel(run.assessment.status)}</strong></article>{visuals!.summaryMetrics.slice(0, 2).map((metric) => <article key={metric.path}><span>{metric.path}</span><strong>{metric.value.toPrecision(5)}</strong></article>)}</div>
       <div className="result-visual-grid">
+        {run.kind.startsWith('transient_') && <PressureWaveAnimator key={run.id} caseRecord={caseRecord} run={run} focus={focus} onFocus={onFocus} />}
         <section className="notebook-card chart-card chart-card--wide">
           <div className="chart-heading"><div><span className="eyebrow">時系列</span><h2>保存済みの時系列</h2></div><span>{timeSeries?.id ?? '記録なし'}</span></div>
           {timePath && timeSeries ? <>
