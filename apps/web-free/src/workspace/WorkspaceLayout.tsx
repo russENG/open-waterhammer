@@ -115,7 +115,7 @@ export function WorkspaceLayout() {
     <header className="product-header">
       <div className="product-mark"><span className="mark-lines" aria-hidden="true"><i /><i /><i /></span><div><strong>OPEN WATERHAMMER</strong><small>Hydraulic transient workspace</small></div></div>
       <div className="product-context"><span className="alpha-label">alpha</span><span className="support-label">設計比較支援</span><span className="version-label">{`v${PRODUCT_VERSION}`}</span><PyodideStatusChip /></div>
-      <nav aria-label="Documentation"><Link to={canonicalPath(selection.projectId, selection.caseId, 'overview')}>Workspace</Link><a href="#/docs/reference">Reference</a><a href="#/docs/library">Library</a><a href="#/docs/design-flow">設計フロー</a><a href="#/docs/hydraulic">水理設計の視点</a><a href="#/docs/about">Help / About</a></nav>
+      <nav aria-label="サービス内メニュー"><Link to={canonicalPath(selection.projectId, selection.caseId, 'overview')}>作業画面</Link><a href="#/docs/reference">設計基準</a><a href="#/docs/library">計算ライブラリ</a><a href="#/docs/design-flow">設計フロー</a><a href="#/docs/hydraulic">水理設計の視点</a><a href="#/docs/about">このサイトについて</a></nav>
     </header>
     <div className="workspace-grid">
       <WorkspaceTree projectId={selection.projectId} caseId={selection.caseId} comparison={comparison} onSelect={goToCase} onToggleComparison={toggleComparison} onCreate={() => void createNew()} onFork={() => setForkDialog(true)} onArchive={() => void archiveSelected()} onSelectProject={goToProject} />
