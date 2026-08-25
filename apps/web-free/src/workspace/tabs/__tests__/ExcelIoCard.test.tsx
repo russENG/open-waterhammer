@@ -96,7 +96,7 @@ describe('ExcelIoCard', () => {
     setup({ state: 'locked' })
     const input = screen.getByLabelText(/xlsx/i)
     expect(input).toBeDisabled()
-    expect(screen.getByText(/固定済み|Fork/)).toBeVisible()
+    expect(screen.getByText(/計算済み・固定|複製して編集/)).toBeVisible()
   })
 
   test('template download seeds generateTemplate with the documented demo constants', async () => {
