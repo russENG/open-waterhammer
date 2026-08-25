@@ -1,7 +1,7 @@
 import { InMemoryWorkspaceRepository } from '@open-waterhammer/workspace'
 import { render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest'
+import { afterEach, beforeAll, beforeEach, describe, expect, test, vi } from 'vitest'
 
 import { buildSampleWorkspace } from '../../sample-workspace'
 import { WorkspaceProvider } from '../../workspace-context'
@@ -31,8 +31,29 @@ function setup() {
   )
 }
 
+const EMPTY_TEMPLATE = { meta: { projectName: 'buffer-regression' }, pipes: [], nodes: [], cases: [], measurementPoints: [] }
+
 describe('ExcelIoCard template download without a pre-existing globalThis.Buffer', () => {
   let originalBuffer: unknown
+
+  /**
+   * Load the heavy dynamic imports up front, while `Buffer` still exists.
+   *
+   * `downloadTemplate()` calls `import('@open-waterhammer/excel-io')` at click time. Under Vitest
+   * that first load also transforms exceljs plus the excel-io/core/contracts sources, measured here
+   * at ~6.3s — against ~60ms for `generateTemplate()` itself and ~1ms for the Blob. Leaving that
+   * inside the assertion window made the test measure "how fast can Vitest load exceljs", which is
+   * a property of the machine, not of the code: it passed on CI (Linux) and timed out locally.
+   *
+   * Warming the module here does not weaken the regression. exceljs reads `Buffer` when it runs,
+   * not when it loads, so a module imported while `Buffer` existed still fails once `Buffer` is
+   * gone. The "reads Buffer at call time" test below pins that assumption in place, so this
+   * warm-up cannot quietly turn the guard into a no-op.
+   */
+  beforeAll(async () => {
+    await import('@open-waterhammer/excel-io')
+    await import('buffer')
+  }, 60_000)
 
   beforeEach(() => {
     const browserGlobal = globalThis as typeof globalThis & { Buffer?: unknown }
@@ -53,10 +74,8 @@ describe('ExcelIoCard template download without a pre-existing globalThis.Buffer
     try {
       setup()
       await user.click(screen.getByRole('button', { name: /テンプレート/ }))
-      // Explicit timeout: this repo's own precedent (WorkspaceApp.test.tsx's findByText calls)
-      // hardens async assertions to 5s because the default ~1s window can starve under
-      // full-suite parallel load even though the underlying behavior is correct (verified
-      // passing reliably, twice, in isolation before this hardening was added).
+      // With the modules warmed in beforeAll, the work left inside this window is the component's
+      // own logic (~100ms). The 5s budget is here to fail a hang, not to assert a speed.
       await vi.waitFor(() => expect(createObjectURL).toHaveBeenCalled(), { timeout: 5_000 })
       const [blob] = createObjectURL.mock.calls[0]!
       expect(blob).toBeInstanceOf(Blob)
@@ -64,5 +83,18 @@ describe('ExcelIoCard template download without a pre-existing globalThis.Buffer
     } finally {
       createObjectURL.mockRestore()
     }
+  })
+
+  /**
+   * Negative control for the beforeAll warm-up.
+   *
+   * The warm-up is only safe while exceljs resolves `Buffer` at call time. Should a future exceljs
+   * capture it at load time instead, the test above would keep passing while guarding nothing —
+   * it would be running against a module that closed over the real `Buffer` before it was deleted.
+   * This test fails first in that case, and says why.
+   */
+  test('exceljs reads Buffer when it runs, not when it loads (keeps the warm-up honest)', async () => {
+    const { generateTemplate } = await import('@open-waterhammer/excel-io')
+    await expect(generateTemplate(EMPTY_TEMPLATE)).rejects.toThrow(/Buffer/)
   })
 })
