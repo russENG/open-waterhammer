@@ -1,0 +1,67 @@
+name: Release offline browser build
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      - name: Install notebook build tools
+        run: pip install marimo uv
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build all workspaces
+        run: npm run build
+
+      - name: Build Marimo notebooks
+        run: node scripts/build-notebooks.mjs
+
+      - name: Build relative-path browser application
+        run: npm run build --workspace=apps/web-free
+        env:
+          VITE_BASE_PATH: ./
+          VITE_GIT_SHA: ${{ github.sha }}
+
+      - name: Package offline build, checksum, and SBOM
+        shell: bash
+        run: |
+          mkdir -p artifacts
+          cp docs/offline-package-readme.txt apps/web-free/dist/OFFLINE-README.txt
+          cp LICENSE apps/web-free/dist/LICENSE.txt
+          asset_base="open-waterhammer-${GITHUB_REF_NAME}-offline"
+          cd apps/web-free/dist
+          zip -qr "../../../artifacts/${asset_base}.zip" .
+          cd ../../../artifacts
+          sha256sum "${asset_base}.zip" > "${asset_base}.zip.sha256"
+          cd ..
+          npm sbom --sbom-format cyclonedx > "artifacts/open-waterhammer-${GITHUB_REF_NAME}-sbom.cdx.json"
+
+      - name: Create or update GitHub Release
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if ! gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1; then
+            gh release create "$GITHUB_REF_NAME" --verify-tag --generate-notes --title "$GITHUB_REF_NAME"
+          fi
+          gh release upload "$GITHUB_REF_NAME" artifacts/* --clobber

@@ -14,9 +14,11 @@
       - frame-src: 農林水産省の公式PDFと、利用者が登録したローカルPDFのみ許可
       - object-src 'none': プラグイン/embed を禁止
       - base-uri 'self': base タグ注入を禁止
-      - frame-ancestors 'none': クリックジャッキング防止
+      - form-action 'self': フォーム送信先を同一オリジンに限定
+      クリックジャッキング防止は meta CSP では効かないため、main.tsx の埋め込み拒否と
+      ヘッダー対応ホスト用 public/_headers で実施する。
     -->
-    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline'; font-src 'self' data:; img-src 'self' data: blob: https://tile.openstreetmap.org; connect-src 'self' https://tile.openstreetmap.org; frame-src 'self' blob: https://www.maff.go.jp; object-src 'none'; base-uri 'self'; frame-ancestors 'none';" />
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline'; font-src 'self' data:; img-src 'self' data: blob: https://tile.openstreetmap.org; connect-src 'self' https://tile.openstreetmap.org; frame-src 'self' blob: https://www.maff.go.jp; object-src 'none'; base-uri 'self'; form-action 'self';" />
     <title>open-waterhammer — 農業用パイプライン水撃圧計算 OSS</title>
     <meta name="description" content="土地改良事業計画設計基準 設計「パイプライン」（令和3年改定）を参照する水撃圧計算オープンソースツール。定常流・特性曲線法・成果品様式帳票出力に対応。" />
   </head>

@@ -118,7 +118,7 @@ function WorkspaceStart({ workspace, onReady }: { workspace: BrowserWorkspace; o
       </article>
     </div>
     {error && <p className="workspace-start__error" role="alert">{error}</p>}
-    <aside className="local-storage-note"><strong>データの保存場所</strong><p>入力条件と作業状態は、このブラウザ内（IndexedDB）に保存されます。GitHub Pages のサーバーには送信されず、別の端末やブラウザとも自動同期されません。バックアップや共有には <code>.owhproj</code> の書き出しを利用してください。</p></aside>
+    <aside className="local-storage-note"><strong>データの保存場所</strong><p>入力条件と作業状態は、このブラウザ内（IndexedDB）に保存されます。GitHub Pages のサーバーには送信されず、別の端末やブラウザとも自動同期されません。バックアップや共有には <code>.owhproj</code> の書き出しを利用してください。<br />ブラウザー内の保存は暗号化保管庫ではありません。機微な施設情報は、バージョン固定のオフライン版を組織内で利用してください。</p></aside>
   </main>
 }
 

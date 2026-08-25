@@ -20,6 +20,16 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      - name: Reject tracked local-only settings
+        run: |
+          if git ls-files --error-unmatch .claude/settings.local.json >/dev/null 2>&1; then
+            echo "error: .claude/settings.local.json must remain local and ignored"
+            exit 1
+          fi
+
+      - name: Audit production dependencies (high and critical)
+        run: npm audit --omit=dev --audit-level=high
+
       - name: Build all workspaces
         run: npm run build
 

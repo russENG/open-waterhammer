@@ -100,14 +100,15 @@ UI 自体は `Scenario.eventSettings.runKind`（`run` が実行対象の RunKind
   シナリオ・計算結果がネットワークに出ることはない（E2E テストで、全 RunKind の実行中に自己オリジン
   以外への通信が発生しないことを機械的に検証している）。
 - 例外として公開サイト（GitHub Pages 版）のみ、**匿名のアクセス計測**（Cloudflare Web Analytics）を
-  実行する。収集されるのはページ単位の閲覧数・参照元・大まかな地域のみで、**クッキーを使用せず、
-  個人を識別する ID も持たない**。計測対象はページの閲覧そのものであり、入力値・計算結果は対象外。
-  ソースからビルドした場合・フォークした場合は計測コードは含まれない（ビルド時に
-  `VITE_CF_BEACON_TOKEN` が設定されたときのみ、ビーコンと対応する CSP 許可の双方が注入される。
-  実装は [`apps/web-free/web-analytics.ts`](./apps/web-free/web-analytics.ts)）。
-  有効化手順と、Cloudflare ダッシュボードでの日次アクセス数の確認方法は
-  [`docs/operations-analytics.md`](./docs/operations-analytics.md) を参照。
+  実行する。収集されるのはページ単位の閲覧数・参照元・大まかな地域のみで、クッキーや
+  個人識別 ID は使用しない。入力値・計算結果を計測データとして送る実装は持たない。
+  ソースからのビルド、フォーク、オフライン版は `VITE_CF_BEACON_TOKEN` が未設定のため計測しない。
+  実装と運用は [`docs/operations-analytics.md`](./docs/operations-analytics.md) を参照。
 - クラウドバックエンド・公開 HTTP API・認証・アカウントは存在しない（「[繰延事項](#繰延事項)」参照）。
+
+IndexedDB は暗号化保管庫ではない。機微な施設情報を扱う場合は、バージョン固定の
+オフライン版を組織内で配信し、専用のブラウザープロファイルで利用する。詳細は
+[`docs/security.md`](./docs/security.md) と [`docs/offline-use.md`](./docs/offline-use.md) を参照。
 
 ---
 
