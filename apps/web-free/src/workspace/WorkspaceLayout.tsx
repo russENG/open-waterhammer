@@ -13,6 +13,8 @@ import { AnalysisPanel } from './tabs/AnalysisPanel'
 import { ComparePanel } from './tabs/ComparePanel'
 import { OverviewPanel } from './tabs/OverviewPanel'
 import { ScenarioPanel } from './tabs/ScenarioPanel'
+import { caseStateLabel } from './case-state-labels'
+import { projectDisplayName } from './project-label'
 
 const GisPanel = lazy(() => import('../gis/GisPanel').then((module) => ({ default: module.GisPanel })))
 const ExcelIoCard = lazy(() => import('./tabs/ExcelIoCard').then((module) => ({ default: module.ExcelIoCard })))
@@ -38,7 +40,7 @@ function recentSelection() {
 }
 
 export function WorkspaceLayout() {
-  const { data, createFrom, fork, archive } = useWorkspace()
+  const { data, createFrom, fork } = useWorkspace()
   const params = useParams()
   const navigate = useNavigate()
   const selection = resolveWorkspaceRoute(data, params, recentSelection())
@@ -86,7 +88,7 @@ export function WorkspaceLayout() {
 
   async function submitFork() {
     if (!forkReason.trim()) {
-      setForkError('分岐理由を入力してください。')
+      setForkError('変更理由を入力してください。')
       return
     }
     const created = await fork(selection.caseId, forkReason)
@@ -95,10 +97,6 @@ export function WorkspaceLayout() {
     setForkError(null)
     setComparison((current) => [...new Set([...current, selection.caseId, created.id])].slice(0, 4))
     goToCase(created.id)
-  }
-
-  async function archiveSelected() {
-    await archive(selection.caseId)
   }
 
   let panel
@@ -118,9 +116,9 @@ export function WorkspaceLayout() {
       <nav aria-label="サービス内メニュー"><Link to={canonicalPath(selection.projectId, selection.caseId, 'overview')}>作業画面</Link><a href="#/docs/reference">設計基準</a><a href="#/docs/library">計算ライブラリ</a><a href="#/docs/design-flow">設計フロー</a><a href="#/docs/hydraulic">水理設計の視点</a><a href="#/docs/about">このサイトについて</a></nav>
     </header>
     <div className="workspace-grid">
-      <WorkspaceTree projectId={selection.projectId} caseId={selection.caseId} comparison={comparison} onSelect={goToCase} onToggleComparison={toggleComparison} onCreate={() => void createNew()} onFork={() => setForkDialog(true)} onArchive={() => void archiveSelected()} onSelectProject={goToProject} />
+      <WorkspaceTree projectId={selection.projectId} caseId={selection.caseId} comparison={comparison} onSelect={goToCase} onToggleComparison={toggleComparison} onCreate={() => void createNew()} onFork={() => setForkDialog(true)} onSelectProject={goToProject} />
       <main id="workspace-main" className="workspace-main">
-        <div className="workspace-breadcrumb"><span>{project.name}</span><i>/</i><span>{caseRecord.revisionReason ?? '基準案'}</span><b className={`state-pill state-pill--${caseRecord.state}`}>{caseRecord.state}</b></div>
+        <div className="workspace-breadcrumb"><span>{projectDisplayName(project)}</span><i>/</i><span>{caseRecord.revisionReason ?? '基準案'}</span><b className={`state-pill state-pill--${caseRecord.state}`}>{caseStateLabel(caseRecord.state)}</b></div>
         <nav className="workspace-tabs" aria-label="Workspace tabs">{WORKSPACE_TABS.map((tab) => <Link key={tab} aria-label={TAB_LABELS[tab]} aria-current={tab === selection.tab ? 'page' : undefined} to={canonicalPath(selection.projectId, selection.caseId, tab)} className={tab === selection.tab ? 'workspace-tab workspace-tab--active' : 'workspace-tab'}><span aria-hidden="true">{String(WORKSPACE_TABS.indexOf(tab) + 1).padStart(2, '0')}</span>{TAB_LABELS[tab]}</Link>)}</nav>
         {comparisonError && <div className="notice-bar" role="alert">{comparisonError}<button onClick={() => setComparisonError(null)}>×</button></div>}
         <section className="workspace-panel">{panel}</section>
@@ -128,7 +126,7 @@ export function WorkspaceLayout() {
       <RunInspector run={selectedRun} baseline={baselineRun} />
     </div>
     <footer className="product-footer"><div><strong>alpha · 設計比較支援</strong><span>local-first / static hosting / evidence preserved</span><nav aria-label="External resources"><a href="https://github.com/russENG/open-waterhammer" target="_blank" rel="noopener noreferrer">GitHub リポジトリ</a> ・ <a href="./notebooks/" target="_blank" rel="noreferrer">計算ノートブック ↗</a></nav></div><p><b>適用限界：</b>自動評価は設計比較支援のための参考情報です。入力条件、適用基準、数値解法の妥当性は設計者が個別に確認してください。</p></footer>
-    {forkDialog && <div className="modal-backdrop"><section className="modal-sheet fork-dialog" role="dialog" aria-modal="true" aria-label="Fork locked Case"><div className="modal-heading"><div><span className="eyebrow">CASE LIFECYCLE</span><h2>Fork locked Case</h2></div><button className="icon-button" aria-label="Close fork dialog" onClick={() => setForkDialog(false)}>×</button></div><p>固定済み Case は変更できません。差分理由を残して編集可能な子 Case を作成します。</p><label><span>分岐理由</span><textarea value={forkReason} onChange={(event) => setForkReason(event.target.value)} autoFocus /></label>{forkError && <p className="form-error">{forkError}</p>}<div className="modal-actions"><button onClick={() => setForkDialog(false)}>Cancel</button><button className="primary-button" onClick={() => void submitFork()}>Create fork</button></div></section></div>}
+    {forkDialog && <div className="modal-backdrop"><section className="modal-sheet fork-dialog" role="dialog" aria-modal="true" aria-label="固定済みの比較案を複製"><div className="modal-heading"><div><span className="eyebrow">比較案の状態</span><h2>固定済みの比較案を複製</h2></div><button className="icon-button" aria-label="複製ダイアログを閉じる" onClick={() => setForkDialog(false)}>×</button></div><p>計算済み・固定の比較案は変更できません。変更理由を残して、編集可能な複製を作成します。</p><label><span>変更理由</span><textarea value={forkReason} onChange={(event) => setForkReason(event.target.value)} autoFocus /></label>{forkError && <p className="form-error">{forkError}</p>}<div className="modal-actions"><button onClick={() => setForkDialog(false)}>キャンセル</button><button className="primary-button" onClick={() => void submitFork()}>複製して編集</button></div></section></div>}
   </div>
 }
 

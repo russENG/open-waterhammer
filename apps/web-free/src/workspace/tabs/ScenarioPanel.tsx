@@ -31,7 +31,7 @@ export function ScenarioPanel({ scenario, locked }: { scenario?: Scenario; locke
   }
 
   return <div className="panel-stack">
-    <div className="panel-title-row"><div><span className="eyebrow">BOUNDARY RECORD / 03</span><h1>シナリオ</h1><p>境界条件、操作イベント、防護工条件を Run から独立したスナップショットとして記録します。</p></div>{locked && <span className="lock-note">LOCKED · FORK TO EDIT</span>}</div>
+    <div className="panel-title-row"><div><span className="eyebrow">BOUNDARY RECORD / 03</span><h1>シナリオ</h1><p>境界条件、操作イベント、防護工条件を Run から独立したスナップショットとして記録します。</p></div>{locked && <span className="lock-note">計算済み・固定 · 複製して編集</span>}</div>
     <fieldset disabled={locked || busy} className="scenario-fieldset">
       <label className="field-wide"><span>シナリオ名</span><input value={name} onChange={(eventObject) => setName(eventObject.target.value)} /></label>
       <div className="json-editor-grid">

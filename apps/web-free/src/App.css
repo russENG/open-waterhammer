@@ -3399,6 +3399,43 @@ select.input--narrow {
 .boot-screen--error { border-left: 10px solid var(--red); }
 .boot-screen button { margin-top: 20px; padding: 9px 14px; color: white; background: transparent; border: 1px solid white; }
 
+.workspace-start { min-height: 100vh; padding: 30px clamp(22px, 5vw, 76px) 54px; color: #e9e1d5; background: radial-gradient(circle at 85% 10%, #26364d 0, transparent 34%), var(--navy); }
+.workspace-start__brand { display: flex; align-items: center; gap: 14px; padding-bottom: 22px; border-bottom: 1px solid #40506a; }
+.workspace-start__brand .mark-lines { width: 45px; }
+.workspace-start__brand > div { display: grid; gap: 2px; }
+.workspace-start__brand strong { color: white; font: 800 .78rem var(--mono); letter-spacing: .09em; }
+.workspace-start__brand small { color: #a9b4c1; font-size: .58rem; }
+.workspace-start__brand b { margin-left: auto; padding: 4px 8px; color: var(--orange-soft); border: 1px solid #9b6749; font: 700 .5rem var(--mono); text-transform: uppercase; }
+.workspace-start__intro { max-width: 780px; margin: 72px 0 36px; }
+.workspace-start__intro > span { color: var(--orange-soft); font: 700 .56rem var(--mono); letter-spacing: .17em; }
+.workspace-start__intro h1 { margin: 12px 0 10px; color: white; font: 400 clamp(2rem, 5vw, 3.4rem) "Noto Serif JP", serif; letter-spacing: .04em; }
+.workspace-start__intro p { color: #b5bfca; font-size: .75rem; line-height: 1.8; }
+.workspace-start__choices { display: grid; grid-template-columns: repeat(2, minmax(0, 520px)); gap: 22px; }
+.start-card { position: relative; display: grid; grid-template-rows: auto auto 1fr; gap: 22px; min-height: 330px; margin: 0; padding: 30px; color: var(--ink); background: #f5f1e7; border-top: 5px solid #7e8793; box-shadow: 10px 12px 0 rgba(2, 8, 18, .22); }
+.start-card--sample { border-color: var(--orange); }
+.start-card__number { position: absolute; top: 20px; right: 24px; color: #c8c3b9; font: 300 2.2rem var(--mono); }
+.start-card > div:first-of-type { padding-right: 48px; }
+.start-card > div > small { color: var(--orange); font: 700 .5rem var(--mono); letter-spacing: .14em; }
+.start-card h2 { margin: 8px 0; font: 600 1.35rem "Noto Serif JP", serif; }
+.start-card p { max-width: 400px; color: var(--ink-soft); font-size: .66rem; line-height: 1.7; }
+.start-card label { display: grid; align-self: start; gap: 7px; }
+.start-card label > span { font: 700 .56rem var(--mono); }
+.start-card input { width: 100%; padding: 12px 13px; color: var(--ink); background: white; border: 1px solid var(--line-dark); font: .72rem sans-serif; }
+.start-card input:focus { outline: 2px solid var(--orange); outline-offset: 2px; }
+.start-card__button { align-self: end; justify-self: start; min-width: 175px; padding: 11px 17px; color: white; background: var(--navy); border: 1px solid var(--navy); font: 700 .61rem var(--mono); cursor: pointer; }
+.start-card--sample .start-card__button { background: var(--orange); border-color: var(--orange); }
+.start-card__button:hover:not(:disabled) { transform: translateY(-1px); filter: brightness(1.08); }
+.start-card__button:disabled { cursor: wait; opacity: .55; }
+.sample-project { align-self: start; display: grid; gap: 5px; padding: 14px 16px; background: #fffaf2; border: 1px solid #d7b99e; }
+.sample-project > span { justify-self: start; padding: 3px 7px; color: #7b3519; background: #f4cfb6; font: 700 .5rem var(--mono); }
+.sample-project strong { font: 600 .83rem "Noto Serif JP", serif; }
+.sample-project small { color: var(--ink-soft); font-size: .56rem; }
+.local-storage-note { display: grid; grid-template-columns: 150px minmax(0, 880px); gap: 22px; margin-top: 34px; padding: 20px 0; border-top: 1px solid #40506a; border-bottom: 1px solid #40506a; }
+.local-storage-note strong { color: var(--orange-soft); font: 700 .6rem var(--mono); }
+.local-storage-note p { color: #b5bfca; font-size: .63rem; line-height: 1.8; }
+.local-storage-note code { color: white; font: .62rem var(--mono); }
+.workspace-start__error { max-width: 1062px; margin-top: 18px; padding: 10px 13px; color: #ffd9d2; background: #6d2825; font-size: .65rem; }
+
 .docs-header { position: sticky; z-index: 20; top: 0; }
 .docs-brand > span { display: grid; place-items: center; width: 38px; height: 38px; color: var(--navy); background: var(--orange); font: 800 .62rem var(--mono); }
 .docs-main { max-width: 1180px; min-height: calc(100vh - 126px); margin: 0 auto; padding: 28px 24px 60px; background: rgba(248,245,236,.92); }
@@ -3455,6 +3492,11 @@ select.input--narrow {
   .run-ledger li { grid-template-columns: 1fr auto; }.run-ledger time { grid-column: 1 / -1; }
   .model-editor textarea { min-height: 270px; }
   .gis-toolbar { align-items: flex-start; flex-direction: column; }.crs-readout { margin: 0; }
+  .workspace-start { padding-inline: 18px; }
+  .workspace-start__intro { margin-top: 48px; }
+  .workspace-start__choices { grid-template-columns: 1fr; }
+  .start-card { min-height: 310px; padding: 24px; }
+  .local-storage-note { grid-template-columns: 1fr; gap: 8px; }
 }
 
 @media (prefers-reduced-motion: reduce) {

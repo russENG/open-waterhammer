@@ -124,11 +124,11 @@ describe('full workspace application', () => {
     expect(within(tabs).getByRole('link', { name: '概要' })).not.toHaveAttribute('aria-current')
   })
 
-  test('New Case creates an independent empty draft instead of cloning the selected snapshot', async () => {
+  test('新しい比較案 creates an independent empty draft instead of cloning the selected snapshot', async () => {
     const user = userEvent.setup()
     const { data, repository } = setup()
     const tabs = screen.getByRole('navigation', { name: 'Workspace tabs' })
-    await user.click(screen.getByRole('button', { name: 'New Case' }))
+    await user.click(screen.getByRole('button', { name: '新しい比較案' }))
 
     await waitFor(async () => expect((await repository.snapshot()).cases).toHaveLength(5))
     const snapshot = await repository.snapshot()
@@ -154,7 +154,7 @@ describe('full workspace application', () => {
     const user = userEvent.setup()
     const { repository } = setup()
     const tabs = screen.getByRole('navigation', { name: 'Workspace tabs' })
-    await user.click(screen.getByRole('button', { name: 'New Case' }))
+    await user.click(screen.getByRole('button', { name: '新しい比較案' }))
     await user.click(within(tabs).getByRole('link', { name: '解析' }))
 
     // Default kind (wave_speed) is a form-only calculation: no GIS topology needed at all.
@@ -183,7 +183,7 @@ describe('full workspace application', () => {
     const user = userEvent.setup()
     const { data, repository } = setup()
     const tabs = screen.getByRole('navigation', { name: 'Workspace tabs' })
-    await user.click(screen.getByRole('button', { name: 'New Case' }))
+    await user.click(screen.getByRole('button', { name: '新しい比較案' }))
     await user.click(within(tabs).getByRole('link', { name: '解析' }))
     await user.click(await screen.findByRole('radio', { name: /Steady network \/ Python/ }))
 
@@ -252,7 +252,7 @@ describe('full workspace application', () => {
     const user = userEvent.setup()
     const { data, repository } = setup()
     const tabs = screen.getByRole('navigation', { name: 'Workspace tabs' })
-    await user.click(screen.getByRole('button', { name: 'New Case' }))
+    await user.click(screen.getByRole('button', { name: '新しい比較案' }))
     await user.click(within(tabs).getByRole('link', { name: '解析' }))
 
     for (const kind of RUN_KINDS) {
@@ -276,7 +276,7 @@ describe('full workspace application', () => {
     const user = userEvent.setup()
     const { data, repository } = setup()
     const tabs = screen.getByRole('navigation', { name: 'Workspace tabs' })
-    await user.click(screen.getByRole('button', { name: 'New Case' }))
+    await user.click(screen.getByRole('button', { name: '新しい比較案' }))
     await user.click(within(tabs).getByRole('link', { name: '解析' }))
 
     await user.click(await screen.findByRole('radio', { name: /Steady single pipe/ }))
@@ -322,12 +322,12 @@ describe('full workspace application', () => {
     expect(await screen.findByText('Run succeeded')).toBeVisible()
     expect((await repository.snapshot()).cases.some(({ state }) => state === 'locked')).toBe(true)
 
-    await user.click(screen.getByRole('button', { name: 'Fork Case' }))
-    const dialog = await screen.findByRole('dialog', { name: 'Fork locked Case' })
-    await user.click(within(dialog).getByRole('button', { name: 'Create fork' }))
-    expect(within(dialog).getByText('分岐理由を入力してください。')).toBeVisible()
-    await user.type(within(dialog).getByLabelText('分岐理由'), '空気室容量を比較するため')
-    await user.click(within(dialog).getByRole('button', { name: 'Create fork' }))
+    await user.click(screen.getByRole('button', { name: '複製して編集' }))
+    const dialog = await screen.findByRole('dialog', { name: '固定済みの比較案を複製' })
+    await user.click(within(dialog).getByRole('button', { name: '複製して編集' }))
+    expect(within(dialog).getByText('変更理由を入力してください。')).toBeVisible()
+    await user.type(within(dialog).getByLabelText('変更理由'), '空気室容量を比較するため')
+    await user.click(within(dialog).getByRole('button', { name: '複製して編集' }))
 
     await waitFor(async () => expect((await repository.snapshot()).cases).toHaveLength(5))
     expect(await screen.findByRole('button', { name: /空気室容量を比較するため/ })).toBeVisible()

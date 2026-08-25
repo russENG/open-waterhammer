@@ -4,12 +4,20 @@ import { expect, test, type Page } from '@playwright/test'
 // Form-only Run kinds never read GIS drafts (per-RunKind topology gate), so a blank Case
 // can go straight to Analysis without importing any GIS topology first.
 async function createBlankCase(page: Page) {
-  await page.getByRole('button', { name: 'New Case' }).click()
+  await page.getByRole('button', { name: '新しい比較案' }).click()
   await page.getByRole('link', { name: '解析' }).click()
 }
 
-test('global navigation moves between the workspace and documentation pages', async ({ page }) => {
+async function openSample(page: Page) {
   await page.goto('/')
+  await expect(page.getByRole('heading', { name: '作業を始める' })).toBeVisible()
+  await expect(page.getByText('実在する路線・施設とは関係ありません')).toBeVisible()
+  await page.getByRole('button', { name: 'このサンプルを開く' }).click()
+  await expect(page.getByRole('heading', { name: 'サンプル：N地区東部幹線水路' })).toBeVisible()
+}
+
+test('global navigation moves between the workspace and documentation pages', async ({ page }) => {
+  await openSample(page)
 
   await page.getByRole('link', { name: '設計基準' }).click()
   await expect(page).toHaveURL(/#\/docs\/reference$/)
@@ -24,8 +32,7 @@ test('global navigation moves between the workspace and documentation pages', as
 })
 
 test('create, edit, execute, lock, fork, compare, reload, export, and import', async ({ page }) => {
-  await page.goto('/')
-  await expect(page.getByRole('heading', { name: '東部幹線 水撃圧比較' })).toBeVisible()
+  await openSample(page)
   await expect(page.getByText('alpha', { exact: true }).first()).toBeVisible()
   await expect(page.getByText('設計比較支援', { exact: true }).first()).toBeVisible()
   await expect(page.getByRole('contentinfo')).toContainText('適用限界')
@@ -33,7 +40,7 @@ test('create, edit, execute, lock, fork, compare, reload, export, and import', a
   await page.keyboard.press('Tab')
   await expect(page.getByRole('link', { name: 'Skip to workspace' })).toBeFocused()
 
-  await page.getByRole('button', { name: 'New Case' }).click()
+  await page.getByRole('button', { name: '新しい比較案' }).click()
   await expect.poll(() => page.locator('.case-row').count()).toBe(5)
   await page.getByRole('link', { name: '解析' }).click()
   await expect(page.getByText('FORM INPUT ONLY')).toBeVisible()
@@ -69,12 +76,12 @@ test('create, edit, execute, lock, fork, compare, reload, export, and import', a
   await page.getByRole('radio', { name: /Steady network \/ EPANET/ }).check()
   await page.getByRole('button', { name: 'Run calculation' }).click()
   await expect(page.getByRole('status')).toHaveText('Run succeeded', { timeout: 60_000 })
-  await expect(page.locator('.state-pill')).toHaveText('locked')
+  await expect(page.locator('.state-pill')).toHaveText('計算済み・固定')
 
-  await page.getByRole('button', { name: 'Fork Case' }).click()
-  const fork = page.getByRole('dialog', { name: 'Fork locked Case' })
-  await fork.getByLabel('分岐理由').fill('E2E 防護工比較')
-  await fork.getByRole('button', { name: 'Create fork' }).click()
+  await page.getByRole('button', { name: '複製して編集' }).click()
+  const fork = page.getByRole('dialog', { name: '固定済みの比較案を複製' })
+  await fork.getByLabel('変更理由').fill('E2E 防護工比較')
+  await fork.getByRole('button', { name: '複製して編集' }).click()
   await expect(page.locator('.workspace-breadcrumb').getByText('E2E 防護工比較', { exact: true })).toBeVisible()
 
   await page.getByRole('link', { name: '比較' }).click()
@@ -83,7 +90,7 @@ test('create, edit, execute, lock, fork, compare, reload, export, and import', a
 
   await page.reload()
   await expect(page.locator('.workspace-breadcrumb').getByText('E2E 防護工比較', { exact: true })).toBeVisible()
-  await expect(page.locator('.state-pill')).toHaveText('draft')
+  await expect(page.locator('.state-pill')).toHaveText('編集中')
 
   await page.getByRole('link', { name: 'モデル＋GIS' }).click()
   await page.getByRole('button', { name: 'Import GeoJSON' }).click()
@@ -127,10 +134,10 @@ test('create, edit, execute, lock, fork, compare, reload, export, and import', a
   await expect(page.getByRole('status')).toHaveText(/水理計算書・検討書を出力しました/)
 
   // Disambiguated by label: the blank Case (from the wave_speed Run earlier in this test) and
-  // this fork (from the joukowsky_allievi Run just above) are also locked by now, so 'locked'
+  // this fork (from the joukowsky_allievi Run just above) are also fixed by now, so the state
   // alone would match three rows.
-  await page.locator('.case-row').filter({ hasText: 'locked' }).filter({ hasText: '基準案' }).getByRole('button').click()
-  await expect(page.locator('.state-pill')).toHaveText('locked')
+  await page.locator('.case-row').filter({ hasText: '計算済み・固定' }).filter({ hasText: '基準案' }).getByRole('button').click()
+  await expect(page.locator('.state-pill')).toHaveText('計算済み・固定')
   await page.getByRole('link', { name: '帳票' }).click()
   const jsonDownload = page.waitForEvent('download')
   await page.getByRole('button', { name: /Run JSON/ }).click()
@@ -162,7 +169,7 @@ test('create, edit, execute, lock, fork, compare, reload, export, and import', a
 })
 
 test('desktop and narrow workspace keep semantic landmarks without serious accessibility violations', async ({ page }, testInfo) => {
-  await page.goto('/')
+  await openSample(page)
   await expect(page.getByRole('navigation', { name: 'Workspace tabs' })).toBeVisible()
   const desktop = await new AxeBuilder({ page }).analyze()
   expect(desktop.violations.filter(({ impact }) => impact === 'critical' || impact === 'serious')).toEqual([])
@@ -201,13 +208,13 @@ test('all exact RunKinds execute and persist through the production browser regi
     if (url.origin !== 'http://127.0.0.1:4173') externalRequests.add(url.origin)
   })
 
-  await page.goto('/')
+  await openSample(page)
   const csp = await page.locator('meta[http-equiv="Content-Security-Policy"]').getAttribute('content')
   expect(csp).toContain("script-src 'self' 'wasm-unsafe-eval'")
   expect(csp).not.toContain("'unsafe-eval'")
   expect(csp).not.toContain('cdn.jsdelivr.net')
 
-  await page.getByRole('button', { name: 'New Case' }).click()
+  await page.getByRole('button', { name: '新しい比較案' }).click()
   await page.getByRole('link', { name: 'モデル＋GIS' }).click()
   await page.getByRole('button', { name: 'Import GeoJSON' }).click()
   const importDialog = page.getByRole('dialog', { name: 'GeoJSON import wizard' })
@@ -238,7 +245,7 @@ test('all exact RunKinds execute and persist through the production browser regi
     await expect(page.getByRole('button', { name: 'Run calculation' })).toBeEnabled()
     await page.getByRole('button', { name: 'Run calculation' }).click()
     await expect(page.getByRole('status')).toHaveText('Run succeeded', { timeout: 120_000 })
-    await expect(page.locator('.state-pill')).toHaveText('locked')
+    await expect(page.locator('.state-pill')).toHaveText('計算済み・固定')
     const inspector = page.getByRole('complementary', { name: 'Run Inspector' })
     await expect(inspector).toContainText(kind)
     await expect(inspector).toContainText(kind === 'steady_network_epanet' ? 'epanet-js' : 'open-waterhammer-core-py')
@@ -251,11 +258,11 @@ test('all exact RunKinds execute and persist through the production browser regi
     }
 
     if (index < runKinds.length - 1) {
-      await page.getByRole('button', { name: 'Fork Case' }).click()
-      const fork = page.getByRole('dialog', { name: 'Fork locked Case' })
-      await fork.getByLabel('分岐理由').fill(`E2E next exact RunKind ${runKinds[index + 1]}`)
-      await fork.getByRole('button', { name: 'Create fork' }).click()
-      await expect(page.locator('.state-pill')).toHaveText('draft')
+      await page.getByRole('button', { name: '複製して編集' }).click()
+      const fork = page.getByRole('dialog', { name: '固定済みの比較案を複製' })
+      await fork.getByLabel('変更理由').fill(`E2E next exact RunKind ${runKinds[index + 1]}`)
+      await fork.getByRole('button', { name: '複製して編集' }).click()
+      await expect(page.locator('.state-pill')).toHaveText('編集中')
     }
   }
 
@@ -266,7 +273,7 @@ test('all exact RunKinds execute and persist through the production browser regi
   ]))
   expect([...externalRequests]).toEqual([])
   await page.reload()
-  await expect(page.locator('.state-pill')).toHaveText('locked')
+  await expect(page.locator('.state-pill')).toHaveText('計算済み・固定')
   await expect(page.getByRole('complementary', { name: 'Run Inspector' })).toContainText('transient_protection_device')
 })
 
@@ -277,7 +284,7 @@ test('blank form-only Darcy and pump-start branches execute through the real pro
     const url = new URL(request.url())
     if (url.origin !== 'http://127.0.0.1:4173') externalRequests.add(url.origin)
   })
-  await page.goto('/')
+  await openSample(page)
 
   await createBlankCase(page)
   await page.locator('input[type="radio"][value="steady_single_pipe"]').check()

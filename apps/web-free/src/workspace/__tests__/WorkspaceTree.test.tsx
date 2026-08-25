@@ -34,7 +34,6 @@ function renderTree(data: WorkspaceData, onSelectProject = vi.fn()) {
         onToggleComparison={() => {}}
         onCreate={() => {}}
         onFork={() => {}}
-        onArchive={() => {}}
         onSelectProject={onSelectProject}
       />
     </WorkspaceProvider>,

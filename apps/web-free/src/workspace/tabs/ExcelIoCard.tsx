@@ -123,7 +123,7 @@ export function ExcelIoCard({ caseRecord }: { caseRecord: Case }) {
             aria-label="xlsx ファイルを選択して読み込み"
           />
         </label>
-        {locked && <p className="excel-action-note">固定済み Case のため取り込めません。Fork してから取り込んでください。</p>}
+        {locked && <p className="excel-action-note">計算済み・固定の比較案には取り込めません。「複製して編集」で編集可能な比較案を作成してください。</p>}
       </div>
     </div>
     {status && <p role="status" className="inline-message">{status}</p>}

@@ -118,7 +118,7 @@ const geoDrafts: JsonValue = [
 export function buildSampleWorkspace(timestamp = new Date().toISOString()): WorkspaceData {
   const project = {
     ...projectFixture,
-    name: '東部幹線 水撃圧比較',
+    name: 'サンプル：N地区東部幹線水路',
     crs: 'EPSG:6677',
     createdAt: timestamp,
     updatedAt: timestamp,

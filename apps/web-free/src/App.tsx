@@ -1,10 +1,10 @@
-import { lazy, Suspense, useEffect, useState } from 'react'
+import { lazy, Suspense, useEffect, useState, type FormEvent } from 'react'
 import type { WorkspaceData } from '@open-waterhammer/workspace'
 
 import { onNavigate, type AppPage } from './lib/navigation'
 import { resolveLegacyHash } from './lib/legacy-hash'
 import { WorkspaceApp } from './workspace/WorkspaceApp'
-import { initializeBrowserWorkspace } from './workspace/bootstrap'
+import { createBlankProject, initializeBrowserWorkspace, installSampleWorkspace } from './workspace/bootstrap'
 import type { WorkspaceRepositoryClient } from './workspace/workspace-context'
 import './App.css'
 
@@ -74,7 +74,52 @@ export default function App() {
   if (docsPage) return <DocumentationShell page={docsPage} />
   if (bootError) return <div className="boot-screen boot-screen--error" role="alert"><span>WORKSPACE ERROR</span><h1>ローカル Workspace を開けませんでした</h1><p>{bootError}</p><button onClick={() => window.location.reload()}>Reload</button></div>
   if (!workspace) return <div className="boot-screen" role="status"><div className="boot-mark"><i /><i /><i /></div><span>OPEN WATERHAMMER / alpha</span><h1>Local workspace</h1><p>IndexedDB と設計証跡を確認しています…</p></div>
+  if (workspace.data.projects.length === 0) return <WorkspaceStart workspace={workspace} onReady={(data) => setWorkspace({ ...workspace, data })} />
   return <WorkspaceApp repository={workspace.repository} initialData={workspace.data} />
+}
+
+function WorkspaceStart({ workspace, onReady }: { workspace: BrowserWorkspace; onReady(data: WorkspaceData): void }) {
+  const [projectName, setProjectName] = useState('')
+  const [busy, setBusy] = useState<'blank' | 'sample' | null>(null)
+  const [error, setError] = useState<string | null>(null)
+
+  async function run(kind: 'blank' | 'sample') {
+    setBusy(kind)
+    setError(null)
+    try {
+      const data = kind === 'blank'
+        ? await createBlankProject(workspace.repository, projectName)
+        : await installSampleWorkspace(workspace.repository)
+      onReady(data)
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : String(caught))
+      setBusy(null)
+    }
+  }
+
+  function submit(event: FormEvent) {
+    event.preventDefault()
+    void run('blank')
+  }
+
+  return <main className="workspace-start">
+    <header className="workspace-start__brand"><span className="mark-lines" aria-hidden="true"><i /><i /><i /></span><div><strong>OPEN WATERHAMMER</strong><small>水撃圧の設計比較ワークスペース</small></div><b>alpha</b></header>
+    <section className="workspace-start__intro"><span>LOCAL-FIRST WORKSPACE</span><h1>作業を始める</h1><p>新しい検討を始めるか、架空データ入りのサンプルで操作を確認できます。</p></section>
+    <div className="workspace-start__choices">
+      <form className="start-card" onSubmit={submit}>
+        <span className="start-card__number">01</span><div><small>EMPTY PROJECT</small><h2>新規プロジェクト作成</h2><p>空の入力条件と「編集中」の比較案を1件作成します。</p></div>
+        <label><span>プロジェクト名</span><input value={projectName} onChange={(event) => setProjectName(event.target.value)} placeholder="例：○○幹線 水撃圧検討" autoFocus /></label>
+        <button className="start-card__button" disabled={busy !== null}>{busy === 'blank' ? '作成中…' : '作成する'}</button>
+      </form>
+      <article className="start-card start-card--sample">
+        <span className="start-card__number">02</span><div><small>SAMPLE PROJECT</small><h2>サンプルを開く</h2><p>入力、シナリオ、比較案が入ったサンプルで画面を確認できます。</p></div>
+        <div className="sample-project"><span>サンプルデータ</span><strong>サンプル：N地区東部幹線水路</strong><small>実在する路線・施設とは関係ありません</small></div>
+        <button className="start-card__button" type="button" onClick={() => void run('sample')} disabled={busy !== null}>{busy === 'sample' ? '準備中…' : 'このサンプルを開く'}</button>
+      </article>
+    </div>
+    {error && <p className="workspace-start__error" role="alert">{error}</p>}
+    <aside className="local-storage-note"><strong>データの保存場所</strong><p>入力条件と作業状態は、このブラウザ内（IndexedDB）に保存されます。GitHub Pages のサーバーには送信されず、別の端末やブラウザとも自動同期されません。バックアップや共有には <code>.owhproj</code> の書き出しを利用してください。</p></aside>
+  </main>
 }
 
 function DocumentationShell({ page }: { page: AppPage }) {

@@ -45,9 +45,10 @@ Project ── Alternative ── Case（不変・履歴付き） ── Scenari
 
 ### 公開サイトを開く
 
-<https://russeng.github.io/open-waterhammer/> をブラウザで開くだけ。インストール不要。初回は
-IndexedDB が空のため、デモ用のサンプルプロジェクト（「東部幹線 水撃圧比較」、4本の代替 Case）が
-自動的に生成される。
+<https://russeng.github.io/open-waterhammer/> をブラウザで開くだけ。インストール不要。初回は空の画面から
+「新規プロジェクト作成」または、架空データのサンプル（「サンプル：N地区東部幹線水路」、4本の比較案）を
+選択する。入力条件と作業状態はブラウザ内の IndexedDB に保存され、GitHub Pages のサーバーには送信
+されない。別の端末・ブラウザとは自動同期されないため、バックアップや共有には `.owhproj` を使用する。
 
 ### ローカル開発
 

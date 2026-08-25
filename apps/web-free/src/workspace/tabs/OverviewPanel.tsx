@@ -2,6 +2,7 @@ import type { Case, Project, Run, Scenario } from '@open-waterhammer/contracts'
 import { useRef, useState } from 'react'
 
 import { downloadProjectFile, exportProjectFile, importProjectFile } from '../project-transfer'
+import { caseStateLabel } from '../case-state-labels'
 import { deriveSchematic, type SchematicPipe } from '../schematic'
 import { useWorkspaceOptional } from '../workspace-context'
 import { newestCaseIdForProject } from '../workspace-state'
@@ -118,7 +119,7 @@ export function OverviewPanel({ project, caseRecord, scenario, runs, onImported 
   const schematic = deriveSchematic(caseRecord)
   const latest = runs.at(-1)
   return <div className="panel-stack overview-panel">
-    <div className="panel-title-row"><div><span className="eyebrow">CONTROL SHEET / 01</span><h1>設計条件の俯瞰</h1><p>入力・シナリオ・計算証跡を一枚のフィールドノートとして整理します。</p></div><span className={`state-ticket state-ticket--${caseRecord.state}`}>{caseRecord.state}</span></div>
+    <div className="panel-title-row"><div><span className="eyebrow">CONTROL SHEET / 01</span><h1>設計条件の俯瞰</h1><p>入力・シナリオ・計算証跡を一枚のフィールドノートとして整理します。</p></div><span className={`state-ticket state-ticket--${caseRecord.state}`}>{caseStateLabel(caseRecord.state)}</span></div>
     <div className="metric-strip">
       <article><span>CALCULATION PATHS</span><strong>{metrics.inputs.toString().padStart(2, '0')}</strong><small>RunKinds available</small></article>
       <article><span>MODEL ELEMENTS</span><strong>{metrics.geo.toString().padStart(2, '0')}</strong><small>mapped drafts</small></article>
@@ -132,7 +133,7 @@ export function OverviewPanel({ project, caseRecord, scenario, runs, onImported 
           <div><dt>Case ID</dt><dd>{caseRecord.id}</dd></div>
           <div><dt>Lineage</dt><dd>{caseRecord.parentCaseId ? `Forked from ${caseRecord.parentCaseId.slice(0, 13)}…` : 'Origin case'}</dd></div>
           <div><dt>Revision</dt><dd>{caseRecord.revisionReason ?? '基準案'}</dd></div>
-          <div><dt>Lock</dt><dd>{caseRecord.lockProvenance ?? 'editable draft'}</dd></div>
+          <div><dt>作業状態</dt><dd>{caseStateLabel(caseRecord.state)}</dd></div>
         </dl>
       </section>
       <section className="notebook-card schematic-card">

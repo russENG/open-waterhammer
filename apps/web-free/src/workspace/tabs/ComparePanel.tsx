@@ -1,5 +1,6 @@
 import type { Case, JsonValue, Run, Scenario } from '@open-waterhammer/contracts'
 
+import { caseStateLabel } from '../case-state-labels'
 import { buildComparisonRows, formatComparisonNumber } from '../comparison'
 
 function label(caseRecord: Case): string {
@@ -20,7 +21,7 @@ export function ComparePanel({ cases, scenarios, runs }: { cases: Case[]; scenar
   const rows = buildComparisonRows(cases, scenarios, runs)
   return <div className="panel-stack compare-panel">
     <div className="panel-title-row"><div><span className="eyebrow">DELTA SHEET / 06</span><h1>比較</h1><p>Case 条件と永続化済み Run の差分。評価の採否ではなく比較材料を提示します。</p></div><span className="case-count">{cases.length} Cases</span></div>
-    <div className="comparison-table-wrap"><table aria-label="Case comparison" className="comparison-table"><thead><tr><th>Condition / result</th>{cases.map((record, index) => <th key={record.id}><span>C—{String(index + 1).padStart(2, '0')}</span>{label(record)}<small>{record.state}</small></th>)}</tr></thead><tbody>
+    <div className="comparison-table-wrap"><table aria-label="Case comparison" className="comparison-table"><thead><tr><th>Condition / result</th>{cases.map((record, index) => <th key={record.id}><span>C—{String(index + 1).padStart(2, '0')}</span>{label(record)}<small>{caseStateLabel(record.state)}</small></th>)}</tr></thead><tbody>
       <tr><th>Revision reason</th>{cases.map((record) => <td key={record.id}>{record.revisionReason ?? 'Origin'}</td>)}</tr>
       <tr><th>Lineage</th>{cases.map((record) => <td key={record.id}>{record.parentCaseId?.slice(0, 13) ?? '—'}</td>)}</tr>
       <tr><th>Latest Run</th>{latest.map((run, index) => <td key={cases[index]!.id}>{run?.kind ?? 'not executed'}</td>)}</tr>
