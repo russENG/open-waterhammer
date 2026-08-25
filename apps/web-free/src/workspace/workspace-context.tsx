@@ -251,7 +251,7 @@ export function WorkspaceProvider({
     // 同じ保存でシナリオの eventSettings にも重ねる。分けて保存すると、後から保存した
     // 側が直前の書き込みを古い値で上書きしてしまう。
     const scenarios = data.scenarios.filter(({ caseId: owner }) => owner === caseId)
-    let merged = isNonEmptyObject(eventSettings)
+    const merged = isNonEmptyObject(eventSettings)
       ? scenarios.map((scenario, index) => (index === 0
         ? {
           ...scenario,
