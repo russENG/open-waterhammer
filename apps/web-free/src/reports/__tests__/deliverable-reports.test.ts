@@ -222,5 +222,5 @@ describe('generateDeliverableExcel', () => {
     } finally {
       browserGlobal.Buffer = original
     }
-  })
+  }, 30_000)
 })

@@ -13,6 +13,13 @@ export interface ProjectMeta {
   standardId: string;
   version?: string | undefined;
   methodId?: string | undefined;
+  /**
+   * 静水位 [m]（上流水槽・吐水槽の HWL）
+   *
+   * 縦断水理計算の初期エネルギー標高。未入力だと 0 で計算され結果が丸ごと変わるため、
+   * 案件情報シートで受け取る。
+   */
+  staticWaterLevel?: number | undefined;
   notes?: string | undefined;
 }
 

@@ -135,6 +135,7 @@ const PIPE_COLS: readonly ColumnDef[] = [
   { id: "hazen_williams_c", ja: "粗度係数 C（ヘーゼン・ウィリアムス）", cls: "required", width: 16 },
   { id: "youngs_modulus", ja: "ヤング係数 Eₛ [kN/m²]・空欄なら管種から自動", cls: "optional", width: 18 },
   { id: "pipe_restraint_coeff", ja: "埋設状況係数 C₁・空欄なら 1.0", cls: "optional", width: 18 },
+  { id: "allowable_pressure", ja: "許容圧力（呼び圧力）[MPa]・空欄なら設計水圧の判定を行わない", cls: "optional", width: 20 },
 ];
 
 const NODE_COLS: readonly ColumnDef[] = [
@@ -183,6 +184,7 @@ const META_ROWS: ReadonlyArray<{ id: string; desc: string; cls: InputClass; list
   { id: "standard_id", desc: "採用基準ID / Design standard（既定のまま可）", cls: "optional", list: STANDARD_IDS },
   { id: "version", desc: "ソフトウェアバージョン / Software version（自動・編集不要）", cls: "auto" },
   { id: "method_id", desc: "手法識別子 / Calculation method（既定のまま可）", cls: "optional", list: METHOD_IDS },
+  { id: "static_water_level", desc: "静水位 [m] / Static water level（上流水槽の HWL・縦断水理計算に使用）", cls: "optional" },
   { id: "notes", desc: "備考 / Notes", cls: "optional" },
 ];
 
@@ -258,6 +260,7 @@ function addMetaSheet(wb: ExcelJS.Workbook, meta: Partial<ProjectMeta>): ExcelJS
     standard_id: meta.standardId ?? "nochi_pipeline_2021",
     version: meta.version ?? PRODUCT_VERSION,
     method_id: meta.methodId ?? "joukowsky_v1",
+    static_water_level: meta.staticWaterLevel !== undefined ? String(meta.staticWaterLevel) : "",
     notes: meta.notes ?? "",
   };
 
@@ -324,6 +327,7 @@ function addNetworkSheet(wb: ExcelJS.Workbook, pipes: Pipe[], nodes: Node[]): Ex
     p.startNodeId, p.endNodeId, p.pipeType,
     p.innerDiameter, p.wallThickness, p.length,
     p.roughnessCoeff, p.youngsModulus ?? "", p.c1Coeff ?? "",
+    p.allowablePressureMpa ?? "",
   ]);
   const nodeData = nodes.map((n) => [
     "node", n.id, n.name ?? "",
@@ -416,6 +420,8 @@ const GLOSSARY: ReadonlyArray<readonly [string, string, string, string, string]>
   ["流量", "Flow rate / discharge", "Q", "m³/s", "flow_rate"],
   ["流速", "Flow velocity", "V", "m/s", "initial_velocity"],
   ["初期圧力水頭", "Initial pressure head", "H₀", "m", "initial_head"],
+  ["静水位", "Static water level", "HWL", "m", "static_water_level"],
+  ["許容圧力（呼び圧力）", "Allowable (nominal) pressure", "—", "MPa", "allowable_pressure"],
   ["粗度係数（流速係数）", "Hazen-Williams roughness coefficient", "C, CI", "—", "hazen_williams_c"],
   ["ヤング係数（縦弾性係数）", "Young modulus of pipe material", "Eₛ", "kN/m²", "youngs_modulus"],
   ["埋設状況係数", "Pipe restraint (anchorage) coefficient", "C₁", "—", "pipe_restraint_coeff"],

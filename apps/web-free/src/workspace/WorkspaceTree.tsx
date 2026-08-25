@@ -2,14 +2,11 @@ import type { Case } from '@open-waterhammer/contracts'
 import { useRef, useState } from 'react'
 
 import { caseStateLabel } from './case-state-labels'
-import { projectDisplayName } from './project-label'
+import { caseDisplayName, caseDisplayNameFull, projectDisplayName } from './project-label'
 import { useWorkspace } from './workspace-context'
 
 function labelOf(caseRecord: Case): string {
-  if (caseRecord.revisionReason) return caseRecord.revisionReason
-  const model = caseRecord.modelSnapshot
-  if (model && typeof model === 'object' && !Array.isArray(model) && typeof model.designLabel === 'string') return model.designLabel
-  return `比較案 ${caseRecord.id.slice(0, 8)}`
+  return caseDisplayName(caseRecord)
 }
 
 export function WorkspaceTree({
@@ -144,7 +141,7 @@ export function WorkspaceTree({
               {cases.map((caseRecord, index) => <li key={caseRecord.id} className={caseRecord.id === caseId ? 'case-row case-row--active' : 'case-row'}>
                 <button className="case-select" onClick={() => onSelect(caseRecord.id)} aria-current={caseRecord.id === caseId ? 'page' : undefined}>
                   <span className={`state-dot state-dot--${caseRecord.state}`} aria-hidden="true" />
-                  <span><strong>{String(index + 1).padStart(2, '0')} · {labelOf(caseRecord)}</strong><small>{caseStateLabel(caseRecord.state)}{caseRecord.parentCaseId ? ` · ↳ ${caseRecord.parentCaseId.slice(0, 6)}` : ' · 起点'}</small></span>
+                  <span title={caseDisplayNameFull(caseRecord)}><strong>{String(index + 1).padStart(2, '0')} · {labelOf(caseRecord)}</strong><small>{caseStateLabel(caseRecord.state)}{caseRecord.parentCaseId ? ' · 派生' : ' · 起点'}</small></span>
                 </button>
                 <label className="compare-check"><input type="checkbox" checked={comparison.includes(caseRecord.id)} onChange={() => onToggleComparison(caseRecord.id)} aria-label={`${labelOf(caseRecord)}を比較に追加`} /><span>比較</span></label>
               </li>)}

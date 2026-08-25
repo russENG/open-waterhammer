@@ -1,7 +1,8 @@
-import type { JsonValue, Run } from '@open-waterhammer/contracts'
+import { ASSESSMENT_NOTICE, type JsonValue, type Run } from '@open-waterhammer/contracts'
 import { useState } from 'react'
 
 import { flattenComparisonValue } from './comparison'
+import { describeResultPath, findingRuleLabel, formatFindingValue, isComparablePath, summariseResult } from './result-paths'
 import { assessmentStatusLabel, runKindLabel, runStatusLabel } from './run-display-labels'
 
 const ROW_LIMIT = 24
@@ -15,10 +16,16 @@ function capRows(entries: Array<[string, string]>): RowSet {
   return { rows: entries.slice(0, ROW_LIMIT), overflow: Math.max(0, entries.length - ROW_LIMIT) }
 }
 
-/** run.summary の全リーフを「path → 値の文字列」に再帰的に平坦化する（nested な数値も個別の行になる）。 */
+/**
+ * run.summary を表示用の行に畳む。
+ *
+ * 以前は全リーフをそのまま並べていたため `PIPES.PIPE_0.HMAX[10]` のような内部パスと
+ * 生の倍精度、適用外項目の `null` が並んでいた。`summariseResult` が
+ * 系列の要約・ラベル変換・null の除去をまとめて行う。
+ */
 function pairs(value: JsonValue): RowSet {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return capRows([])
-  return capRows(flattenComparisonValue(value).map(([path, child]): [string, string] => [path, String(child)]))
+  return capRows(summariseResult(value).map((row): [string, string] => [row.label, row.value]))
 }
 
 /** run と baseline の summary を再帰的に平坦化して比較し、両者に存在する数値パスの差分だけを残す。 */
@@ -27,10 +34,12 @@ function numericDifferences(run: Run, baseline: Run): RowSet {
   if (!baseline.summary || typeof baseline.summary !== 'object' || Array.isArray(baseline.summary)) return capRows([])
   const previousByPath = new Map(flattenComparisonValue(baseline.summary))
   const deltas = flattenComparisonValue(run.summary).flatMap(([path, value]): Array<[string, string]> => {
+    // 時系列・包絡線の要素ごとの差分は数百行になるので出さない。
+    if (!isComparablePath(path)) return []
     const previous = previousByPath.get(path)
     if (typeof value !== 'number' || typeof previous !== 'number') return []
     const delta = value - previous
-    return [[path, `${delta >= 0 ? '+' : ''}${delta.toPrecision(4)}`]]
+    return [[describeResultPath(path), `${delta >= 0 ? '+' : ''}${delta.toPrecision(4)}`]]
   })
   return capRows(deltas)
 }
@@ -58,9 +67,10 @@ export function RunInspector({ run, baseline }: { run?: Run; baseline?: Run }) {
             <dt>規則</dt><dd>{run.manifest.rulesVersion}</dd>
           </dl>
           <section className="inspector-section">
-            <h3>評価</h3>
+            <h3>自動評価</h3>
             <p className={`assessment assessment--${run.assessment.status}`}>{assessmentStatusLabel(run.assessment.status)}</p>
-            {run.assessment.findings.map((finding) => <div className="finding-card" key={`${finding.ruleId}-${finding.targetRef}`}><strong>{finding.targetRef}</strong><span>{finding.ruleId}</span><small>{String(finding.observedValue)} / {String(finding.threshold)} {finding.unit}</small></div>)}
+            <p className="muted">{ASSESSMENT_NOTICE}</p>
+            {run.assessment.findings.map((finding) => <div className="finding-card" key={`${finding.ruleId}-${finding.targetRef}`}><strong>{finding.targetRef}</strong><span>{findingRuleLabel(finding.ruleId)}</span><small>{formatFindingValue(finding.observedValue)} / 基準 {formatFindingValue(finding.threshold)} {finding.unit}</small></div>)}
           </section>
           <section className="inspector-section"><h3>警告</h3>{run.manifest.warnings.length ? run.manifest.warnings.map((warning) => <p className="warning-line" key={warning}>{warning}</p>) : <p className="muted">警告はありません。</p>}</section>
           <section className="inspector-section"><h3>由来情報</h3><code className="hash-code">{run.manifest.inputHashes.calculation}</code></section>

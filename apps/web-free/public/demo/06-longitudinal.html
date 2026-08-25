@@ -1,0 +1,46 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>L01 縦断水理計算で設計内圧を出す — Open Waterhammer デモ手順</title>
+<meta name="description" content="Open Waterhammer のデモ手順（画面写真つき）。Excel入力からブラウザ内計算、農水省 成果品様式の書き出しまで。">
+<link rel="stylesheet" href="./style.css">
+</head>
+<body>
+<header class="site">
+  <strong>Open Waterhammer</strong>
+  <nav aria-label="デモ手順">
+    <a href="../">作業画面</a>
+    <a href="./">デモ手順 目次</a>
+    <a href="./01-start.html">作業を始める</a><a href="./02-template.html">入力テンプレートを取得す</a><a href="./03-import.html">Excelを取り込む</a><a href="./04-scenario.html">シナリオを確認する</a><a href="./05-joukowsky.html">A02 Joukowsk</a><a href="./06-longitudinal.html" aria-current="page">L01 縦断水理計算で設</a><a href="./07-reports.html">成果品様式を書き出す</a><a href="./08-transient.html">T01 単一管路の過渡解</a><a href="./09-compare.html">比較案を並べる</a>
+  </nav>
+</header>
+<main>
+<span class="eyebrow">手順 06 / 09</span>
+<h1>L01 縦断水理計算で設計内圧を出す</h1>
+<p class="lead">成果品様式④「水理計算書」24列そのもの。</p>
+<figure>
+  <img src="./img/s6-longitudinal-results.png" alt="L01 縦断水理計算で設計内圧を出すの画面">
+  <figcaption>縦断水理計算の結果。</figcaption>
+</figure>
+
+      <div class="table-scroll"><table>
+        <thead><tr><th>項目</th><th>値</th></tr></thead>
+        <tbody>
+        <tr><td>計算状態</td><td>計算完了</td></tr>
+        <tr><td>自動評価</td><td>適合</td></tr>
+        <tr><td>最大設計内圧 Pp [MPa]</td><td>1.438</td></tr>
+        <tr><td>最大流速 V [m/s]</td><td>1.597</td></tr>
+        <tr><td>静水位 [m]</td><td>580.600</td></tr>
+        </tbody>
+      </table></div>
+      <p>測点ごとに、単距離 Lh・地盤高 GL・管中心高 FH・管長 SL・流量 Q・管径 D・流速係数 CI（入力側）と、動水勾配・流速 V・速度水頭 hv・摩擦損失水頭 hf・損失係数計 Σf・その他損失水頭計 Σhc・全損失水頭 h・ｴﾈﾙｷﾞｰ標高 EL・動水位 WLm・動水頭 hm・静水圧 Ps・水撃圧 Pi・設計内圧 Pp（計算側）を出す。</p>
+      <p>水撃圧 Pi は、A02 で求めた値を「水撃圧 [MPa]」欄に入れると設計値として反映される。空欄なら静水圧×40%の仮算定になり、その旨が警告に出る。静水圧が0以下の区間では比例算定を適用せず、Pi・Pp とも空欄にする。</p>
+<nav class="pager">
+  <span><a href="./05-joukowsky.html">← A02 Joukowsky / Allievi で水撃圧を求める</a></span>
+  <span><a href="./07-reports.html">成果品様式を書き出す →</a></span>
+</nav>
+</main>
+</body>
+</html>

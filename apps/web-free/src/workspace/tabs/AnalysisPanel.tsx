@@ -31,9 +31,9 @@ const KIND_COPY: Record<RunKind, { code: string; title: string; note: string }> 
   steady_network_epanet: { code: 'S03', title: '管路網の定常解析 / EPANET', note: 'EPANETによる定常解' },
   longitudinal_hydraulics: { code: 'L01', title: '縦断水理計算', note: '縦断・設計内圧' },
   transient_single_pipe: { code: 'T01', title: '単一管路の過渡解析', note: '特性曲線法・単一路線' },
-  transient_network: { code: 'T02', title: '管路網の過渡解析', note: '分岐・合流の過渡解析' },
+  transient_network: { code: 'T02', title: '管路網の過渡解析', note: 'EPANET定常状態から開始・分岐・合流' },
   transient_pump: { code: 'T03', title: 'ポンプ過渡解析', note: '停止・始動イベント' },
-  transient_protection_device: { code: 'T04', title: '水撃圧対策設備', note: '空気室・サージタンク' },
+  transient_protection_device: { code: 'T04', title: '水撃圧対策設備', note: 'EPANET定常状態から開始・空気室・サージタンク' },
 }
 
 function root(caseRecord: Case): Record<string, JsonValue> {
@@ -47,12 +47,15 @@ export function AnalysisPanel({
   scenario,
   onScenarioSelect,
   onRunSelected,
+  onFork,
 }: {
   caseRecord: Case
   scenarios: Scenario[]
   scenario?: Scenario
   onScenarioSelect(scenarioId: string): void
   onRunSelected(run: Run): void
+  /** 固定済みの比較案を複製するダイアログを開く。ロック中の復帰導線をこのタブにも置くため。 */
+  onFork(): void
 }) {
   const { run, saveModel, busy, lastError } = useWorkspace()
   const [kind, setKind] = useState<RunKind>('wave_speed')
@@ -73,6 +76,13 @@ export function AnalysisPanel({
   const primaryFields = fields.filter((field) => !isAdvancedEngineeringField(kind, field))
   const advancedFields = fields.filter((field) => isAdvancedEngineeringField(kind, field))
   const collections = ENGINEERING_COLLECTIONS[kind]
+  // 計算が成功すると比較案は locked になり、入力も実行もできなくなる。
+  // 理由と復帰手段をこのタブに出さないと、利用者は次に何をすればよいか分からない。
+  const locked = caseRecord.state !== 'draft'
+  // この計算方法の入力が保存されていない = 画面の値は組み込みの既定値であって、
+  // Excel から取り込んだ値ではない。黙って計算させると出所を誤解する。
+  const usingDefaults = inputs[kind] === undefined
+  const hasExcelImport = modelRoot.excelImport !== undefined
 
   function selectKind(next: RunKind) {
     setKind(next)
@@ -182,6 +192,15 @@ export function AnalysisPanel({
       <section className="analysis-editor notebook-card">
         <div className="analysis-editor-heading"><div><span className="eyebrow">{KIND_COPY[kind].code} 入力</span><h2>{KIND_COPY[kind].title}</h2></div><span className={`validation-badge ${gate.canRun ? 'validation-badge--ok' : 'validation-badge--ng'}`}>{!isTopologyKind ? 'フォーム入力のみ' : gate.canRun ? 'モデル準備完了' : gate.reason === 'topology_invalid' ? `不正要素 ${Object.keys(gate.errorsByFeature).length}件` : 'GIS / 管路網データが必要'}</span></div>
         <p className="field-help">方式別の主要設計値を単位付きで編集します。シナリオに属する操作条件も同じ保存操作で記録されます。</p>
+        {locked && <div className="analysis-notice analysis-notice--locked" role="note">
+          <div><strong>この比較案は計算済みで固定されています</strong><p>入力条件と計算結果を証跡として残すため、変更できません。条件を変えて計算し直すには、変更理由を残して編集可能な複製を作ります。</p></div>
+          <button type="button" className="primary-button" onClick={onFork}>複製して編集</button>
+        </div>}
+        {!locked && usingDefaults && <div className="analysis-notice" role="note">
+          <div><strong>この計算方法の入力はまだ保存されていません</strong><p>{hasExcelImport
+            ? 'Excelから作成されるのは 波速 / Joukowsky・Allievi / 縦断水理計算 の入力だけです。この方法の欄は組み込みの既定値なので、実際の管路諸元に置き換えてから保存してください。'
+            : '欄の値は組み込みの既定値です。実際の設計値に置き換えてから保存してください。'}</p></div>
+        </div>}
         {draftsBrokenNonBlocking && <p className="inline-message">GISの編集中データに不正要素が {Object.keys(gate.errorsByFeature).length} 件あります。この計算では使用しないため、実行を妨げません。</p>}
         {collections.length > 0 && <div className="engineering-collections">{collections.map((collection) => {
           const rows = readEngineeringValue(engineering, collection)
@@ -197,7 +216,7 @@ export function AnalysisPanel({
         <div className="engineering-field-grid">{primaryFields.map((field) => <EngineeringFieldControl key={engineeringFieldKey(field)} field={field} value={readEngineeringValue(engineering, field)} locked={caseRecord.state !== 'draft'} onChange={(raw) => updateField(field, raw)} />)}</div>
         {advancedFields.length > 0 && <details className="advanced-engineering-fields"><summary>詳細な計算条件（{advancedFields.length}項目）</summary><p>通常は初期値を使います。式固有の条件や許容値を確認するときに開いてください。</p><div className="engineering-field-grid">{advancedFields.map((field) => <EngineeringFieldControl key={engineeringFieldKey(field)} field={field} value={readEngineeringValue(engineering, field)} locked={caseRecord.state !== 'draft'} onChange={(raw) => updateField(field, raw)} />)}</div></details>}
         <details className="advanced-json"><summary>詳細設定 · 正準JSON</summary><label className="model-editor"><span>モデル入力</span><textarea value={modelText} onChange={(event) => { setModelText(event.target.value); setDirty(true); try { setEngineering({ ...engineering, model: JSON.parse(event.target.value) as JsonValue }) } catch { /* Retain invalid draft text until save. */ } }} disabled={caseRecord.state !== 'draft'} spellCheck={false} /></label></details>
-        <div className="analysis-actions"><button onClick={() => void saveInput()} disabled={busy || caseRecord.state !== 'draft'}>入力条件を保存</button><button className="run-button" onClick={() => void execute()} disabled={busy || dirty || caseRecord.state !== 'draft' || !gate.canRun} aria-label="計算を実行"><span>▶</span>{busy ? '計算中…' : dirty ? '入力条件の保存が必要' : '計算を実行'}</button></div>
+        <div className="analysis-actions"><button onClick={() => void saveInput()} disabled={busy || locked}>入力条件を保存</button><button className="run-button" onClick={() => void execute()} disabled={busy || dirty || locked || !gate.canRun} aria-label="計算を実行"><span>▶</span>{busy ? '計算中…' : locked ? '計算済み・固定' : dirty ? '入力条件の保存が必要' : '計算を実行'}</button></div>
         {(status || lastError) && <p className="inline-message" role="status">{status ?? lastError}</p>}
       </section>
     </div>

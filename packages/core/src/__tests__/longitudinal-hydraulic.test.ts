@@ -126,8 +126,10 @@ describe("縦断水理計算", () => {
     const result = calcLongitudinalHydraulic(input);
 
     for (const r of result.pointResults) {
-      assert.ok(Math.abs(r.designPressure - (r.staticPressure + r.waterhammerPressure)) < 1e-6,
-        `Pp(${r.designPressure.toFixed(4)}) = Ps(${r.staticPressure.toFixed(4)}) + Pi(${r.waterhammerPressure.toFixed(4)})`);
+      const Pi = r.waterhammerPressure!;
+      const Pp = r.designPressure!;
+      assert.ok(Math.abs(Pp - (r.staticPressure + Pi)) < 1e-6,
+        `Pp(${Pp.toFixed(4)}) = Ps(${r.staticPressure.toFixed(4)}) + Pi(${Pi.toFixed(4)})`);
     }
   });
 
@@ -141,7 +143,7 @@ describe("縦断水理計算", () => {
     const result = calcLongitudinalHydraulic(input);
 
     for (const r of result.pointResults) {
-      assert.ok(Math.abs(r.waterhammerPressure - r.staticPressure * 0.4) < 1e-6,
+      assert.ok(Math.abs(r.waterhammerPressure! - r.staticPressure * 0.4) < 1e-6,
         `Pi = Ps × 0.4`);
     }
   });
@@ -178,7 +180,69 @@ describe("縦断水理計算", () => {
       `全損失 ${r.totalLoss.toFixed(4)} ≈ 0.100`);
 
     // 設計内圧 = Ps + Pi の整合性
-    assert.ok(Math.abs(r.designPressure - (r.staticPressure + r.waterhammerPressure)) < 1e-6,
+    assert.ok(Math.abs(r.designPressure! - (r.staticPressure + r.waterhammerPressure!)) < 1e-6,
       `Pp = Ps + Pi`);
+  });
+});
+
+// ─── 負圧区間の扱い (#40) ────────────────────────────────────────────────────
+
+describe("負圧区間では比例算定の水撃圧・設計内圧を出さない", () => {
+  /** 公式帳票例の最初の3測点（φ600, C=130, Q=451.50L/s）。 */
+  function points(): MeasurementPoint[] {
+    return [
+      {
+        id: "IP.161", horizontalDistance: 25.776, groundLevel: 477.20,
+        pipeCenterHeight: 475.533, pipeLength: 25.874, flowRate: 0.4515,
+        diameter: 0.6, roughnessC: 130,
+        bendLossCoeff: 0.022, valveLossCoeff: 0, branchLossCoeff: 0,
+      },
+      {
+        id: "IP.162", horizontalDistance: 9.000, groundLevel: 478.01,
+        pipeCenterHeight: 476.402, pipeLength: 9.033, flowRate: 0.4515,
+        diameter: 0.6, roughnessC: 130,
+        bendLossCoeff: 0.043, valveLossCoeff: 0, branchLossCoeff: 0,
+      },
+      {
+        id: "IP.163", horizontalDistance: 7.583, groundLevel: 478.71,
+        pipeCenterHeight: 477.050, pipeLength: 7.611, flowRate: 0.4515,
+        diameter: 0.6, roughnessC: 130,
+        bendLossCoeff: 0.049, valveLossCoeff: 0, branchLossCoeff: 0,
+      },
+    ];
+  }
+
+  /** 静水位を管中心高より低く置き、全測点を負圧にする。 */
+  function negativeInput(extra: Partial<LongitudinalHydraulicInput> = {}): LongitudinalHydraulicInput {
+    return { points: points(), staticWaterLevel: 400.0, ...extra };
+  }
+
+  test("既定の40%指定では undefined を返す（負値を出さない）", () => {
+    const result = calcLongitudinalHydraulic(negativeInput());
+    assert.ok(result.pointResults.every((r) => r.pressureHead < 0));
+    assert.ok(result.pointResults.every((r) => r.waterhammerPressure === undefined));
+    assert.ok(result.pointResults.every((r) => r.designPressure === undefined));
+    assert.equal(result.maxDesignPressure, 0);
+    assert.equal(result.warnings.filter((w) => w.includes("静水圧が0以下の測点")).length, 1);
+  });
+
+  test("割合指定も同じく算定しない", () => {
+    const result = calcLongitudinalHydraulic(negativeInput({ waterhammerRatio: 0.4 }));
+    assert.ok(result.pointResults.every((r) => r.waterhammerPressure === undefined));
+  });
+
+  test("MPa絶対値の指定は静水圧の符号によらず使う", () => {
+    const result = calcLongitudinalHydraulic(negativeInput({ waterhammerPressureMpa: 0.41 }));
+    for (const r of result.pointResults) {
+      assert.equal(r.waterhammerPressure, 0.41);
+      assert.ok(Math.abs(r.designPressure! - (r.staticPressure + 0.41)) < 1e-12);
+    }
+  });
+
+  test("同種の警告は測点ごとに積まず1行にまとめる", () => {
+    const result = calcLongitudinalHydraulic(negativeInput());
+    assert.ok(result.warnings.filter((w) => w.includes("推奨上限")).length <= 1);
+    assert.ok(result.warnings.filter((w) => w.includes("推奨下限")).length <= 1);
+    assert.equal(result.warnings.filter((w) => w.includes("負圧")).length, 1);
   });
 });

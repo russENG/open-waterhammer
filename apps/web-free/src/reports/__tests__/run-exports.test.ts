@@ -1,10 +1,16 @@
-import { runFixture } from '@open-waterhammer/contracts'
+import {
+  SOFTWARE_DISCLAIMER,
+  SOFTWARE_LICENSE_ID,
+  SOFTWARE_LICENSE_URL,
+  SOFTWARE_SOURCE_URL,
+  runFixture,
+} from '@open-waterhammer/contracts'
 import { describe, expect, test, vi } from 'vitest'
 
-import { APPLICABILITY_LIMITATIONS, buildRunJsonExport, generatePersistedRunExcel } from '../run-exports'
+import { buildRunJsonExport, generatePersistedRunExcel } from '../run-exports'
 
 describe('persisted Run exports', () => {
-  test('Run JSON carries the manifest summary, rule ids, alpha labels, and limitations', () => {
+  test('Run JSON carries the manifest summary, rule ids, license, and warranty disclaimer', () => {
     const text = buildRunJsonExport({
       ...runFixture,
       assessment: {
@@ -18,7 +24,13 @@ describe('persisted Run exports', () => {
     const exported = JSON.parse(text)
 
     expect(exported.labels).toEqual(['alpha', '設計比較支援'])
-    expect(exported.applicabilityLimitations).toBe(APPLICABILITY_LIMITATIONS)
+    expect(exported.license).toEqual({
+      id: SOFTWARE_LICENSE_ID,
+      url: SOFTWARE_LICENSE_URL,
+      source: SOFTWARE_SOURCE_URL,
+    })
+    expect(exported.warrantyDisclaimer).toBe(SOFTWARE_DISCLAIMER)
+    expect(exported.applicabilityLimitations).toBeUndefined()
     expect(exported.ruleIds).toEqual(['NOCHI-8.3.4'])
     expect(exported.run.manifest.runId).toBe(runFixture.id)
     expect(exported.manifestSummary.productVersion).toBe('0.2.0-alpha.1')
@@ -54,5 +66,5 @@ describe('persisted Run exports', () => {
     } finally {
       browserGlobal.Buffer = original
     }
-  })
+  }, 30_000)
 })

@@ -33,9 +33,9 @@ test('global navigation moves between the workspace and documentation pages', as
 
 test('create, edit, execute, lock, fork, compare, reload, export, and import', async ({ page }) => {
   await openSample(page)
-  await expect(page.getByText('alpha', { exact: true }).first()).toBeVisible()
-  await expect(page.getByText('設計比較支援', { exact: true }).first()).toBeVisible()
-  await expect(page.getByRole('contentinfo')).toContainText('適用限界')
+  await expect(page.getByRole('banner')).not.toContainText('alpha')
+  await expect(page.getByRole('banner')).not.toContainText('設計比較支援')
+  await expect(page.getByRole('contentinfo')).toHaveCount(0)
 
   await page.keyboard.press('Tab')
   await expect(page.getByRole('link', { name: '作業内容へ移動' })).toBeFocused()
@@ -78,7 +78,7 @@ test('create, edit, execute, lock, fork, compare, reload, export, and import', a
   await expect(page.getByRole('status')).toHaveText('計算が完了しました', { timeout: 60_000 })
   await expect(page.locator('.state-pill')).toHaveText('計算済み・固定')
 
-  await page.getByRole('button', { name: '複製して編集' }).click()
+  await page.locator('#workspace-main').getByRole('button', { name: '複製して編集' }).click()
   const fork = page.getByRole('dialog', { name: '固定済みの比較案を複製' })
   await fork.getByLabel('変更理由').fill('E2E 防護工比較')
   await fork.getByRole('button', { name: '複製して編集' }).click()
@@ -133,10 +133,8 @@ test('create, edit, execute, lock, fork, compare, reload, export, and import', a
   await expect((await deliverableDownload).suggestedFilename()).toMatch(/^waterhammer-report-.+\.xlsx$/)
   await expect(page.getByRole('status')).toHaveText(/水理計算書・検討書を書き出しました/)
 
-  // Disambiguated by label: the blank Case (from the wave_speed Run earlier in this test) and
-  // this fork (from the joukowsky_allievi Run just above) are also fixed by now, so the state
-  // alone would match three rows.
-  await page.locator('.case-row').filter({ hasText: '計算済み・固定' }).filter({ hasText: '基準案' }).getByRole('button').click()
+  // 別の代替案にも起点があるため、元の「基準案」と起点の組み合わせで特定する。
+  await page.getByRole('button', { name: /基準案.*起点/ }).click()
   await expect(page.locator('.state-pill')).toHaveText('計算済み・固定')
   await page.getByRole('link', { name: '帳票' }).click()
   const jsonDownload = page.waitForEvent('download')
@@ -269,7 +267,7 @@ test('all exact RunKinds execute and persist through the production browser regi
     }
 
     if (index < runKinds.length - 1) {
-      await page.getByRole('button', { name: '複製して編集' }).click()
+      await page.locator('#workspace-main').getByRole('button', { name: '複製して編集' }).click()
       const fork = page.getByRole('dialog', { name: '固定済みの比較案を複製' })
       await fork.getByLabel('変更理由').fill(`E2E next exact RunKind ${runKinds[index + 1]}`)
       await fork.getByRole('button', { name: '複製して編集' }).click()

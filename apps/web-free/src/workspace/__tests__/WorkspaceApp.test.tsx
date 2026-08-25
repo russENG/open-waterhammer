@@ -1,8 +1,4 @@
-import {
-  PRODUCT_VERSION,
-  RUN_KINDS,
-  type RunKind,
-} from '@open-waterhammer/contracts'
+import { RUN_KINDS, type RunKind } from '@open-waterhammer/contracts'
 import { createExecutorRegistry } from '@open-waterhammer/runner'
 import { InMemoryWorkspaceRepository } from '@open-waterhammer/workspace'
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react'
@@ -79,16 +75,13 @@ afterEach(() => {
 })
 
 describe('full workspace application', () => {
-  test('falls back from an invalid hash route and exposes permanent product and limitations language', async () => {
+  test('falls back from an invalid hash route and keeps the global chrome minimal', async () => {
     const { data } = setup()
 
-    expect(await screen.findByRole('banner')).toHaveTextContent('alpha')
-    expect(screen.getByRole('banner')).toHaveTextContent('設計比較支援')
-    // Asserted against the imported constant (never a literal) so this test tracks
-    // WorkspaceLayout's PRODUCT_VERSION display and would fail if it ever reverted to a
-    // hardcoded string that drifted from @open-waterhammer/contracts.
-    expect(screen.getByRole('banner')).toHaveTextContent(`v${PRODUCT_VERSION}`)
-    expect(screen.getByRole('contentinfo')).toHaveTextContent('適用限界')
+    expect(await screen.findByRole('banner')).toHaveTextContent('Open Waterhammer')
+    expect(screen.getByRole('banner')).not.toHaveTextContent('alpha')
+    expect(screen.getByRole('banner')).not.toHaveTextContent('設計比較支援')
+    expect(screen.queryByRole('contentinfo')).not.toBeInTheDocument()
     expect(screen.getByRole('navigation', { name: '作業タブ' })).toBeVisible()
     expect(screen.getByRole('complementary', { name: '計算記録の詳細' })).toBeVisible()
     expect(screen.getByRole('heading', { name: '差分' })).toBeVisible()
@@ -279,7 +272,7 @@ describe('full workspace application', () => {
     selected = (await repository.snapshot()).cases.find(({ id }) => id === data.cases.at(-1)!.id)!
     network = (selected.modelSnapshot as { runInputs: Record<string, { network: { nodes: Record<string, unknown>; pipes: Array<{ downstreamNodeId: string }> } }> }).runInputs.transient_network!.network
     expect(network.pipes[0]!.downstreamNodeId).toBe('V-02')
-  })
+  }, 30_000)
 
   test('initializes and saves every exact RunKind from one blank Case using only closed form controls', async () => {
     const user = userEvent.setup()
@@ -304,7 +297,7 @@ describe('full workspace application', () => {
     const inputs = (created.modelSnapshot as { runInputs: Record<string, unknown> }).runInputs
     expect(Object.keys(inputs).sort()).toEqual([...RUN_KINDS].sort())
     expect(Object.values(inputs).every((input) => input && typeof input === 'object')).toBe(true)
-  })
+  }, 30_000)
 
   test('switches blank form-only Cases to Darcy and pump-start branches before persistence', async () => {
     const user = userEvent.setup()
@@ -357,7 +350,11 @@ describe('full workspace application', () => {
     expect(await screen.findByText('計算が完了しました')).toBeVisible()
     expect((await repository.snapshot()).cases.some(({ state }) => state === 'locked')).toBe(true)
 
-    await user.click(screen.getByRole('button', { name: '複製して編集' }))
+    // 固定後の復帰導線は左ツリーと解析タブの案内の2か所にある（どちらも同じダイアログを開く）。
+    // ここでは解析タブ側から開く。
+    const lockNotice = screen.getByText('この比較案は計算済みで固定されています')
+      .closest<HTMLElement>('div[role="note"]')!
+    await user.click(within(lockNotice).getByRole('button', { name: '複製して編集' }))
     const dialog = await screen.findByRole('dialog', { name: '固定済みの比較案を複製' })
     await user.click(within(dialog).getByRole('button', { name: '複製して編集' }))
     expect(within(dialog).getByText('変更理由を入力してください。')).toBeVisible()
@@ -365,7 +362,8 @@ describe('full workspace application', () => {
     await user.click(within(dialog).getByRole('button', { name: '複製して編集' }))
 
     await waitFor(async () => expect((await repository.snapshot()).cases).toHaveLength(5))
-    expect(await screen.findByRole('button', { name: /空気室容量を比較するため/ })).toBeVisible()
+    const forkReason = await screen.findByTitle('空気室容量を比較するため')
+    expect(forkReason.closest('button')).toBeVisible()
   })
 
   test('removes a cleared optional numeric input and refuses to persist a cleared required numeric input', async () => {

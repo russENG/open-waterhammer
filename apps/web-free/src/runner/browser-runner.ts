@@ -1,6 +1,7 @@
 import { RUN_KINDS, type JsonValue, type RunKind } from '@open-waterhammer/contracts'
 import {
   createEpanetExecutor,
+  createEpanetInitializedMocExecutor,
   createExecutorRegistry,
   type CalculationExecutor,
   type PythonProtocolResponse,
@@ -61,11 +62,20 @@ export function createBrowserPythonExecutor(
 export function createBrowserExecutorRegistry(options: {
   callProtocol?: BrowserProtocolCaller
   epanetExecutor?: CalculationExecutor
+  epanetInitialSolver?: NonNullable<Parameters<typeof createEpanetInitializedMocExecutor>[1]>
 } = {}) {
   const pythonExecutor = createBrowserPythonExecutor(options.callProtocol)
   const epanetExecutor = options.epanetExecutor ?? createEpanetExecutor()
+  const epanetInitializedMoc = createEpanetInitializedMocExecutor(
+    pythonExecutor,
+    options.epanetInitialSolver,
+  )
   return createExecutorRegistry(Object.fromEntries(RUN_KINDS.map((kind) => [
     kind,
-    kind === 'steady_network_epanet' ? epanetExecutor : pythonExecutor,
+    kind === 'steady_network_epanet'
+      ? epanetExecutor
+      : kind === 'transient_network' || kind === 'transient_protection_device'
+        ? epanetInitializedMoc
+        : pythonExecutor,
   ])) as Record<RunKind, CalculationExecutor>)
 }

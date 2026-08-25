@@ -143,8 +143,9 @@ export function LibraryPage({ initialAnchor }: LibraryPageProps) {
           ブラウザでは Pyodide 経由で同じ <code>.py</code> を実行している。
         </p>
         <p>
-          定常流網計算は <code>epanet-js</code>（米国 EPA EPANET の WASM 移植、MIT）に委譲。
-          自前実装と数値一致を検証済み。
+          管路網の過渡解析と水撃圧対策設備の計算では、最初に <code>epanet-js</code>
+          （米国 EPA EPANET の WASM 移植、MIT）で定常状態を計算し、管路流量と節点水頭を
+          特性曲線法へ引き継ぐ。EPANETのリンクは物理管路であり、特性曲線法の内部格子とは別に設定する。
         </p>
         <p>
           🎓 学習用の対話的ノートブック（Marimo）も併設:{" "}

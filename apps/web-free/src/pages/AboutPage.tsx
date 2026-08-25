@@ -1,3 +1,10 @@
+import {
+  SOFTWARE_DISCLAIMER,
+  SOFTWARE_LICENSE_ID,
+  SOFTWARE_LICENSE_URL,
+  SOFTWARE_SOURCE_URL,
+} from '@open-waterhammer/contracts'
+
 import { navigateTo } from '../lib/navigation'
 
 /* eslint-disable no-irregular-whitespace -- preserved Japanese documentation contains intentional full-width spacing */
@@ -44,8 +51,27 @@ export function AboutPage() {
             AI 技術の発展は、この発想を後押ししています。設計基準を参照した計算ロジックを実装し、検証し、ドキュメント化する作業は、これまで相応の人手と時間を要するものでした。個人の技術者が片手間に手を出せる規模ではなかった。今は違います。本プロジェクト自身、Claude をはじめとする AI の支援を受けて開発されています。AI は人の判断を置き換えるものではありませんが、個人が手の届く範囲を着実に広げます。コモンズへの貢献の敷居が下がり、より多くの目が、より深く、コードに触れられるようになる。<strong>「十分な目」を集める話であると同時に、その目を持つ人を増やす話でもあります。</strong>
           </p>
           <p>
-            最後に大事な区別を一つ。このプロジェクトは <strong>信用</strong> の作り方を変えますが、<strong>設計責任</strong> の所在を変えるものではありません。計算結果を使うとき、最終的な責任は設計を行う技術者または組織に帰属します。変えたいのは、その責任を負うときに手元にある「根拠の見え方」です。閉じた実装の出力を信じるしかない状態から、根拠そのものを読んで判断できる状態へ。これが、計算ロジックをコモンズに置くことの、最も実務的な意味です。
+            最後に大事な区別を一つ。このプロジェクトは <strong>信用</strong> の作り方を変えますが、設計における確認・採用の手続きを置き換えるものではありません。計算結果を設計に採用する際は、入力条件、適用基準、モデル化および結果の確認が必要です。変えたいのは、その確認を行うときに手元にある「根拠の見え方」です。閉じた実装の出力を信じるしかない状態から、根拠そのものを読んで判断できる状態へ。これが、計算ロジックをコモンズに置くことの、最も実務的な意味です。
           </p>
+        </div>
+      </section>
+
+      <section className="about-section" id="license-warranty">
+        <h3 className="about-section-title">ライセンス・無保証</h3>
+        <div className="about-card">
+          <p>
+            本ソフトウェアは <strong>{SOFTWARE_LICENSE_ID}</strong> のもとで公開しています。
+            ライセンス本文の無保証・責任制限は、同ライセンス第15条から第17条に定められています。
+          </p>
+          <p>{SOFTWARE_DISCLAIMER}</p>
+          <div className="about-links">
+            <a href={SOFTWARE_LICENSE_URL} target="_blank" rel="noopener noreferrer" className="about-link">
+              AGPL-3.0 ライセンス全文
+            </a>
+            <a href={SOFTWARE_SOURCE_URL} target="_blank" rel="noopener noreferrer" className="about-link">
+              ソースコード
+            </a>
+          </div>
         </div>
       </section>
 

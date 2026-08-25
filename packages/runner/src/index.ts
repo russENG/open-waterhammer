@@ -1,5 +1,6 @@
 export * from "./default-registry.js";
 export * from "./epanet.js";
+export * from "./epanet-to-moc.js";
 export * from "./hashes.js";
 export * from "./manifest.js";
 export * from "./registry.js";

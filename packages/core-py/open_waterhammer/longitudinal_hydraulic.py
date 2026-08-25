@@ -112,10 +112,16 @@ def calc_longitudinal_hydraulic(
 
     max_velocity = 0.0
     max_design_pressure = 0.0
+    # 同じ内容の警告を測点ごとに積まないためのフラグ（31測点なら31行出てしまう）。
+    provisional_waterhammer_reported = False
+    negative_static_pressure_reported = False
+    slow_points: list[str] = []
+    fast_points: list[str] = []
+    negative_head_points: list[tuple[str, float]] = []
     # 初期エネルギー標高 = 静水位
     prev_el = static_water_level
 
-    for i, pt in enumerate(points):
+    for pt in points:
         # 断面積・流速
         area = math.pi * pt.diameter * pt.diameter / 4
         v = pt.flow_rate / area
@@ -145,37 +151,47 @@ def calc_longitudinal_hydraulic(
         p_s = head_to_mpa(hm)
 
         # 水撃圧 [MPa]
+        #
+        # 静水圧に比例させる指定（waterhammer_ratio・既定の40%）は正圧を前提にした経験則なので、
+        # p_s <= 0 の測点に適用すると水撃圧・設計内圧まで負値になる。そこでは算定せず None を返し、
+        # 帳票では「—」として空欄にする。waterhammer_pressure_mpa で絶対値を与えた場合は
+        # 設計者が明示した値なので、静水圧の符号によらずそのまま使う。
+        p_i: float | None
         if waterhammer_pressure_mpa is not None:
             p_i = waterhammer_pressure_mpa
+        elif p_s <= 0:
+            p_i = None
+            if not negative_static_pressure_reported:
+                negative_static_pressure_reported = True
+                warnings.append(
+                    "静水圧が0以下の測点があるため、その区間の水撃圧・設計内圧は算定していません。"
+                    "水撃圧をMPaで直接指定するか、管路計画を見直してください。"
+                )
         elif waterhammer_ratio is not None:
             p_i = p_s * waterhammer_ratio
         else:
             p_i = p_s * 0.4  # デフォルト: 静水圧×40%
-            if i == 0:
+            if not provisional_waterhammer_reported:
+                provisional_waterhammer_reported = True
                 warnings.append(
                     "水撃圧が未指定のため、静水圧×40%で仮算定しています。"
                     "別途水撃圧計算（Step 2〜4）の結果を適用してください。"
                 )
 
         # 設計内圧 [MPa]
-        p_p = p_s + p_i
+        p_p = None if p_i is None else p_s + p_i
 
-        # 警告
+        # 警告は測点ごとに積まず、ループ後にまとめて1行にする（31測点で31行出ると読めない）。
         if v < 0.5:
-            warnings.append(
-                f"{pt.id}: 流速 {v:.2f} m/s は推奨下限 0.5 m/s を下回っています"
-            )
+            slow_points.append(pt.id)
         if v > 2.5:
-            warnings.append(
-                f"{pt.id}: 流速 {v:.2f} m/s は推奨上限 2.5 m/s を超えています"
-            )
+            fast_points.append(pt.id)
         if hm < 0:
-            warnings.append(
-                f"{pt.id}: 動水頭 {hm:.2f} m が負圧です。管路が動水位を超えています"
-            )
+            negative_head_points.append((pt.id, hm))
 
         max_velocity = max(max_velocity, v)
-        max_design_pressure = max(max_design_pressure, p_p)
+        if p_p is not None:
+            max_design_pressure = max(max_design_pressure, p_p)
 
         point_results.append(
             MeasurementPointResult(
@@ -198,6 +214,24 @@ def calc_longitudinal_hydraulic(
 
         prev_el = el
 
+    if slow_points:
+        warnings.append(
+            f"流速が推奨下限 0.5 m/s を下回る測点が {len(slow_points)} 件あります"
+            f"（{_summarize_ids(slow_points)}）。"
+        )
+    if fast_points:
+        warnings.append(
+            f"流速が推奨上限 2.5 m/s を超える測点が {len(fast_points)} 件あります"
+            f"（{_summarize_ids(fast_points)}）。管径の拡大を検討してください。"
+        )
+    if negative_head_points:
+        worst_id, worst_head = min(negative_head_points, key=lambda item: item[1])
+        warnings.append(
+            f"動水頭が負圧の測点が {len(negative_head_points)} 件あります"
+            f"（最小 {worst_id} で {worst_head:.2f} m）。"
+            "管路が動水位を超えています。水柱分離の検討が必要です。"
+        )
+
     return LongitudinalHydraulicResult(
         case_name=case_name,
         static_water_level=static_water_level,
@@ -206,3 +240,10 @@ def calc_longitudinal_hydraulic(
         max_design_pressure=max_design_pressure,
         warnings=warnings,
     )
+
+
+def _summarize_ids(ids: list[str]) -> str:
+    """警告文に測点IDを並べる。件数が多いときは先頭3件＋「ほかN件」に丸める。"""
+    if len(ids) <= 3:
+        return ", ".join(ids)
+    return f"{', '.join(ids[:3])} ほか{len(ids) - 3}件"

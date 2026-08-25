@@ -1,0 +1,45 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>成果品様式を書き出す — Open Waterhammer デモ手順</title>
+<meta name="description" content="Open Waterhammer のデモ手順（画面写真つき）。Excel入力からブラウザ内計算、農水省 成果品様式の書き出しまで。">
+<link rel="stylesheet" href="./style.css">
+</head>
+<body>
+<header class="site">
+  <strong>Open Waterhammer</strong>
+  <nav aria-label="デモ手順">
+    <a href="../">作業画面</a>
+    <a href="./">デモ手順 目次</a>
+    <a href="./01-start.html">作業を始める</a><a href="./02-template.html">入力テンプレートを取得す</a><a href="./03-import.html">Excelを取り込む</a><a href="./04-scenario.html">シナリオを確認する</a><a href="./05-joukowsky.html">A02 Joukowsk</a><a href="./06-longitudinal.html">L01 縦断水理計算で設</a><a href="./07-reports.html" aria-current="page">成果品様式を書き出す</a><a href="./08-transient.html">T01 単一管路の過渡解</a><a href="./09-compare.html">比較案を並べる</a>
+  </nav>
+</header>
+<main>
+<span class="eyebrow">手順 07 / 09</span>
+<h1>成果品様式を書き出す</h1>
+<p class="lead">再計算せず、保存済みの計算結果から1冊にまとめる。</p>
+<figure>
+  <img src="./img/s7-reports.png" alt="成果品様式を書き出すの画面">
+  <figcaption>プロジェクト内の成功した計算結果 2 件（縦断水理計算 / Joukowsky / Allievi）を1冊にまとめます。</figcaption>
+</figure>
+
+      <div class="table-scroll"><table>
+        <thead><tr><th>シート</th><th>内容</th></tr></thead>
+        <tbody>
+        <tr><td>① 計算結果</td><td>ケース諸元・波速・T₀・α・閉そく区分・ΔH・水撃圧・設計水圧・許容圧力・余裕度・判定（21列）</td></tr>
+        <tr><td>④ 水理計算書_&amp;lt;ケース名&amp;gt;</td><td>測点ごとの26列（成果品様式24列＋許容圧力・判定）</td></tr>
+        <tr><td>② 管路データ</td><td>管路ID・管種・D・t・L・粗度係数・始終点節点（9列）</td></tr>
+        <tr><td>③ 案件情報</td><td>案件名・設計者・作成日付・適用基準・バージョン・計算方法（8行）</td></tr>
+        </tbody>
+      </table></div>
+      <p>帳票の対象はプロジェクト内の成功した計算結果すべて。①と④が別ファイルに分かれない。</p>
+      <p>あわせて、選択した計算結果1件の Excel帳票（<code>.xlsx</code>）と計算記録JSON（<code>.json</code>）も書き出せる。JSONには由来情報のハッシュが入る。</p>
+<nav class="pager">
+  <span><a href="./06-longitudinal.html">← L01 縦断水理計算で設計内圧を出す</a></span>
+  <span><a href="./08-transient.html">T01 単一管路の過渡解析（補足） →</a></span>
+</nav>
+</main>
+</body>
+</html>

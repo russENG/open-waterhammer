@@ -27,6 +27,11 @@
 import type { Pipe } from "./types.js";
 import { GRAVITY } from "./formulas.js";
 
+/** 技術書 §8.4.2(2): 設計用水撃圧解析で一般に用いられる差分距離 [m] */
+export const MOC_GRID_SPACING_RECOMMENDED_MIN = 50;
+/** 技術書 §8.4.2(2): 本ソルバーが設計用途で許容する最大差分距離 [m] */
+export const MOC_GRID_SPACING_MAX = 200;
+
 // ═══════════════════════════════════════════════════════════════════════════════
 // 境界条件型（Discriminated Union）
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -206,6 +211,8 @@ export interface MocOptions {
   tMax?: number;
   /** 全管路共通の初期流量 Q₀ [m³/s]（省略時は各管路 BC から推算） */
   initialFlow?: number;
+  /** 定常計算から引き継ぐ節点水頭 [m] */
+  initialNodeHeads?: Record<string, number>;
 }
 
 export interface MocSnapshot {
@@ -279,8 +286,8 @@ export function harmonizeTimeStep(segs: MocPipeSegment[]): {
     if (relErr > 0.05) {
       warnings.push(
         `${s.id}: dt整合化で nReaches=${s.nReaches}→${N_new}、`
-        + `Δx の理想値からの誤差 ${(relErr * 100).toFixed(1)}%（CFL≠1）。`
-        + `nReaches を増やすか管路長/波速の比を見直してください。`,
+        + `Δx の理想値からの誤差 ${(relErr * 100).toFixed(1)}%（CFL<1）。`
+        + `特性線の足を格子間で補間します。`,
       );
     } else if (N_new !== s.nReaches) {
       warnings.push(`${s.id}: dt整合化で nReaches=${s.nReaches}→${N_new}（誤差 ${(relErr * 100).toFixed(2)}%）`);
@@ -289,6 +296,32 @@ export function harmonizeTimeStep(segs: MocPipeSegment[]): {
   });
 
   return { segs: harmonized, dt, warnings };
+}
+
+function validateGridSpacing(segs: MocPipeSegment[]): string[] {
+  const warnings: string[] = [];
+  for (const seg of segs) {
+    if (!Number.isInteger(seg.nReaches) || seg.nReaches < 1) {
+      throw new Error(`${seg.id}: 計算区間数は1以上の整数で指定してください。`);
+    }
+    const dx = seg.pipe.length / seg.nReaches;
+    if (dx > MOC_GRID_SPACING_MAX) {
+      const nMin = Math.ceil(seg.pipe.length / MOC_GRID_SPACING_MAX);
+      throw new Error(
+        `${seg.id}: 差分距離 Δx=${dx.toFixed(1)} m は設計用水撃圧解析の上限 `
+        + `${MOC_GRID_SPACING_MAX} m を超えています。`
+        + `計算区間数を ${nMin} 以上にしてください（技術書 §8.4.2(2)）。`,
+      );
+    }
+    if (dx < MOC_GRID_SPACING_RECOMMENDED_MIN) {
+      warnings.push(
+        `${seg.id}: 差分距離 Δx=${dx.toFixed(1)} m は一般的な実務目安 `
+        + `${MOC_GRID_SPACING_RECOMMENDED_MIN}～${MOC_GRID_SPACING_MAX} m より細かい設定です。`
+        + `精度上の問題はありませんが、計算負荷を確認してください（技術書 §8.4.2(2)）。`,
+      );
+    }
+  }
+  return warnings;
 }
 
 /** Hazen-Williams → Darcy-Weisbach 等価摩擦係数（局所流速版） */
@@ -590,6 +623,14 @@ function steadyHeadProfile(H_upstream: number, hfTotal: number, N: number): numb
   return Array.from({ length: N + 1 }, (_, i) => H_upstream - hfTotal * (i / N));
 }
 
+function interpolateGrid(values: number[], position: number): number {
+  const bounded = Math.min(Math.max(position, 0), values.length - 1);
+  const lower = Math.floor(bounded);
+  const upper = Math.min(lower + 1, values.length - 1);
+  const fraction = bounded - lower;
+  return values[lower]! + (values[upper]! - values[lower]!) * fraction;
+}
+
 // ═══════════════════════════════════════════════════════════════════════════════
 // メイン MOC ソルバー
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -602,9 +643,14 @@ export function runMoc(network: MocNetwork, options: MocOptions = {}): MocResult
   const { pipes: rawSegs, nodes } = network;
   if (rawSegs.length === 0) throw new Error("管路が 0 本です");
 
+  // 整合化処理へ渡す前に、計算区間数が格子として成立することを保証する。
+  validateGridSpacing(rawSegs);
+
   // ── dt 整合化（技術書 §8.4.2(2)）─────────────────────────────────────────
   const { segs, warnings: harmonizeWarnings } = harmonizeTimeStep(rawSegs);
   const warnings: string[] = [...harmonizeWarnings];
+  // 管路網では整合化により分割数が変わるため、実際に使用する差分距離を再検証する。
+  warnings.push(...validateGridSpacing(segs));
 
   // ── ノード接続グラフ構築 ──────────────────────────────────────────────────
   // nodeFlowIn[nodeId]  = 管路インデックスの配列（この node が下流端である管路）
@@ -661,7 +707,7 @@ export function runMoc(network: MocNetwork, options: MocOptions = {}): MocResult
   const nSteps = Math.ceil(tMax / dt_global);
 
   // ── 初期水頭プロファイル（BFS で各管路上流端 H を伝播）────────────────────
-  const nodeH0: Record<string, number> = {};
+  const nodeH0: Record<string, number> = { ...(options.initialNodeHeads ?? {}) };
   // シード: 既知水頭の境界ノード
   for (const [nodeId, bc] of Object.entries(nodes)) {
     if (bc.type === "reservoir") nodeH0[nodeId] = bc.head;
@@ -698,7 +744,13 @@ export function runMoc(network: MocNetwork, options: MocOptions = {}): MocResult
   // ── 状態配列の初期化 ──────────────────────────────────────────────────────
   const Hs: number[][] = segs.map((seg, pi) => {
     const H_up = nodeH0[seg.upstreamNodeId] ?? 0;
-    return steadyHeadProfile(H_up, physics[pi]!.hfTotal, seg.nReaches);
+    const H_down = nodeH0[seg.downstreamNodeId];
+    return H_down === undefined
+      ? steadyHeadProfile(H_up, physics[pi]!.hfTotal, seg.nReaches)
+      : Array.from(
+        { length: seg.nReaches + 1 },
+        (_, i) => H_up + (H_down - H_up) * (i / seg.nReaches),
+      );
   });
   const Qs: number[][] = segs.map((seg, pi) => new Array<number>(seg.nReaches + 1).fill(Q0arr[pi]!));
 
@@ -773,17 +825,21 @@ export function runMoc(network: MocNetwork, options: MocOptions = {}): MocResult
       const H = Hs[pi]!;
       const Q = Qs[pi]!;
       const { B, D, C_hw, dx, A } = physics[pi]!;
+      const courant = segs[pi]!.waveSpeed * dt_global / dx;
+      const travelDx = segs[pi]!.waveSpeed * dt_global;
       const Hnew = Hnews[pi]!;
       const Qnew = Qnews[pi]!;
 
       for (let i = 1; i <= N - 1; i++) {
-        const Qa = Q[i - 1]!;
-        const Qb = Q[i + 1]!;
+        const Qa = interpolateGrid(Q, i - courant);
+        const Qb = interpolateGrid(Q, i + courant);
+        const Ha = interpolateGrid(H, i - courant);
+        const Hb = interpolateGrid(H, i + courant);
         // 局所可変摩擦係数（H-W → D-W、現流速で再計算）
-        const Ra = localDarcyF(Qa / A, D, C_hw) * dx / (2 * GRAVITY * D * A * A);
-        const Rb = localDarcyF(Qb / A, D, C_hw) * dx / (2 * GRAVITY * D * A * A);
-        const CP = H[i - 1]! + B * Qa - Ra * Qa * Math.abs(Qa);
-        const CM = H[i + 1]! - B * Qb + Rb * Qb * Math.abs(Qb);
+        const Ra = localDarcyF(Qa / A, D, C_hw) * travelDx / (2 * GRAVITY * D * A * A);
+        const Rb = localDarcyF(Qb / A, D, C_hw) * travelDx / (2 * GRAVITY * D * A * A);
+        const CP = Ha + B * Qa - Ra * Qa * Math.abs(Qa);
+        const CM = Hb - B * Qb + Rb * Qb * Math.abs(Qb);
         Hnew[i] = (CP + CM) / 2;
         Qnew[i] = (CP - CM) / (2 * B);
       }
@@ -800,14 +856,18 @@ export function runMoc(network: MocNetwork, options: MocOptions = {}): MocResult
       const H = Hs[pi]!;
       const Q = Qs[pi]!;
       const { B, D, C_hw, dx, A } = physics[pi]!;
+      const courant = segs[pi]!.waveSpeed * dt_global / dx;
+      const travelDx = segs[pi]!.waveSpeed * dt_global;
 
-      const Q_N1 = Q[N - 1]!;
-      const R_dn = localDarcyF(Q_N1 / A, D, C_hw) * dx / (2 * GRAVITY * D * A * A);
-      CP_arr[pi] = H[N - 1]! + B * Q_N1 - R_dn * Q_N1 * Math.abs(Q_N1);
+      const Q_N1 = interpolateGrid(Q, N - courant);
+      const H_N1 = interpolateGrid(H, N - courant);
+      const R_dn = localDarcyF(Q_N1 / A, D, C_hw) * travelDx / (2 * GRAVITY * D * A * A);
+      CP_arr[pi] = H_N1 + B * Q_N1 - R_dn * Q_N1 * Math.abs(Q_N1);
 
-      const Q_1 = Q[1]!;
-      const R_up = localDarcyF(Q_1 / A, D, C_hw) * dx / (2 * GRAVITY * D * A * A);
-      CM_arr[pi] = H[1]! - B * Q_1 + R_up * Q_1 * Math.abs(Q_1);
+      const Q_1 = interpolateGrid(Q, courant);
+      const H_1 = interpolateGrid(H, courant);
+      const R_up = localDarcyF(Q_1 / A, D, C_hw) * travelDx / (2 * GRAVITY * D * A * A);
+      CM_arr[pi] = H_1 - B * Q_1 + R_up * Q_1 * Math.abs(Q_1);
     }
 
     // ── 3. 全ノードを一括処理 ───────────────────────────────────────────────

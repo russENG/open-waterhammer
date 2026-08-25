@@ -73,8 +73,10 @@ describe('mapWorkbookToRunInputs', () => {
     expect(canonicalModel.measurementPoints.map(({ pipeId }) => pipeId)).toEqual(['P-01', 'P-01'])
     expect(canonicalModel.hydraulicUnits).toHaveLength(1)
     expect(canonicalIssues.filter(({ code }) => code === 'POINT_PIPE_INFERRED')).toHaveLength(2)
-    expect(longitudinal.staticWaterLevel).toBe(0)
-    expect(warnings.some((warning) => warning.includes('staticWaterLevel') || warning.includes('静水位'))).toBe(true)
+    // 案件情報に静水位が無い場合は reservoir 節点の固定水頭で補い、その旨を警告に残す。
+    // 0 のまま計算すると全区間が負圧になるため、黙って 0 にはしない。
+    expect(longitudinal.staticWaterLevel).toBe(142)
+    expect(warnings.some((warning) => warning.includes('静水位'))).toBe(true)
   })
 
   test('network kinds (steady_network_python/epanet) are present only when both pipes and nodes are given', () => {

@@ -262,7 +262,7 @@ owh run <bundle> --case <id> --scenario <id> --out <new-bundle> [--python <path>
 シードされたサンプルワークスペース（`transient_protection_device` の初期ケース）では、貯水池
 `R-01` — 管路 `P-01` — 接続点 `J-01` — 管路 `P-02` — バルブ `V-01`（2秒閉鎖）というネットワークに
 対し、`J-01` にサージタンクを配置した結果、ベースライン最大水頭 ≈149.6 m → 防護後 80.0 m
-（貯水池水頭で頭打ち）、reductionRate ≈ 46.5% という有意な緩和を示す。
+（貯水池水頭で頭打ち）、EPANETで求めた初期定常状態からの reductionRate ≈ 29.7% という緩和を示す。
 
 **適用限界（重要）**: このサンプルの防護後計算では、最小水頭が大気圧を下回る区間（hmin ≈ −8.49 m）
 が現れる。これは物理的に不正確ではなく、**本ツールが柱分離（キャビテーション・気柱分離）モデルを
@@ -308,8 +308,8 @@ GIS の編集中データ（`modelSnapshot.geoDrafts`）と、Run が実際に�
 ## 10. 自動評価（Assessment）ルール
 
 自動評価は 5 状態ぴったり: `pass | warning | fail | needs_review | not_applicable`。人間による
-「承認（Approval）」記録は本リリースには存在しない——自動評価はあくまで参考情報であり、設計者の
-判断を代替しない（§13）。
+「承認（Approval）」記録は本リリースには存在しない。画面では評価の近くに、採用前に入力条件と
+計算結果を確認する旨を短く表示する（§13）。
 
 `judge_design_pressure`（技術書 式8.3.2 に基づく判定、`packages/core-py/open_waterhammer/formulas.py`）
 は、設計水圧と入力された許容圧力を比較する:
@@ -373,7 +373,8 @@ ExcelとWeb入力の責任分界、項目対応、再読込時の上書き規則
   （Python がキャメルケース化したフィールド名）を TypeScript の `SimpleFormulaResult` 型（一部
   スネークケースの命名を残す）へ 1 対 1 で明示的にマッピングする——汎用のケース変換では対応しきれない
   ため、フィールドごとに書き下している。既存の「Excel report（`generateRunReport`）」「Run JSON」の
-  2出力に加わる3つ目の出力であり、いずれも既存の alpha・設計比較支援・適用限界の表示を保持する。
+  2出力に加わる3つ目の出力である。計算結果 Excel と Run JSON には、ライセンス、ソースコード URL、
+  無保証・責任制限を記録する。
 
 ---
 

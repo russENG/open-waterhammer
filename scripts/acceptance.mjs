@@ -239,11 +239,12 @@ const GOLDEN_NUMERICS = {
   },
   transient_protection_device: {
     // summary.protection.reductionRate for the golden PROTECTION_NETWORK + PROTECTION_DEVICE_
-    // SETTINGS above (surge_tank at J-01, tankArea 4, initialLevel 78.7) — matches the ≈46.5%
+    // SETTINGS above (surge_tank at J-01, tankArea 4, initialLevel 78.7) after the EPANET
+    // initial steady-state handoff — matches the ≈29.7%
     // figure already documented in docs/design-workspace.md §8. Pins the mitigation math
     // (baseline vs. protected MOC comparison) cross-runtime, the same way every other kind's
     // numeric goldens do.
-    reductionRate: 0.4653186845288916,
+    reductionRate: 0.2972749871677246,
   },
 };
 

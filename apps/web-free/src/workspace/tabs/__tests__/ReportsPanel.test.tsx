@@ -94,10 +94,10 @@ describe('ReportsPanel deliverable Excel button', () => {
     expect(await screen.findByText(/水理計算書|エラー/)).toBeVisible()
   })
 
-  test('the existing Excel report and Run JSON buttons and the applicability box are unaffected', () => {
+  test('keeps export actions without repeating the full warranty disclaimer on screen', () => {
     renderPanel([])
     expect(screen.getByRole('button', { name: /Excel帳票/ })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: /計算記録JSON/ })).toBeInTheDocument()
-    expect(screen.getByText('alpha · 設計比較支援')).toBeVisible()
+    expect(screen.queryByText(/本ソフトウェアは現状有姿/)).not.toBeInTheDocument()
   })
 })

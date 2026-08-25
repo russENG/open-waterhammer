@@ -13,7 +13,9 @@
     "typecheck": "npm run typecheck --workspaces --if-present",
     "lint": "npm run lint --workspaces --if-present && npm run lint:wording",
     "lint:wording": "node scripts/check-ui-wording.mjs",
-    "acceptance": "node scripts/acceptance.mjs"
+    "acceptance": "node scripts/acceptance.mjs",
+    "example:cases": "tsx examples/typical-cases.ts",
+    "typecheck:examples": "tsc -p examples --noEmit"
   },
   "engines": {
     "node": ">=22"

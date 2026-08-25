@@ -1,3 +1,9 @@
+import {
+  DEMO_LONGITUDINAL_CASES,
+  DEMO_LONGITUDINAL_NODES,
+  DEMO_LONGITUDINAL_PIPE,
+  TEMPLATE_SAMPLE_PROJECT_NAME,
+} from '@open-waterhammer/sample-data'
 import { deleteDB } from 'idb'
 import { afterEach, describe, expect, test } from 'vitest'
 
@@ -113,22 +119,26 @@ describe('browser workspace bootstrap', () => {
       pipes: [], nodes: [], cases: [], measurementPoints: [],
     }
 
-    await expect(createProjectFromExcel(opened.repository, workbook)).rejects.toThrow(/プロジェクト名/)
+    await expect(createProjectFromExcel(opened.repository, workbook)).rejects.toThrow(/案件名/)
     expect((await opened.repository.snapshot()).projects).toHaveLength(0)
     opened.repository.close()
   })
 
-  test('does not accept the untouched template placeholder as a project name', async () => {
+  // 配布テンプレートの既定名は「読み込めるが警告を出す」。以前はここで例外を投げていたため、
+  // アプリが配ったファイルをアプリ自身が受け付けられなかった。
+  test('accepts the shipped template project name but warns about renaming it', async () => {
     const databaseName = `owh-ui-bootstrap-${crypto.randomUUID()}`
     names.push(databaseName)
     const opened = await initializeBrowserWorkspace({ databaseName })
     const workbook = {
-      meta: { projectName: '（案件名を入力）', standardId: 'nochi_pipeline_2021' },
-      pipes: [], nodes: [], cases: [], measurementPoints: [],
+      meta: { projectName: TEMPLATE_SAMPLE_PROJECT_NAME, standardId: 'nochi_pipeline_2021' },
+      pipes: [DEMO_LONGITUDINAL_PIPE], nodes: DEMO_LONGITUDINAL_NODES,
+      cases: DEMO_LONGITUDINAL_CASES, measurementPoints: [],
     }
 
-    await expect(createProjectFromExcel(opened.repository, workbook)).rejects.toThrow(/プロジェクト名/)
-    expect((await opened.repository.snapshot()).projects).toHaveLength(0)
+    const created = await createProjectFromExcel(opened.repository, workbook)
+    expect(created.data.projects.map(({ name }) => name)).toEqual([TEMPLATE_SAMPLE_PROJECT_NAME])
+    expect(created.warnings.some((warning) => warning.includes('案件名がテンプレートの既定値のまま'))).toBe(true)
     opened.repository.close()
   })
 })

@@ -89,7 +89,16 @@ export function mapWorkbookToRunInputs(data: WorkbookData): {
   if (pipe) {
     runInputs.wave_speed = { pipe }
     if (calculationCase) {
-      runInputs.joukowsky_allievi = { pipe, calculationCase }
+      // 許容圧力（呼び圧力）は管路が持つ。値があれば設計水圧の判定が走る
+      // （core-py protocol.py の _joukowsky_allievi）。未入力なら判定しない。
+      runInputs.joukowsky_allievi = {
+        pipe,
+        calculationCase,
+        ...(pipe.allowablePressureMpa !== undefined ? { allowablePressureMpa: pipe.allowablePressureMpa } : {}),
+      }
+      if (pipe.allowablePressureMpa === undefined) {
+        warnings.push(`管路 ${pipe.id}: 許容圧力（呼び圧力）が未入力のため、設計水圧の判定は行いません。解析タブで入力すると判定できます。`)
+      }
     } else {
       warnings.push('シナリオ設定シートにシナリオが1件もないため、簡易水撃圧計算の入力は作成しませんでした。')
     }
@@ -98,10 +107,22 @@ export function mapWorkbookToRunInputs(data: WorkbookData): {
   }
 
   if (data.measurementPoints.length > 0) {
-    const longitudinal = canonicalToLongitudinalInput(canonical.model, 0)
-    runInputs.longitudinal_hydraulics = longitudinal.value ?? { points: data.measurementPoints, staticWaterLevel: 0 }
+    // 静水位は案件情報シートの static_water_level を正本にする。未入力のときだけ、
+    // reservoir 節点の固定水頭で補い、それも無ければ 0 に落として警告を出す。
+    const reservoirHead = data.nodes.find((node) => node.nodeType === 'reservoir')?.hydraulicGrade
+    const staticWaterLevel = data.meta.staticWaterLevel ?? reservoirHead ?? 0
+    if (data.meta.staticWaterLevel === undefined) {
+      warnings.push(reservoirHead !== undefined
+        ? `静水位（static_water_level）が未入力のため、reservoir 節点の固定水頭 ${reservoirHead} m を使いました。案件情報シートで確認してください。`
+        : '静水位（static_water_level）が未入力のため、縦断水理計算の静水位は 0 で作成しました。このままでは全区間が負圧になります。案件情報シートまたは解析タブで入力してください。')
+    }
+    const longitudinal = canonicalToLongitudinalInput(canonical.model, staticWaterLevel)
+    const allowable = pipe?.allowablePressureMpa
+    runInputs.longitudinal_hydraulics = {
+      ...(longitudinal.value ?? { points: data.measurementPoints, staticWaterLevel }),
+      ...(allowable !== undefined ? { allowablePressureMpa: allowable } : {}),
+    }
     if (!longitudinal.value) warnings.push('測点と管路の対応を解決できないため、後方互換用に測点表の重複値を使って縦断入力を作成しました。')
-    warnings.push('longitudinal_hydraulics の静水位（staticWaterLevel）は既定値 0 で作成しました。解析タブで実際の値を確認・入力してください。')
   }
 
   if (data.pipes.length > 0 && data.nodes.length > 0) {

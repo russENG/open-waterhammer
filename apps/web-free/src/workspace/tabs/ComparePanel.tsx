@@ -2,11 +2,12 @@ import type { Case, JsonValue, Run, Scenario } from '@open-waterhammer/contracts
 
 import { caseStateLabel } from '../case-state-labels'
 import { buildComparisonRows, formatComparisonNumber } from '../comparison'
+import { caseDisplayName } from '../project-label'
+import { describeResultPath } from '../result-paths'
 import { assessmentStatusLabel, runKindLabel } from '../run-display-labels'
 
 function label(caseRecord: Case): string {
-  const root = caseRecord.modelSnapshot
-  return root && typeof root === 'object' && !Array.isArray(root) && typeof root.designLabel === 'string' ? root.designLabel : caseRecord.revisionReason ?? caseRecord.id.slice(0, 8)
+  return caseDisplayName(caseRecord)
 }
 
 function valueText(value: JsonValue | undefined): string {
@@ -26,11 +27,11 @@ export function ComparePanel({ cases, scenarios, runs }: { cases: Case[]; scenar
       <tr><th>変更理由</th>{cases.map((record) => <td key={record.id}>{record.revisionReason ?? '起点'}</td>)}</tr>
       <tr><th>系譜</th>{cases.map((record) => <td key={record.id}>{record.parentCaseId?.slice(0, 13) ?? '—'}</td>)}</tr>
       <tr><th>最新の計算結果</th>{latest.map((run, index) => <td key={cases[index]!.id}>{run ? runKindLabel(run.kind) : '未計算'}</td>)}</tr>
-      <tr><th>評価</th>{latest.map((run, index) => <td key={cases[index]!.id}><span className={`assessment assessment--${run?.assessment.status ?? 'not_applicable'}`}>{run ? assessmentStatusLabel(run.assessment.status) : '—'}</span></td>)}</tr>
+      <tr><th>自動評価</th>{latest.map((run, index) => <td key={cases[index]!.id}><span className={`assessment assessment--${run?.assessment.status ?? 'not_applicable'}`}>{run ? assessmentStatusLabel(run.assessment.status) : '—'}</span></td>)}</tr>
       <tr className="comparison-group"><th colSpan={cases.length + 1}>条件差分・モデル＋シナリオ</th></tr>
-      {rows.conditionRows.map((row) => <tr key={row.path}><th>{row.path}</th>{row.values.map((value, index) => <td key={cases[index]!.id}>{valueText(value)}</td>)}</tr>)}
+      {rows.conditionRows.map((row) => <tr key={row.path}><th title={row.path}>{describeResultPath(row.path)}</th>{row.values.map((value, index) => <td key={cases[index]!.id}>{valueText(value)}</td>)}</tr>)}
       <tr className="comparison-group"><th colSpan={cases.length + 1}>保存済み計算結果の差分・数値要約</th></tr>
-      {rows.resultRows.map((row) => <tr key={row.path}><th>{row.path}</th>{row.values.map((value, index) => <td key={cases[index]!.id}><strong>{value === undefined ? '—' : formatComparisonNumber(value)}</strong>{index > 0 && row.deltas[index] !== undefined ? <small className={row.deltas[index]! > 0 ? 'delta-up' : 'delta-down'}>{row.deltas[index]! >= 0 ? '+' : ''}{formatComparisonNumber(row.deltas[index]!)}</small> : null}</td>)}</tr>)}
+      {rows.resultRows.map((row) => <tr key={row.path}><th title={row.path}>{describeResultPath(row.path)}</th>{row.values.map((value, index) => <td key={cases[index]!.id}><strong>{value === undefined ? '—' : formatComparisonNumber(value)}</strong>{index > 0 && row.deltas[index] !== undefined ? <small className={row.deltas[index]! > 0 ? 'delta-up' : 'delta-down'}>{row.deltas[index]! >= 0 ? '+' : ''}{formatComparisonNumber(row.deltas[index]!)}</small> : null}</td>)}</tr>)}
     </tbody></table></div>
   </div>
 }

@@ -1,5 +1,9 @@
 import type { Case, JsonValue, Run, Scenario } from '@open-waterhammer/contracts'
 
+// 平坦化は result-paths.ts が正本。既存の呼び出し元のためにここから再輸出する。
+export { flattenComparisonValue } from './result-paths'
+import { flattenComparisonValue, isComparablePath } from './result-paths'
+
 export interface ComparisonRow<T> {
   path: string
   values: Array<T | undefined>
@@ -10,11 +14,7 @@ export function formatComparisonNumber(value: number): string {
 }
 
 /** JsonValue を「パス → 末端値」の一覧に再帰的に平坦化する（配列は [i]、オブジェクトは .key で連結）。 */
-export function flattenComparisonValue(value: JsonValue, prefix = ''): Array<[string, JsonValue]> {
-  if (Array.isArray(value)) return value.flatMap((child, index) => flattenComparisonValue(child, `${prefix}[${index}]`))
-  if (value && typeof value === 'object') return Object.keys(value).sort().flatMap((key) => flattenComparisonValue(value[key]!, prefix ? `${prefix}.${key}` : key))
-  return [[prefix, value]]
-}
+
 
 function latestRun(caseId: string, runs: Run[]): Run | undefined {
   return runs.filter((run) => run.caseId === caseId).sort((left, right) => right.updatedAt.localeCompare(left.updatedAt))[0]
@@ -41,7 +41,12 @@ export function buildComparisonRows(cases: Case[], scenarios: Scenario[], runs: 
 
   const results = cases.map((caseRecord) => {
     const run = latestRun(caseRecord.id, runs)
-    return Object.fromEntries(run ? flattenComparisonValue(run.summary).filter((entry): entry is [string, number] => typeof entry[1] === 'number' && Number.isFinite(entry[1])).map(([path, value]) => [`summary.${path}`, value]) : [])
+    // 時系列・包絡線の要素ごとの行は出さない（1計算で数百行になり表がスクロールできない）。
+    // 系列の比較は結果タブの図と証跡パネルの要約に任せる。
+    return Object.fromEntries(run ? flattenComparisonValue(run.summary)
+      .filter(([path]) => isComparablePath(path))
+      .filter((entry): entry is [string, number] => typeof entry[1] === 'number' && Number.isFinite(entry[1]))
+      .map(([path, value]) => [`summary.${path}`, value]) : [])
   })
   const resultPaths = [...new Set(results.flatMap(Object.keys))].sort()
   const resultRows = resultPaths.map((path) => {

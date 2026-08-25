@@ -29,7 +29,15 @@ const OPTIONAL_CANONICAL_PATHS: Record<(typeof RUN_KINDS)[number], string[]> = {
   steady_network_epanet: [
     'model.caseName', 'model.pipes.0.minorLossCoeff', 'model.nodes.0.head', 'model.nodes.1.demand',
   ],
-  longitudinal_hydraulics: ['model.caseName', 'model.waterhammerRatio'],
+  // 水撃圧は MPa 直接指定と静水圧比のどちらも任意。測点の参照列（pipeId / nodeId /
+  // distanceAlongPipe）は Excel テンプレートでも「○任意」なので必須にしない。
+  longitudinal_hydraulics: [
+    'model.caseName', 'model.waterhammerPressureMpa', 'model.waterhammerRatio',
+    // OPTIONAL_PATHS は配列添字を 0 に正規化して照合するので、テンプレートの
+    // 2件目の測点にも同じ任意判定が効く（transient_protection_device の pipes.0/1 と同じ）。
+    'model.points.0.pipeId', 'model.points.0.nodeId', 'model.points.0.distanceAlongPipe',
+    'model.points.1.pipeId', 'model.points.1.nodeId', 'model.points.1.distanceAlongPipe',
+  ],
   transient_single_pipe: [
     'model.pipe.name', 'model.pipe.startNodeId', 'model.pipe.endNodeId',
     'event.nReaches', 'event.tMax', 'event.operation',
@@ -495,6 +503,38 @@ describe('RunKind engineering field catalog', () => {
     expect(engineeringFieldsFor('transient_network', currentOnlySelect).find(({ path }) => path === 'network.nodes.R-01.operation'))
       .toMatchObject({ kind: 'select', required: false })
     expect(validateEngineeringState('transient_network', currentOnlySelect)).toContainEqual(expect.objectContaining({ path: 'network.nodes.R-01.operation' }))
+  })
+
+  test('rejects a design-waterhammer grid coarser than 200 m and requires integer reach counts', () => {
+    const coarseSingle = updateEngineeringValue(
+      ENGINEERING_TEMPLATES.transient_single_pipe,
+      { target: 'event', path: 'nReaches' },
+      2,
+    )
+    expect(validateEngineeringState('transient_single_pipe', coarseSingle)).toContainEqual({
+      path: 'nReaches',
+      message: '管路の差分距離は250.0 mです。設計用水撃圧解析の上限200 mを満たすよう、計算区間数を3以上にしてください（技術書 §8.4.2(2)）。',
+    })
+
+    const coarseNetwork = updateEngineeringValue(
+      ENGINEERING_TEMPLATES.transient_network,
+      { target: 'model', path: 'network.pipes.0.nReaches' },
+      2,
+    )
+    expect(validateEngineeringState('transient_network', coarseNetwork)).toContainEqual(expect.objectContaining({
+      path: 'network.pipes.0.nReaches',
+      message: expect.stringContaining('計算区間数を3以上'),
+    }))
+
+    const fractional = updateEngineeringValue(
+      ENGINEERING_TEMPLATES.transient_single_pipe,
+      { target: 'event', path: 'nReaches' },
+      2.5,
+    )
+    expect(validateEngineeringState('transient_single_pipe', fractional)).toContainEqual({
+      path: 'nReaches',
+      message: '管路の計算区間数は整数で入力してください。',
+    })
   })
 
   test('deletes an optional select when cleared instead of retaining an empty protocol string', () => {

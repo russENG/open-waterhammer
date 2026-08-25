@@ -1,0 +1,47 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>A02 Joukowsky / Allievi で水撃圧を求める — Open Waterhammer デモ手順</title>
+<meta name="description" content="Open Waterhammer のデモ手順（画面写真つき）。Excel入力からブラウザ内計算、農水省 成果品様式の書き出しまで。">
+<link rel="stylesheet" href="./style.css">
+</head>
+<body>
+<header class="site">
+  <strong>Open Waterhammer</strong>
+  <nav aria-label="デモ手順">
+    <a href="../">作業画面</a>
+    <a href="./">デモ手順 目次</a>
+    <a href="./01-start.html">作業を始める</a><a href="./02-template.html">入力テンプレートを取得す</a><a href="./03-import.html">Excelを取り込む</a><a href="./04-scenario.html">シナリオを確認する</a><a href="./05-joukowsky.html" aria-current="page">A02 Joukowsk</a><a href="./06-longitudinal.html">L01 縦断水理計算で設</a><a href="./07-reports.html">成果品様式を書き出す</a><a href="./08-transient.html">T01 単一管路の過渡解</a><a href="./09-compare.html">比較案を並べる</a>
+  </nav>
+</header>
+<main>
+<span class="eyebrow">手順 05 / 09</span>
+<h1>A02 Joukowsky / Allievi で水撃圧を求める</h1>
+<p class="lead">成果品様式①「計算結果」シートの中核。</p>
+<figure>
+  <img src="./img/s5-results.png" alt="A02 Joukowsky / Allievi で水撃圧を求めるの画面">
+  <figcaption>結果タブ。方式ごとの主要指標を単位つきで表示する。</figcaption>
+</figure>
+
+      <div class="table-scroll"><table>
+        <thead><tr><th>項目</th><th>値</th></tr></thead>
+        <tbody>
+        <tr><td>計算状態</td><td>計算完了</td></tr>
+        <tr><td>自動評価</td><td>不適合</td></tr>
+        <tr><td>水撃圧水頭 ΔH [m]</td><td>178.49</td></tr>
+        <tr><td>閉そく区分</td><td>急閉そく</td></tr>
+        <tr><td>波速 a [m/s]</td><td>1095.3</td></tr>
+        </tbody>
+      </table></div>
+      <p>閉そく区分は 2L/a と等価閉そく時間 tν の比で決まる。急閉そくならジューコフスキー式、緩閉そくならアリエビ式を適用する（技術書 §8.3.2）。</p>
+      <p>管路に許容圧力（呼び圧力）が入っていれば、設計水圧との判定がここで走る。判定結果は成果品様式①の「設計水圧／許容圧力／余裕度／判定」列に出力される。</p>
+      <p class="talk">話す一言：「同じ入力なら同じ由来情報ハッシュになります。再現性の担保はここです」</p>
+<nav class="pager">
+  <span><a href="./04-scenario.html">← シナリオを確認する</a></span>
+  <span><a href="./06-longitudinal.html">L01 縦断水理計算で設計内圧を出す →</a></span>
+</nav>
+</main>
+</body>
+</html>

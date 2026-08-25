@@ -41,3 +41,30 @@ export function runStatusLabel(status: Run['status']): string {
 export function assessmentStatusLabel(status: Run['assessment']['status']): string {
   return ASSESSMENT_STATUS_LABELS[status]
 }
+
+/**
+ * 自動評価が `needs_review`（要確認）になる理由を説明する。
+ *
+ * 判定材料が無いときの既定値が `needs_review` なので、指摘0件と併記されると
+ * 「何を確認すればよいのか分からない」状態になっていた。方式ごとに、
+ * 判定できる余地があるのか（＝許容圧力を入れれば判定される）を区別して伝える。
+ */
+const DESIGN_PRESSURE_JUDGED_KINDS = new Set<RunKind>([
+  'joukowsky_allievi', 'empirical_pressure', 'longitudinal_hydraulics',
+])
+
+export function assessmentNote(run: Run): string {
+  if (run.assessment.findings.length > 0) return ''
+  switch (run.assessment.status) {
+    case 'pass':
+      return '判定した項目はすべて基準内でした。'
+    case 'needs_review':
+      return DESIGN_PRESSURE_JUDGED_KINDS.has(run.kind)
+        ? '許容圧力（呼び圧力）が未入力のため、設計水圧の判定を行っていません。解析タブで入力すると判定できます。'
+        : 'この計算方式には自動判定がありません。結果の妥当性は設計者が確認してください。'
+    case 'not_applicable':
+      return 'この計算結果は自動判定の対象外です。'
+    default:
+      return '指摘事項はありません。'
+  }
+}

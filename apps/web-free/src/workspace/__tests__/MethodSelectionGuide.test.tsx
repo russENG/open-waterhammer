@@ -15,7 +15,7 @@ function setupAnalysisPanel() {
   const scenarios = data.scenarios.filter(({ caseId }) => caseId === caseRecord.id)
   render(
     <WorkspaceProvider repository={repository} initialData={data}>
-      <AnalysisPanel caseRecord={caseRecord} scenarios={scenarios} scenario={scenarios[0]} onScenarioSelect={() => {}} onRunSelected={() => {}} />
+      <AnalysisPanel caseRecord={caseRecord} scenarios={scenarios} scenario={scenarios[0]} onScenarioSelect={() => {}} onRunSelected={() => {}} onFork={() => {}} />
     </WorkspaceProvider>,
   )
   return { data, caseRecord }

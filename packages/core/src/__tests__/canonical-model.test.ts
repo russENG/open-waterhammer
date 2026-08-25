@@ -77,6 +77,23 @@ describe("canonical hydraulic model", () => {
     assert.equal(built.issues.filter(({ code }) => code === "POINT_PIPE_INFERRED").length, 2);
   });
 
+  test("fills an omitted distance from ordered lengths when the pipe reference is explicit", () => {
+    const built = buildCanonicalHydraulicModel({
+      source: "excel",
+      nodes,
+      pipes: [pipes[0]!],
+      measurementPoints: [
+        point({ id: "MP-01", pipeId: "P-01", pipeLength: 30 }),
+        point({ id: "MP-02", pipeId: "P-01", pipeLength: 45 }),
+      ],
+    });
+
+    assert.equal(built.model.measurementPoints[0]?.distanceAlongPipe, 30);
+    assert.equal(built.model.measurementPoints[1]?.distanceAlongPipe, 75);
+    assert.equal(built.model.hydraulicUnits.length, 1);
+    assert.equal(built.model.hydraulicUnits[0]?.designFlow, 0.2);
+  });
+
   test("splits hydraulic units when design flow changes on one pipe", () => {
     const built = buildCanonicalHydraulicModel({
       source: "excel",

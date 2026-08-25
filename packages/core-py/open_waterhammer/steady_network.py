@@ -87,8 +87,58 @@ def _hazen_williams_loss(
     return (velocity, velocity_head, gradient, gradient * length)
 
 
+def _detect_out_of_scope_topology(
+    pipes: list[NetworkPipeDef],
+    reservoirs: list[NetworkNodeDef],
+    visited: set[str],
+    parent_pipe: dict[str, str],
+) -> list[str]:
+    """Warn when the input leaves the tree / single-reservoir assumption.
+
+    BFS keeps only the first pipe that reaches each node. A pipe whose both ends
+    are already reached but which was never adopted as a parent closes a cycle —
+    either a real loop or a parallel inflow from a second reservoir. This solver
+    drops such pipes, so its flow split no longer matches reality.
+    """
+    warnings: list[str] = []
+
+    used_pipe_ids = set(parent_pipe.values())
+    excluded = [
+        pipe
+        for pipe in pipes
+        if pipe.id not in used_pipe_ids
+        and pipe.upstream_node_id in visited
+        and pipe.downstream_node_id in visited
+    ]
+
+    if excluded:
+        warnings.append(
+            "閉路（ループまたは複数貯水槽の並行流入）を検出しました: "
+            + ", ".join(pipe.id for pipe in excluded)
+            + "。本ソルバーは樹枝状管路網（ループなし・単一貯水槽）専用のため、"
+            "これらの管路は計算から除外され、結果は実際の流量配分・水頭と一致しません。"
+            "ループを含む管路網は EPANET 経路で計算してください。"
+        )
+
+    if len(reservoirs) > 1:
+        warnings.append(
+            f"reservoir ノードが {len(reservoirs)} 個あります"
+            f"（{', '.join(r.id for r in reservoirs)}）。"
+            "本ソルバーは各ノードへ最初に到達した経路だけを解くため、"
+            "2 つ目以降の貯水槽からの流入は無視されます。"
+            "複数の水源を持つ管路網は EPANET 経路で計算してください。"
+        )
+
+    return warnings
+
+
 def calc_steady_network(input_data: SteadyNetworkInput) -> SteadyNetworkResult:
-    """Calculate known-demand steady hydraulics for a tree network."""
+    """Calculate known-demand steady hydraulics for a tree network.
+
+    前提を外れた入力（ループ・複数貯水槽）は例外にせず ``warnings`` で報告する。
+    本ソルバーは閉路を構成する管路を計算から除外するため、その場合の結果は
+    実際の流量配分と一致しない。EPANET 経路を使うこと。
+    """
     pipes = input_data.pipes
     nodes = input_data.nodes
     warnings: list[str] = []
@@ -135,6 +185,10 @@ def calc_steady_network(input_data: SteadyNetworkInput) -> SteadyNetworkResult:
     for node in nodes:
         if node.id not in visited:
             warnings.append(f"{node.id}: reservoir から到達できません")
+
+    warnings.extend(
+        _detect_out_of_scope_topology(pipes, reservoirs, visited, parent_pipe)
+    )
 
     subtree_demand = {
         node.id: node.demand if node.type == "demand" else 0.0 for node in nodes

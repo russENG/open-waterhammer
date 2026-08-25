@@ -134,6 +134,9 @@ def _result(
 # のハンドラから呼ばれる。入力のみに依存する純粋関数（決定論的）。
 
 RULE_DESIGN_PRESSURE = "judge_design_pressure/8.3.2"
+# 過渡解析の最小水頭が負圧になった管路を指摘する。水柱分離の検討要否の目印であって、
+# 不適合の断定ではないので status は warning に倒す。
+RULE_NEGATIVE_PRESSURE = "negative_pressure/8.4"
 
 _ASSESSMENT_STATUS_BY_JUDGEMENT: dict[str, str] = {"ok": "pass", "warning": "warning", "ng": "fail"}
 _ASSESSMENT_STATUS_SEVERITY: dict[str, int] = {"pass": 0, "warning": 1, "fail": 2}
@@ -376,12 +379,20 @@ def _longitudinal(model: dict[str, Any], scenario: dict[str, Any]) -> dict[str, 
     if allowable_pressure_mpa is not None:
         # 各測点の設計内圧 (Pp) を個別に判定し、最悪ステータスを全体判定とする。
         # point_results は入力 points の順序を保つため、findings も測点順で安定する。
+        # 負圧区間は設計内圧が未算定 (None) なので判定対象から外す
+        # （longitudinal_hydraulic.py 側で警告済み）。
         targets = [
             (point.point_id, point.design_pressure, allowable_pressure_mpa, point.point_id)
             for point in output.point_results
+            if point.design_pressure is not None
         ]
-        assessment, messages = _assess_design_pressure_targets(targets)
-        warnings += messages
+        if targets:
+            assessment, messages = _assess_design_pressure_targets(targets)
+            warnings += messages
+        else:
+            warnings.append(
+                _skipped_assessment_warning("設計内圧を算定できた測点がないため")
+            )
     elif allowable_present:
         warnings.append(_skipped_assessment_warning(_ALLOWABLE_PRESSURE_INVALID_REASON))
 
@@ -423,13 +434,58 @@ def _moc_output(method: str, model: dict[str, Any], scenario: dict[str, Any], ou
             for pipe_id, pipe in converted_pipes.items()
         },
     }
+    assessment, negative_pressure_messages = _assess_negative_pressure(converted_pipes)
     time_series = {
         "pipes": {
             pipe_id: pipe["snapshots"] for pipe_id, pipe in converted_pipes.items()
         },
         "nodes": converted_nodes,
     }
-    return _result(method, model, scenario, summary, output.warnings, time_series)
+    return _result(
+        method,
+        model,
+        scenario,
+        summary,
+        list(output.warnings) + negative_pressure_messages,
+        time_series,
+        assessment=assessment,
+    )
+
+
+def _assess_negative_pressure(
+    pipes: dict[str, dict[str, Any]],
+) -> tuple[dict[str, Any] | None, list[str]]:
+    """各管路の Hmin が負圧になっていないかを判定する.
+
+    過渡解析には設計水圧の判定が無く、負圧が出ても `needs_review` のまま
+    指摘0件で返っていた（利用者からは「何を確認すればよいか分からない」状態）。
+    最小水頭が負の管路を1件ずつ finding にし、全体は warning とする。
+    負圧が無ければ pass（判定した上で問題なし）を返し、needs_review と区別する。
+    """
+    findings: list[dict[str, Any]] = []
+    messages: list[str] = []
+    for pipe_id, pipe in pipes.items():
+        h_min_series = [value for value in pipe.get("Hmin", []) if isinstance(value, (int, float))]
+        if not h_min_series:
+            continue
+        h_min = min(h_min_series)
+        if h_min >= 0:
+            continue
+        findings.append(
+            {
+                "targetRef": pipe_id,
+                "observedValue": h_min,
+                "threshold": 0,
+                "unit": "m",
+                "ruleId": RULE_NEGATIVE_PRESSURE,
+            }
+        )
+        messages.append(
+            f"管路 {pipe_id}: 最小水頭 {h_min:.2f} m が負圧です。水柱分離の検討が必要です。"
+        )
+    if not findings:
+        return {"status": "pass", "findings": []}, messages
+    return {"status": "warning", "findings": findings}, messages
 
 
 def _boundary_condition(value: dict[str, Any]) -> Any:
@@ -520,7 +576,11 @@ def _transient_network(model: dict[str, Any], scenario: dict[str, Any]) -> dict[
     options = model.get("options", {})
     output = run_moc(
         _network(_required(model, "network")),
-        MocOptions(t_max=options.get("tMax"), initial_flow=options.get("initialFlow")),
+        MocOptions(
+            t_max=options.get("tMax"),
+            initial_flow=options.get("initialFlow"),
+            initial_node_heads=options.get("initialNodeHeads"),
+        ),
     )
     return _moc_output("moc-network", model, scenario, output)
 
@@ -594,7 +654,11 @@ def _transient_protection(model: dict[str, Any], scenario: dict[str, Any]) -> di
             )
 
     options = model.get("options", {})
-    moc_options = MocOptions(t_max=options.get("tMax"), initial_flow=options.get("initialFlow"))
+    moc_options = MocOptions(
+        t_max=options.get("tMax"),
+        initial_flow=options.get("initialFlow"),
+        initial_node_heads=options.get("initialNodeHeads"),
+    )
     baseline_output = run_moc(_network(network_value), moc_options)
 
     protected_network_value = copy.deepcopy(network_value)
