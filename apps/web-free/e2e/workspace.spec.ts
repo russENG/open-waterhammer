@@ -248,6 +248,7 @@ test('all exact RunKinds execute and persist through the production browser regi
       // Fresh drafts deliberately omit 許容圧力 (withoutDemoOnlyAllowablePressure strips the
       // demo-only threshold from ENGINEERING_TEMPLATES), so enter it the way an engineer
       // would; the assessment assertion below depends on this typed-in threshold.
+      await page.locator('details.advanced-engineering-fields').getByText(/詳細な計算条件/).click()
       await page.getByLabel(/許容圧力/).fill('0.75')
     }
     await page.getByRole('button', { name: '入力条件を保存' }).click()
