@@ -77,7 +77,7 @@ const BLANK_ROWS = { pipe: 12, node: 12, point: 20, case: 8 } as const;
 
 // ─── 選択肢 ───────────────────────────────────────────────────────────────────
 
-const PIPE_TYPE_CODES = [
+const PIPE_MATERIAL_CODES = [
   "steel", "ductile_iron", "rcp", "cpcp", "upvc",
   "pe2", "pe3_pe100", "wdpe",
   "grp_fw1", "grp_fw2", "grp_fw3", "grp_fw4", "grp_fw5", "gfpe",
@@ -87,7 +87,7 @@ const NODE_TYPE_CODES = ["reservoir", "junction", "tank", "pump_node", "valve_no
 
 const OPERATION_TYPE_CODES = ["valve_close", "valve_open", "pump_stop", "pump_start", "combined"] as const;
 
-const PIPE_TYPE_LABELS: ReadonlyArray<readonly [string, string, string]> = [
+const PIPE_MATERIAL_LABELS: ReadonlyArray<readonly [string, string, string]> = [
   ["steel", "鋼管", "Steel pipe"],
   ["ductile_iron", "ダクタイル鋳鉄管", "Ductile iron pipe"],
   ["rcp", "遠心力鉄筋コンクリート管", "Reinforced concrete pipe (RCP)"],
@@ -128,13 +128,13 @@ const PIPE_COLS: readonly ColumnDef[] = [
   { id: "pipe_name", ja: "管路名", cls: "optional", width: 14 },
   { id: "start_node", ja: "始点節点ID", cls: "required", width: 12 },
   { id: "end_node", ja: "終点節点ID", cls: "required", width: 12 },
-  { id: "pipe_type", ja: "管種コード", cls: "required", width: 15, list: PIPE_TYPE_CODES },
+  { id: "pipe_material", ja: "管種コード", cls: "required", width: 15, list: PIPE_MATERIAL_CODES },
   { id: "inner_diameter", ja: "管内径 D [m]", cls: "required", width: 14 },
   { id: "wall_thickness", ja: "管厚 t [m]", cls: "required", width: 13 },
   { id: "length", ja: "管路延長 L [m]", cls: "required", width: 14 },
-  { id: "roughness_coeff", ja: "粗度係数 C（ヘーゼン・ウィリアムス）", cls: "required", width: 16 },
+  { id: "hazen_williams_c", ja: "粗度係数 C（ヘーゼン・ウィリアムス）", cls: "required", width: 16 },
   { id: "youngs_modulus", ja: "ヤング係数 Eₛ [kN/m²]・空欄なら管種から自動", cls: "optional", width: 18 },
-  { id: "c1_coeff", ja: "埋設状況係数 C₁・空欄なら 1.0", cls: "optional", width: 16 },
+  { id: "pipe_restraint_coeff", ja: "埋設状況係数 C₁・空欄なら 1.0", cls: "optional", width: 18 },
 ];
 
 const NODE_COLS: readonly ColumnDef[] = [
@@ -150,7 +150,7 @@ const CASE_COLS: readonly ColumnDef[] = [
   { id: "case_name", ja: "ケース名", cls: "required", width: 18 },
   { id: "description", ja: "説明", cls: "optional", width: 40 },
   { id: "operation_type", ja: "操作種別", cls: "required", width: 15, list: OPERATION_TYPE_CODES },
-  { id: "target_facility_id", ja: "対象施設ID（バルブ・ポンプ等）", cls: "required", width: 18 },
+  { id: "target_device_id", ja: "対象施設ID（バルブ・ポンプ等）", cls: "required", width: 18 },
   { id: "initial_velocity", ja: "初期流速 V₀ [m/s]", cls: "required", width: 16 },
   { id: "initial_head", ja: "初期圧力水頭 H₀ [m]", cls: "required", width: 17 },
   { id: "close_time", ja: "等価閉そく時間 tν [s]・バルブ操作は必須", cls: "optional", width: 18 },
@@ -161,15 +161,15 @@ const POINT_COLS: readonly ColumnDef[] = [
   { id: "point_name", ja: "測点名", cls: "optional", width: 14 },
   { id: "horizontal_distance", ja: "単距離 Lh [m]", cls: "required", width: 14 },
   { id: "ground_level", ja: "地盤高 GL [m]", cls: "required", width: 14 },
-  { id: "pipe_center_height", ja: "管中心高 FH [m]", cls: "required", width: 15 },
-  { id: "pipe_length", ja: "管長 SL [m]", cls: "required", width: 13 },
+  { id: "pipe_centerline_elevation", ja: "管中心高 FH [m]", cls: "required", width: 17 },
+  { id: "slope_length", ja: "管長 SL [m]（斜距離）", cls: "required", width: 14 },
   { id: "flow_rate", ja: "流量 Q [m³/s]", cls: "required", width: 14 },
-  { id: "diameter", ja: "管径 D [m]", cls: "required", width: 13 },
-  { id: "roughness_c", ja: "流速係数 CI（ヘーゼン・ウィリアムス C）", cls: "required", width: 16 },
+  { id: "inner_diameter", ja: "管径 D [m]（内径）", cls: "required", width: 14 },
+  { id: "hazen_williams_c", ja: "流速係数 CI（ヘーゼン・ウィリアムス C）", cls: "required", width: 16 },
   { id: "bend_loss_coeff", ja: "湾曲損失係数 fb・既定 0", cls: "optional", width: 15 },
   { id: "valve_loss_coeff", ja: "バルブ損失係数 fv・既定 0", cls: "optional", width: 15 },
   { id: "branch_loss_coeff", ja: "直角分流損失係数 fβ・既定 0", cls: "optional", width: 16 },
-  { id: "other_loss", ja: "その他損失水頭 [m]", cls: "optional", width: 15 },
+  { id: "other_minor_loss_head", ja: "その他損失水頭 [m]", cls: "optional", width: 18 },
 ];
 
 /** 案件情報シートの行スキーマ（キー・バリュー形式） */
@@ -401,23 +401,24 @@ function addMeasurementPointsSheet(wb: ExcelJS.Workbook, points: MeasurementPoin
 
 /** 用語対応表: 日本語名 / English / 記号 / 単位 / フィールドID */
 const GLOSSARY: ReadonlyArray<readonly [string, string, string, string, string]> = [
-  ["管内径", "Inner diameter", "D", "m", "inner_diameter / diameter"],
+  ["管種（管材）", "Pipe material", "—", "—", "pipe_material"],
+  ["管内径", "Inner diameter", "D", "m", "inner_diameter"],
   ["管厚", "Wall thickness", "t", "m", "wall_thickness"],
   ["管路延長", "Pipe length", "L", "m", "length"],
-  ["管長（斜距離）", "Slope length", "SL", "m", "pipe_length"],
+  ["管長（斜距離）", "Slope length", "SL", "m", "slope_length"],
   ["単距離（水平距離）", "Horizontal distance", "Lh", "m", "horizontal_distance"],
   ["地盤高", "Ground level / elevation", "GL", "m", "ground_level / elevation"],
-  ["管中心高", "Pipe centreline elevation", "FH", "m", "pipe_center_height"],
+  ["管中心高", "Pipe centreline elevation", "FH", "m", "pipe_centerline_elevation"],
   ["流量", "Flow rate / discharge", "Q", "m³/s", "flow_rate"],
   ["流速", "Flow velocity", "V", "m/s", "initial_velocity"],
   ["初期圧力水頭", "Initial pressure head", "H₀", "m", "initial_head"],
-  ["粗度係数（流速係数）", "Hazen-Williams roughness coefficient", "C, CI", "—", "roughness_coeff / roughness_c"],
+  ["粗度係数（流速係数）", "Hazen-Williams roughness coefficient", "C, CI", "—", "hazen_williams_c"],
   ["ヤング係数（縦弾性係数）", "Young modulus of pipe material", "Eₛ", "kN/m²", "youngs_modulus"],
-  ["埋設状況係数", "Pipe restraint (anchorage) coefficient", "C₁", "—", "c1_coeff"],
+  ["埋設状況係数", "Pipe restraint (anchorage) coefficient", "C₁", "—", "pipe_restraint_coeff"],
   ["湾曲損失係数", "Bend loss coefficient", "fb", "—", "bend_loss_coeff"],
   ["バルブ損失係数", "Valve loss coefficient", "fv", "—", "valve_loss_coeff"],
   ["直角分流損失係数", "Right-angle branch loss coefficient", "fβ", "—", "branch_loss_coeff"],
-  ["その他損失水頭", "Other minor loss head", "Σhc", "m", "other_loss"],
+  ["その他損失水頭", "Other minor loss head", "Σhc", "m", "other_minor_loss_head"],
   ["動水位", "Hydraulic grade line", "WLm", "m", "hydraulic_grade"],
   ["波速（圧力波伝播速度）", "Wave speed / celerity", "a", "m/s", "（計算値）"],
   ["圧力振動周期", "Pressure wave period", "T₀", "s", "（計算値 4L/a）"],
@@ -425,6 +426,23 @@ const GLOSSARY: ReadonlyArray<readonly [string, string, string, string, string]>
   ["水撃圧", "Water hammer (surge) pressure", "Pi", "MPa", "（計算値）"],
   ["静水圧", "Static pressure", "Ps", "MPa", "（計算値）"],
   ["設計内圧", "Design internal pressure", "Pp", "MPa", "（計算値 Ps+Pi）"],
+];
+
+/**
+ * 旧フィールドIDとの対応。
+ * reader は旧IDも読み取るため、既存の帳票はそのまま使える。
+ */
+const RENAMED_FIELD_IDS: ReadonlyArray<readonly [string, string, string]> = [
+  ["initial_flow", "initial_velocity", "値は流速 [m/s]。flow は流量を指すため誤り"],
+  ["pipe_type", "pipe_material", "選ぶのは管の材質（管種）"],
+  ["roughness_coeff", "hazen_williams_c", "ヘーゼン・ウィリアムス C であることを明示"],
+  ["roughness_c", "hazen_williams_c", "管路表と同じ量なので名前をそろえた"],
+  ["c1_coeff", "pipe_restraint_coeff", "記号 C₁ ではなく意味（埋設状況）で示す"],
+  ["target_facility_id", "target_device_id", "対象はバルブ・ポンプなどの機器"],
+  ["diameter", "inner_diameter", "管路表と同じ量なので名前をそろえた"],
+  ["pipe_length", "slope_length", "管路延長 length と別物（斜距離）と分かるように"],
+  ["pipe_center_height", "pipe_centerline_elevation", "標高は elevation にそろえた"],
+  ["other_loss", "other_minor_loss_head", "係数ではなく水頭 [m]"],
 ];
 
 function addInstructionSheet(wb: ExcelJS.Workbook): ExcelJS.Worksheet {
@@ -459,9 +477,9 @@ function addInstructionSheet(wb: ExcelJS.Workbook): ExcelJS.Worksheet {
   push(["ケース設定", "計算ケースの一覧（操作種別・初期条件）", "Calculation cases"]);
   push([]);
 
-  head("■ 管種コード / Pipe material codes（pipe_type 欄）");
+  head("■ 管種コード / Pipe material codes（pipe_material 欄）");
   push(["コード", "日本語名", "English"]);
-  for (const r of PIPE_TYPE_LABELS) push([...r]);
+  for (const r of PIPE_MATERIAL_LABELS) push([...r]);
   push([]);
 
   head("■ 節点種別コード / Node type codes（node_type 欄）");
@@ -478,6 +496,12 @@ function addInstructionSheet(wb: ExcelJS.Workbook): ExcelJS.Worksheet {
   push(["日本語名", "English", "記号", "単位", "フィールドID"]);
   const glossaryHeaderRow = ws.rowCount;
   for (const r of GLOSSARY) push([...r]);
+  push([]);
+
+  head("■ 旧フィールドIDとの対応 / Renamed field IDs");
+  push(["旧ID", "現行ID", "変更の理由"]);
+  for (const [oldId, newId, why] of RENAMED_FIELD_IDS) push([oldId, newId, why]);
+  push(["", "旧IDの帳票もそのまま読み込めます。", "Workbooks using the old IDs are still accepted."]);
   push([]);
 
   head("■ ケース設定の入力について / Notes on calculation cases");

@@ -35,7 +35,7 @@ export interface Pipe {
   wallThickness: number;
   /** 管路延長 L [m] */
   length: number;
-  /** 粗度係数 (ハーゼン・ウィリアムス C または マニング n) */
+  /** ハーゼン・ウィリアムス粗度係数 C（帳票のフィールドID: hazen_williams_c） */
   roughnessCoeff: number;
   /** ヤング係数 Eₛ [kN/m²] — 省略時は管種から自動参照 */
   youngsModulus?: number;
@@ -141,7 +141,7 @@ export interface MeasurementPoint {
   flowRate: number;
   /** 管径 D [m] (内径) */
   diameter: number;
-  /** 流速係数 CI (Hazen-Williams C) */
+  /** 流速係数 CI = ハーゼン・ウィリアムス C（帳票のフィールドID: hazen_williams_c） */
   roughnessC: number;
   /** 湾曲損失係数 fb [-] */
   bendLossCoeff: number;

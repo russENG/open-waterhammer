@@ -68,13 +68,13 @@
 | `pipe_name` | 管路名 | string | — | — | |
 | `start_node` | 始点節点ID | string | — | ○ | |
 | `end_node` | 終点節点ID | string | — | ○ | |
-| `pipe_type` | 管種 | enum | — | ○ | 下記管種コード参照 |
+| `pipe_material` | 管種（管材） | enum | — | ○ | 下記管種コード参照。旧ID `pipe_type` |
 | `inner_diameter` | 管内径 D | float | m | ○ | 波速計算に使用 |
 | `wall_thickness` | 管厚 t | float | m | ○ | 波速計算に使用 |
 | `length` | 管路延長 L | float | m | ○ | |
-| `roughness_coeff` | 粗度係数 | float | — | ○ | ハーゼン・ウィリアムスCまたはマニング n |
+| `hazen_williams_c` | 粗度係数 C | float | — | ○ | ハーゼン・ウィリアムス C。実装は常に HW（`moc.ts` で Darcy 等価に換算）。旧ID `roughness_coeff` |
 | `youngs_modulus` | ヤング係数 Eₛ | float | kN/m² | — | 管種から自動参照（上書き可） |
-| `c1_coeff` | 埋設状況係数 C₁ | float | — | — | デフォルト: 1.0 |
+| `pipe_restraint_coeff` | 埋設状況係数 C₁ | float | — | — | デフォルト: 1.0。旧ID `c1_coeff` |
 
 ##### 管種コード（参照: 表-8.2.1）
 
@@ -147,7 +147,7 @@
 | `case_name` | ケース名 | string | ○ | |
 | `description` | 説明 | string | — | |
 | `operation_type` | 操作種別 | enum | ○ | `valve_close`, `valve_open`, `pump_stop`, `pump_start`, `combined` |
-| `target_facility_id` | 対象施設ID | string | ○ | |
+| `target_device_id` | 対象施設ID（バルブ・ポンプ等） | string | ○ | 旧ID `target_facility_id` |
 | `initial_velocity` | 初期流速 V₀ | float | ○ | m/s。旧ID `initial_flow`（流速なのに flow という誤称）も読み取りのみ受け付ける |
 | `initial_head` | 初期圧力水頭 H₀ | float | ○ | m |
 | `close_time` | 等価閉そく時間 tν | float | — | s。`valve_close` / `valve_open` では必須。急緩判定とアリエビ式に使う |

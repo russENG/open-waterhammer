@@ -55,7 +55,7 @@ describe('ExcelIoCard', () => {
     const user = userEvent.setup()
     mockedParseWorkbook.mockResolvedValueOnce({
       data: { meta: { projectName: '', standardId: '' }, pipes: [], nodes: [], cases: [], measurementPoints: [] },
-      errors: [{ sheet: 'network', row: 3, field: 'pipe_type', message: '不明な管種コード: "foo"' }],
+      errors: [{ sheet: 'network', row: 3, field: 'pipe_material', message: '不明な管種コード: "foo"' }],
       warnings: [],
     })
     const { repository } = setup()

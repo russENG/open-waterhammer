@@ -155,7 +155,7 @@ function parseMeta(wb: ExcelJS.Workbook, errors: ParseError[]): ProjectMeta {
 
 // ─── network シート（管路・節点） ─────────────────────────────────────────────
 
-const VALID_PIPE_TYPES = new Set<string>([
+const VALID_PIPE_MATERIALS = new Set<string>([
   "steel", "ductile_iron", "rcp", "cpcp", "upvc",
   "pe2", "pe3_pe100", "wdpe",
   "grp_fw1", "grp_fw2", "grp_fw3", "grp_fw4", "grp_fw5", "gfpe",
@@ -174,26 +174,27 @@ function parsePipes(rows: Record<string, unknown>[], errors: ParseError[]): Pipe
     const id = str(row["pipe_id"] ?? row["管路ID"]);
     if (!id) continue; // 空行はスキップ
 
-    const pipeTypeRaw = str(row["pipe_type"] ?? row["管種"]).toLowerCase();
-    if (!VALID_PIPE_TYPES.has(pipeTypeRaw)) {
-      errors.push({ sheet: "network", row: rowNum, field: "pipe_type", message: `不明な管種コード: "${pipeTypeRaw}"` });
+    // 2番目以降のキーは旧フィールドID・日本語見出し（既存の帳票を読むための後方互換）
+    const pipeTypeRaw = str(row["pipe_material"] ?? row["pipe_type"] ?? row["管種"]).toLowerCase();
+    if (!VALID_PIPE_MATERIALS.has(pipeTypeRaw)) {
+      errors.push({ sheet: "network", row: rowNum, field: "pipe_material", message: `不明な管種コード: "${pipeTypeRaw}"` });
     }
 
     const pipe: Pipe = {
       id,
       startNodeId: str(row["start_node"] ?? row["始点節点ID"]),
       endNodeId: str(row["end_node"] ?? row["終点節点ID"]),
-      pipeType: (VALID_PIPE_TYPES.has(pipeTypeRaw) ? pipeTypeRaw : "ductile_iron") as PipeType,
+      pipeType: (VALID_PIPE_MATERIALS.has(pipeTypeRaw) ? pipeTypeRaw : "ductile_iron") as PipeType,
       innerDiameter: requireNum(row["inner_diameter"] ?? row["管内径 D"], "管内径 D", errors, "network", rowNum),
       wallThickness: requireNum(row["wall_thickness"] ?? row["管厚 t"], "管厚 t", errors, "network", rowNum),
       length: requireNum(row["length"] ?? row["管路延長 L"], "管路延長 L", errors, "network", rowNum),
-      roughnessCoeff: requireNum(row["roughness_coeff"] ?? row["粗度係数"], "粗度係数", errors, "network", rowNum),
+      roughnessCoeff: requireNum(row["hazen_williams_c"] ?? row["roughness_coeff"] ?? row["粗度係数"], "粗度係数 C", errors, "network", rowNum),
     };
     const pipeName = str(row["pipe_name"] ?? row["管路名"]);
     if (pipeName) pipe.name = pipeName;
     const Es = num(row["youngs_modulus"] ?? row["ヤング係数 Eₛ"]);
     if (Es !== undefined) pipe.youngsModulus = Es;
-    const c1 = num(row["c1_coeff"] ?? row["埋設状況係数 C₁"]);
+    const c1 = num(row["pipe_restraint_coeff"] ?? row["c1_coeff"] ?? row["埋設状況係数 C₁"]);
     if (c1 !== undefined) pipe.c1Coeff = c1;
     pipes.push(pipe);
   }
@@ -317,7 +318,7 @@ function parseCases(wb: ExcelJS.Workbook, errors: ParseError[], warnings: string
       id,
       name: str(row["case_name"] ?? row["ケース名"]) || id,
       operationType: (VALID_OPERATION_TYPES.has(opRaw) ? opRaw : "valve_close") as OperationType,
-      targetFacilityId: str(row["target_facility_id"] ?? row["対象施設ID"]),
+      targetFacilityId: str(row["target_device_id"] ?? row["target_facility_id"] ?? row["対象施設ID"]),
       // initial_flow は旧フィールドID（流速なのに flow という誤称）。既存ブックのため読み取りだけ残す。
       initialVelocity: requireNum(row["initial_velocity"] ?? row["initial_flow"] ?? row["初期流速 V₀"], "初期流速 V₀", errors, "cases", rowNum),
       initialHead: requireNum(row["initial_head"] ?? row["初期圧力水頭 H₀"], "初期圧力水頭 H₀", errors, "cases", rowNum),
@@ -358,18 +359,18 @@ function parseMeasurementPoints(wb: ExcelJS.Workbook, errors: ParseError[]): Mea
       id,
       horizontalDistance: requireNum(row["horizontal_distance"] ?? row["単距離 Lh"], "単距離", errors, "測点データ", rowNum),
       groundLevel: requireNum(row["ground_level"] ?? row["地盤高 GL"], "地盤高", errors, "測点データ", rowNum),
-      pipeCenterHeight: requireNum(row["pipe_center_height"] ?? row["管中心高 FH"], "管中心高", errors, "測点データ", rowNum),
-      pipeLength: requireNum(row["pipe_length"] ?? row["管長 SL"], "管長", errors, "測点データ", rowNum),
+      pipeCenterHeight: requireNum(row["pipe_centerline_elevation"] ?? row["pipe_center_height"] ?? row["管中心高 FH"], "管中心高", errors, "測点データ", rowNum),
+      pipeLength: requireNum(row["slope_length"] ?? row["pipe_length"] ?? row["管長 SL"], "管長", errors, "測点データ", rowNum),
       flowRate: requireNum(row["flow_rate"] ?? row["流量 Q"], "流量", errors, "測点データ", rowNum),
-      diameter: requireNum(row["diameter"] ?? row["管径 D"], "管径", errors, "測点データ", rowNum),
-      roughnessC: requireNum(row["roughness_c"] ?? row["流速係数 CI"], "流速係数", errors, "測点データ", rowNum),
+      diameter: requireNum(row["inner_diameter"] ?? row["diameter"] ?? row["管径 D"], "管径", errors, "測点データ", rowNum),
+      roughnessC: requireNum(row["hazen_williams_c"] ?? row["roughness_c"] ?? row["流速係数 CI"], "流速係数 C", errors, "測点データ", rowNum),
       bendLossCoeff: num(row["bend_loss_coeff"] ?? row["湾曲損失係数 fb"]) ?? 0,
       valveLossCoeff: num(row["valve_loss_coeff"] ?? row["バルブ損失係数 fv"]) ?? 0,
       branchLossCoeff: num(row["branch_loss_coeff"] ?? row["直角分流損失係数 fβ"]) ?? 0,
     };
     const ptName = str(row["point_name"] ?? row["測点名"]);
     if (ptName) pt.name = ptName;
-    const other = num(row["other_loss"] ?? row["その他損失"]);
+    const other = num(row["other_minor_loss_head"] ?? row["other_loss"] ?? row["その他損失"]);
     if (other !== undefined) pt.otherLoss = other;
     points.push(pt);
   }
