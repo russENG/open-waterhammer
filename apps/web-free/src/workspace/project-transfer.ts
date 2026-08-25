@@ -67,6 +67,27 @@ export async function importProjectFile(
   }
 }
 
+/** Validates a Project file and atomically replaces the browser workspace with it. */
+export async function replaceProjectFile(
+  repository: Pick<WorkspaceRepository, 'replaceBundle'>,
+  file: File,
+): Promise<ImportSummary> {
+  const bytes = new Uint8Array(await file.arrayBuffer())
+  const inspection = await inspectProjectBundle(bytes)
+  if (inspection.cases.length === 0) {
+    throw new Error('比較案が含まれていないため、このプロジェクトは開けません。')
+  }
+  const project = await repository.replaceBundle(bytes)
+  return {
+    project,
+    alternatives: inspection.alternatives.length,
+    cases: inspection.cases.length,
+    scenarios: inspection.scenarios.length,
+    runs: inspection.runs.length,
+    legacyArtifacts: inspection.legacyArtifacts.length,
+  }
+}
+
 /** Thin, non-pure DOM trigger for a browser file download — the only side-effecting export here. */
 export function downloadProjectFile(file: { name: string; bytes: Uint8Array }): void {
   // `.slice()` copies into a fresh, concretely `ArrayBuffer`-backed Uint8Array — `file.bytes`

@@ -20,6 +20,7 @@ function isEmpty(data: WorkspaceData): boolean {
 interface InitializableWorkspaceRepository {
   snapshot(): Promise<WorkspaceData>
   importBundle(bytes: Uint8Array): Promise<unknown>
+  replaceBundle(bytes: Uint8Array): Promise<unknown>
 }
 
 function buildBlankWorkspace(projectName: string, timestamp = new Date().toISOString()): WorkspaceData {
@@ -62,11 +63,11 @@ async function importIntoEmptyWorkspace(repository: InitializableWorkspaceReposi
   return repository.snapshot()
 }
 
-async function importBlankProject(repository: InitializableWorkspaceRepository, projectName: string): Promise<WorkspaceData> {
+async function replaceWithBlankWorkspace(repository: InitializableWorkspaceRepository, projectName: string): Promise<WorkspaceData> {
   const name = projectName.trim()
   if (!name) throw new Error('プロジェクト名を入力してください。')
   const data = buildBlankWorkspace(name)
-  await repository.importBundle(await exportProjectBundle(data, data.projects[0]!.id))
+  await repository.replaceBundle(await exportProjectBundle(data, data.projects[0]!.id))
   return repository.snapshot()
 }
 
@@ -76,9 +77,9 @@ export function createBlankProject(repository: InitializableWorkspaceRepository,
   return importIntoEmptyWorkspace(repository, buildBlankWorkspace(name))
 }
 
-/** 既存プロジェクトを残したまま、編集可能な空のプロジェクトを追加する。 */
-export function addBlankProject(repository: InitializableWorkspaceRepository, projectName: string): Promise<WorkspaceData> {
-  return importBlankProject(repository, projectName)
+/** 現在の保存内容を、編集可能な空のプロジェクト1件で置き換える。 */
+export function replaceWithBlankProject(repository: InitializableWorkspaceRepository, projectName: string): Promise<WorkspaceData> {
+  return replaceWithBlankWorkspace(repository, projectName)
 }
 
 export function installSampleWorkspace(repository: InitializableWorkspaceRepository): Promise<WorkspaceData> {

@@ -159,6 +159,31 @@ describe("in-memory WorkspaceRepository", () => {
     assert.deepEqual(await target.snapshot(), before);
   });
 
+  test("atomically replaces existing workspace data with one validated Project bundle", async () => {
+    const source = createRepository();
+    const target = new InMemoryWorkspaceRepository({
+      projects: [{ ...projectFixture, id: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa", name: "旧プロジェクト" }],
+      alternatives: [],
+      cases: [],
+      scenarios: [],
+      runs: [],
+      legacyArtifacts: [],
+    });
+
+    const replaced = await target.replaceBundle(await source.exportBundle(projectFixture.id));
+
+    assert.deepEqual(replaced, projectFixture);
+    assert.deepEqual(await target.snapshot(), await source.snapshot());
+  });
+
+  test("does not remove existing data when replacement validation fails", async () => {
+    const target = createRepository();
+    const before = await target.snapshot();
+
+    await assert.rejects(target.replaceBundle(new Uint8Array([1, 2, 3])), /invalid zip/i);
+    assert.deepEqual(await target.snapshot(), before);
+  });
+
   test("rejects changing an existing Scenario id to a different owning Case", async () => {
     const lockedOwner: Case = {
       ...caseFixture,

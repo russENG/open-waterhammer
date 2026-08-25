@@ -23,6 +23,7 @@ Open Waterhammer の利用者向け画面で使う用語と表記を定める。
 | manifest | 計算記録 | 検証用JSONの項目名を説明するときのみ `manifest` を併記できる |
 | provenance | 由来情報 | 技術者向け詳細表示で併記する場合は「由来情報（provenance）」とする |
 | local-first | ローカル保存 | 保存先を説明するときは「このブラウザ内に保存」と具体化する |
+| offline build | バージョン固定のオフライン版 | 公開サイトと区別し、組織内で配信する静的成果物を指す |
 | static hosting | 静的配信 | 技術構成の説明に限って使用する |
 | evidence preserved | 証跡保持 | 計算条件・結果・由来情報を保持することを表す |
 
@@ -65,6 +66,8 @@ Open Waterhammer の利用者向け画面で使う用語と表記を定める。
 | Import as drafts | 編集中データとして読み込む |
 | Export | 書き出す |
 | Import | 読み込む |
+| Open Project | プロジェクトを開く |
+| Replace Project | プロジェクトを置き換える |
 | Cancel | キャンセル |
 | Close | 閉じる |
 

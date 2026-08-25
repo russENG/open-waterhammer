@@ -1,7 +1,7 @@
 import type { Case, Project, Run, Scenario } from '@open-waterhammer/contracts'
 import { useRef, useState } from 'react'
 
-import { downloadProjectFile, exportProjectFile, importProjectFile } from '../project-transfer'
+import { downloadProjectFile, exportProjectFile, replaceProjectFile } from '../project-transfer'
 import { caseStateLabel } from '../case-state-labels'
 import { assessmentStatusLabel, runKindLabel, runStatusLabel } from '../run-display-labels'
 import { deriveSchematic, type SchematicPipe } from '../schematic'
@@ -61,11 +61,16 @@ function ProjectTransferCard({ project, onImported }: { project: Project; onImpo
   async function handleFileChange(event: React.ChangeEvent<HTMLInputElement>) {
     const file = event.target.files?.[0]
     if (!file) return
+    const approved = window.confirm(`「${file.name}」を開くと、現在の「${project.name}」は閉じられ、読み込んだプロジェクトに置き換わります。続けますか？`)
+    if (!approved) {
+      event.target.value = ''
+      return
+    }
     setError(null)
     setMessage(null)
     setBusy(true)
     try {
-      const summary = await importProjectFile(repository, file)
+      const summary = await replaceProjectFile(repository, file)
       // A fresh snapshot, not the (possibly stale) `data` this component's WorkspaceProvider
       // ancestor was last rendered with — `refresh()` both updates that provider's state AND
       // returns the same snapshot it just read, so this local use of it is guaranteed current.
@@ -107,7 +112,7 @@ function ProjectTransferCard({ project, onImported }: { project: Project; onImpo
           aria-hidden="true"
           tabIndex={-1}
         />
-        <p className="excel-action-note">同じ ID のプロジェクトが既に存在する場合は読み込めません。</p>
+        <p className="excel-action-note">現在のプロジェクトを閉じ、選んだファイルの内容に置き換えます。</p>
       </div>
     </div>
     {message && <p role="status" className="inline-message">{message}</p>}

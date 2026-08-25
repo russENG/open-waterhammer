@@ -4,7 +4,7 @@ import { lazy, Suspense, useEffect, useMemo, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 
 import type { LinkedFocus } from './focus'
-import { importProjectFile } from './project-transfer'
+import { downloadProjectFile, exportProjectFile, replaceProjectFile } from './project-transfer'
 import { PyodideStatusChip } from './PyodideStatusChip'
 import { RunInspector } from './RunInspector'
 import { WorkspaceTree } from './WorkspaceTree'
@@ -41,7 +41,7 @@ function recentSelection() {
 }
 
 export function WorkspaceLayout() {
-  const { data, repository, busy, refresh, addProject, createFrom, fork } = useWorkspace()
+  const { data, repository, busy, refresh, replaceProject, createFrom, fork } = useWorkspace()
   const params = useParams()
   const navigate = useNavigate()
   const selection = resolveWorkspaceRoute(data, params, recentSelection())
@@ -71,11 +71,6 @@ export function WorkspaceLayout() {
     navigate(canonicalPath(selection.projectId, nextCaseId, selection.tab))
   }
 
-  function goToProject(nextProjectId: string) {
-    const target = resolveWorkspaceRoute(data, { projectId: nextProjectId })
-    navigate(canonicalPath(target.projectId, target.caseId, target.tab))
-  }
-
   function toggleComparison(nextCaseId: string) {
     const result = toggleComparisonCase(comparison, nextCaseId)
     setComparison(result.selection)
@@ -88,17 +83,23 @@ export function WorkspaceLayout() {
   }
 
   async function createProject(name: string) {
-    const created = await addProject(name)
+    const created = await replaceProject(name)
     navigate(canonicalPath(created.project.id, created.caseRecord.id, 'overview'))
   }
 
   async function importProject(file: File): Promise<string> {
-    const summary = await importProjectFile(repository, file)
+    const summary = await replaceProjectFile(repository, file)
     const next = await refresh()
     const caseId = newestCaseIdForProject(next, summary.project.id)
     if (!caseId) throw new Error('読み込んだプロジェクトに比較案がありません。')
     navigate(canonicalPath(summary.project.id, caseId, 'overview'))
     return `${summary.project.name} を読み込みました。`
+  }
+
+  async function exportProject(): Promise<string> {
+    const file = await exportProjectFile(repository, project.id)
+    downloadProjectFile(file)
+    return `${file.name} を書き出しました。`
   }
 
   async function submitFork() {
@@ -131,7 +132,7 @@ export function WorkspaceLayout() {
       <nav aria-label="サービス内メニュー"><Link to={canonicalPath(selection.projectId, selection.caseId, 'overview')}>作業画面</Link><a href="#/docs/reference">設計基準</a><a href="#/docs/library">計算ライブラリ</a><a href="#/docs/design-flow">設計フロー</a><a href="#/docs/hydraulic">水理設計の視点</a><a href="#/docs/about">このサイトについて</a></nav>
     </header>
     <div className="workspace-grid">
-      <WorkspaceTree projectId={selection.projectId} caseId={selection.caseId} comparison={comparison} onSelect={goToCase} onToggleComparison={toggleComparison} onCreate={() => void createNew()} onFork={() => setForkDialog(true)} onSelectProject={goToProject} onCreateProject={createProject} onImportProject={importProject} projectActionDisabled={busy} />
+      <WorkspaceTree projectId={selection.projectId} caseId={selection.caseId} comparison={comparison} onSelect={goToCase} onToggleComparison={toggleComparison} onCreate={() => void createNew()} onFork={() => setForkDialog(true)} onCreateProject={createProject} onImportProject={importProject} onExportProject={exportProject} projectActionDisabled={busy} />
       <main id="workspace-main" className="workspace-main">
         <div className="workspace-breadcrumb"><span>{projectDisplayName(project)}</span><i>/</i><span>{caseRecord.revisionReason ?? '基準案'}</span><b className={`state-pill state-pill--${caseRecord.state}`}>{caseStateLabel(caseRecord.state)}</b></div>
         <nav className="workspace-tabs" aria-label="作業タブ">{WORKSPACE_TABS.map((tab) => <Link key={tab} aria-label={TAB_LABELS[tab]} aria-current={tab === selection.tab ? 'page' : undefined} to={canonicalPath(selection.projectId, selection.caseId, tab)} className={tab === selection.tab ? 'workspace-tab workspace-tab--active' : 'workspace-tab'}><span aria-hidden="true">{String(WORKSPACE_TABS.indexOf(tab) + 1).padStart(2, '0')}</span>{TAB_LABELS[tab]}</Link>)}</nav>

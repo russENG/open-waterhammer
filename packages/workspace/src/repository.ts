@@ -176,6 +176,23 @@ export class WorkspaceRepositoryBase implements WorkspaceRepository {
     });
   }
 
+  async replaceBundle(bytes: Uint8Array): Promise<import("@open-waterhammer/contracts").Project> {
+    // Validate the complete archive before opening the write transaction. A corrupt
+    // bundle therefore leaves the currently open Project untouched.
+    const imported = await importProjectBundle(bytes);
+    const project = imported.projects[0];
+    if (!project) throw new Error("Imported bundle has no Project");
+    return this.storage.transaction((draft) => {
+      draft.projects = structuredClone(imported.projects);
+      draft.alternatives = structuredClone(imported.alternatives);
+      draft.cases = structuredClone(imported.cases);
+      draft.scenarios = structuredClone(imported.scenarios);
+      draft.runs = structuredClone(imported.runs);
+      draft.legacyArtifacts = structuredClone(imported.legacyArtifacts);
+      return structuredClone(project);
+    });
+  }
+
   async migrateLegacy(storage: LegacyStorage | undefined = this.#legacyStorage): Promise<LegacyMigrationResult> {
     return migrateLegacySessions(this.storage, storage);
   }

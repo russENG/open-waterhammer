@@ -51,5 +51,6 @@ export interface WorkspaceRepository {
   appendRun(run: Run): Promise<void>;
   exportBundle(projectId: string): Promise<Uint8Array>;
   importBundle(bytes: Uint8Array): Promise<Project>;
+  replaceBundle(bytes: Uint8Array): Promise<Project>;
   migrateLegacy(storage?: LegacyStorage): Promise<LegacyMigrationResult>;
 }

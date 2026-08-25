@@ -20,9 +20,9 @@ export function WorkspaceTree({
   onToggleComparison,
   onCreate,
   onFork,
-  onSelectProject,
   onCreateProject,
   onImportProject,
+  onExportProject,
   projectActionDisabled = false,
 }: {
   projectId: string
@@ -32,9 +32,9 @@ export function WorkspaceTree({
   onToggleComparison(caseId: string): void
   onCreate(): void
   onFork(): void
-  onSelectProject(projectId: string): void
   onCreateProject(name: string): Promise<void>
   onImportProject(file: File): Promise<string>
+  onExportProject(): Promise<string>
   projectActionDisabled?: boolean
 }) {
   const { data } = useWorkspace()
@@ -44,6 +44,7 @@ export function WorkspaceTree({
   const [projectActionBusy, setProjectActionBusy] = useState(false)
   const [projectActionError, setProjectActionError] = useState<string | null>(null)
   const [projectActionMessage, setProjectActionMessage] = useState<string | null>(null)
+  const [pendingProjectFile, setPendingProjectFile] = useState<File | null>(null)
   const projectFileInputRef = useRef<HTMLInputElement>(null)
   const project = data.projects.find(({ id }) => id === projectId)!
   const selected = data.cases.find(({ id }) => id === caseId)!
@@ -66,19 +67,40 @@ export function WorkspaceTree({
     }
   }
 
-  async function handleProjectFile(event: React.ChangeEvent<HTMLInputElement>) {
+  function handleProjectFile(event: React.ChangeEvent<HTMLInputElement>) {
     const file = event.target.files?.[0]
     if (!file) return
+    setProjectActionError(null)
+    setProjectActionMessage(null)
+    setPendingProjectFile(file)
+    event.target.value = ''
+  }
+
+  async function confirmProjectFile() {
+    if (!pendingProjectFile) return
     setProjectActionBusy(true)
     setProjectActionError(null)
     setProjectActionMessage(null)
     try {
-      setProjectActionMessage(await onImportProject(file))
+      setProjectActionMessage(await onImportProject(pendingProjectFile))
+      setPendingProjectFile(null)
     } catch (error) {
       setProjectActionError(error instanceof Error ? error.message : String(error))
     } finally {
       setProjectActionBusy(false)
-      event.target.value = ''
+    }
+  }
+
+  async function exportCurrentProject() {
+    setProjectActionBusy(true)
+    setProjectActionError(null)
+    setProjectActionMessage(null)
+    try {
+      setProjectActionMessage(await onExportProject())
+    } catch (error) {
+      setProjectActionError(error instanceof Error ? error.message : String(error))
+    } finally {
+      setProjectActionBusy(false)
     }
   }
 
@@ -92,7 +114,8 @@ export function WorkspaceTree({
             setProjectActionMessage(null)
             setCreateProjectOpen(true)
           }}>新規プロジェクト</button>
-          <button type="button" disabled={actionsDisabled} onClick={() => projectFileInputRef.current?.click()}>プロジェクトを読み込み</button>
+          <button type="button" disabled={actionsDisabled} onClick={() => projectFileInputRef.current?.click()}>プロジェクトを開く</button>
+          <button type="button" disabled={actionsDisabled} onClick={() => void exportCurrentProject()}>現在のプロジェクトを書き出す</button>
         </div>
         <input
           ref={projectFileInputRef}
@@ -100,7 +123,7 @@ export function WorkspaceTree({
           accept=".owhproj"
           data-testid="tree-project-file-input"
           className="tree-project-file-input"
-          onChange={(event) => void handleProjectFile(event)}
+          onChange={handleProjectFile}
           disabled={actionsDisabled}
           aria-hidden="true"
           tabIndex={-1}
@@ -108,15 +131,6 @@ export function WorkspaceTree({
         {projectActionMessage && <p role="status" className="tree-project-message">{projectActionMessage}</p>}
         {projectActionError && !createProjectOpen && <p role="alert" className="form-error">{projectActionError}</p>}
       </div>
-      {data.projects.length > 1 && <div className="tree-project-switcher">
-        <label htmlFor="workspace-project-switcher">プロジェクト切替</label>
-        <select id="workspace-project-switcher" value={projectId} onChange={(event) => onSelectProject(event.target.value)}>
-          {data.projects.map((candidate) => {
-            const alternativeCount = data.alternatives.filter(({ projectId: owner }) => owner === candidate.id).length
-            return <option key={candidate.id} value={candidate.id}>{projectDisplayName(candidate)}（代替案 {alternativeCount}件）</option>
-          })}
-        </select>
-      </div>}
       <div className="tree-project-row">
         <button className="tree-expander" aria-expanded={open} onClick={() => setOpen((value) => !value)}>{open ? '−' : '+'}</button>
         <div><span className="tree-kicker">現在のプロジェクト</span><h2>{projectDisplayName(project)}</h2><small>{project.crs} · {project.standardSelection.version}</small></div>
@@ -146,10 +160,19 @@ export function WorkspaceTree({
     </aside>
     {createProjectOpen && <div className="modal-backdrop"><section className="modal-sheet project-dialog" role="dialog" aria-modal="true" aria-label="新規プロジェクト">
       <div className="modal-heading"><div><span className="eyebrow">プロジェクト管理</span><h2>新規プロジェクト</h2></div><button className="icon-button" aria-label="新規プロジェクトを閉じる" onClick={() => setCreateProjectOpen(false)}>×</button></div>
-      <p>空の入力条件と、編集可能な比較案を1件作成します。現在のプロジェクトはそのまま残ります。</p>
+      <p>このブラウザで開けるプロジェクトは1件です。現在の「{projectDisplayName(project)}」を閉じ、空のプロジェクトで置き換えます。必要な場合は先に書き出してください。</p>
       <label><span>プロジェクト名</span><input value={projectName} onChange={(event) => setProjectName(event.target.value)} placeholder="例：○○幹線 水撃圧検討" autoFocus /></label>
+      {projectActionMessage && <p role="status" className="tree-project-message">{projectActionMessage}</p>}
       {projectActionError && <p role="alert" className="form-error">{projectActionError}</p>}
-      <div className="modal-actions"><button type="button" disabled={projectActionBusy} onClick={() => setCreateProjectOpen(false)}>キャンセル</button><button type="button" className="primary-button" disabled={actionsDisabled || !projectName.trim()} onClick={() => void submitNewProject()}>作成して開く</button></div>
+      <div className="modal-actions"><button type="button" disabled={projectActionBusy} onClick={() => setCreateProjectOpen(false)}>キャンセル</button><button type="button" disabled={actionsDisabled} onClick={() => void exportCurrentProject()}>現在のプロジェクトを書き出す</button><button type="button" className="primary-button" disabled={actionsDisabled || !projectName.trim()} onClick={() => void submitNewProject()}>置き換えて作成</button></div>
+    </section></div>}
+    {pendingProjectFile && <div className="modal-backdrop"><section className="modal-sheet project-dialog" role="dialog" aria-modal="true" aria-label="プロジェクトを開く">
+      <div className="modal-heading"><div><span className="eyebrow">プロジェクト管理</span><h2>プロジェクトを開く</h2></div><button className="icon-button" aria-label="プロジェクトを開く画面を閉じる" onClick={() => setPendingProjectFile(null)}>×</button></div>
+      <p>「{pendingProjectFile.name}」を開くと、現在の「{projectDisplayName(project)}」は閉じられ、読み込んだプロジェクトに置き換わります。必要な場合は先に書き出してください。</p>
+      {data.projects.length > 1 && <p className="form-error">旧版で保存されたプロジェクトを含む全{data.projects.length}件が置き換わります。</p>}
+      {projectActionMessage && <p role="status" className="tree-project-message">{projectActionMessage}</p>}
+      {projectActionError && <p role="alert" className="form-error">{projectActionError}</p>}
+      <div className="modal-actions"><button type="button" disabled={projectActionBusy} onClick={() => setPendingProjectFile(null)}>キャンセル</button><button type="button" disabled={actionsDisabled} onClick={() => void exportCurrentProject()}>現在のプロジェクトを書き出す</button><button type="button" className="primary-button" disabled={actionsDisabled} onClick={() => void confirmProjectFile()}>置き換えて開く</button></div>
     </section></div>}
   </>
 }

@@ -8,7 +8,7 @@ import {
 import { InMemoryWorkspaceRepository } from '@open-waterhammer/workspace'
 import { describe, expect, test, vi } from 'vitest'
 
-import { downloadProjectFile, exportProjectFile, importProjectFile } from '../project-transfer'
+import { downloadProjectFile, exportProjectFile, importProjectFile, replaceProjectFile } from '../project-transfer'
 
 // A Run locks its Case (successful_run provenance) — exportProjectBundle validates its own
 // output before returning, so a seeded repository must already satisfy that relationship or
@@ -91,6 +91,31 @@ describe('importProjectFile', () => {
       .rejects.toThrow(/duplicate workspace entity id/i)
     // Rejected atomically: the target's data must be untouched, never a partial merge.
     expect(await target.snapshot()).toEqual(await seededRepository().snapshot())
+  })
+})
+
+describe('replaceProjectFile', () => {
+  test('replaces all existing workspace data with the validated file', async () => {
+    const source = seededRepository()
+    const target = new InMemoryWorkspaceRepository({
+      projects: [{ ...projectFixture, id: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa', name: '旧プロジェクト' }],
+      alternatives: [], cases: [], scenarios: [], runs: [], legacyArtifacts: [],
+    })
+    const file = await exportProjectFile(source, projectFixture.id)
+
+    const summary = await replaceProjectFile(target, new File([file.bytes.slice()], file.name))
+
+    expect(summary.project).toEqual(projectFixture)
+    expect((await target.snapshot()).projects).toEqual([projectFixture])
+  })
+
+  test('keeps the current workspace when validation fails', async () => {
+    const target = seededRepository()
+    const before = await target.snapshot()
+
+    await expect(replaceProjectFile(target, new File([new Uint8Array([1, 2, 3])], 'corrupt.owhproj')))
+      .rejects.toThrow(/invalid zip/i)
+    expect(await target.snapshot()).toEqual(before)
   })
 })
 

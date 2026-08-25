@@ -3,7 +3,7 @@ import { InMemoryWorkspaceRepository } from '@open-waterhammer/workspace'
 import { render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { createElement } from 'react'
-import { describe, expect, test, vi } from 'vitest'
+import { beforeEach, describe, expect, test, vi } from 'vitest'
 
 import { buildSampleWorkspace } from '../../sample-workspace'
 import { WorkspaceProvider } from '../../workspace-context'
@@ -11,11 +11,15 @@ import { OverviewPanel } from '../OverviewPanel'
 
 vi.mock('../../project-transfer', () => ({
   exportProjectFile: vi.fn(),
-  importProjectFile: vi.fn(),
+  replaceProjectFile: vi.fn(),
   downloadProjectFile: vi.fn(),
 }))
 
-import { downloadProjectFile, exportProjectFile, importProjectFile } from '../../project-transfer'
+import { downloadProjectFile, exportProjectFile, replaceProjectFile } from '../../project-transfer'
+
+beforeEach(() => {
+  vi.spyOn(window, 'confirm').mockReturnValue(true)
+})
 
 function caseWith(modelSnapshot: Case['modelSnapshot']): Case {
   return { ...caseFixture, modelSnapshot }
@@ -67,20 +71,20 @@ describe('OverviewPanel project bundle card', () => {
 
   test('shows the readable error message verbatim when import fails (duplicate or corrupt bundle)', async () => {
     const user = userEvent.setup()
-    vi.mocked(importProjectFile).mockRejectedValue(new Error('Duplicate workspace entity id: 11111111-1111-4111-8111-111111111111'))
+    vi.mocked(replaceProjectFile).mockRejectedValue(new Error('読み込んだファイルを検証できませんでした'))
     renderInWorkspace()
     const file = new File([new Uint8Array([1, 2, 3])], 'dup.owhproj')
 
     const input = screen.getByTestId('project-bundle-file-input')
     await user.upload(input, file)
 
-    expect(await screen.findByRole('alert')).toHaveTextContent('Duplicate workspace entity id: 11111111-1111-4111-8111-111111111111')
-    expect(importProjectFile).toHaveBeenCalledWith(expect.anything(), file)
+    expect(await screen.findByRole('alert')).toHaveTextContent('読み込んだファイルを検証できませんでした')
+    expect(replaceProjectFile).toHaveBeenCalledWith(expect.anything(), file)
   })
 
   test('shows imported counts and refreshes workspace data on a successful import', async () => {
     const user = userEvent.setup()
-    vi.mocked(importProjectFile).mockResolvedValue({
+    vi.mocked(replaceProjectFile).mockResolvedValue({
       project: { ...projectFixture, id: 'zzzzzzzz-zzzz-4zzz-8zzz-zzzzzzzzzzzz', name: 'Imported harbor line' },
       alternatives: 1,
       cases: 2,
@@ -99,7 +103,7 @@ describe('OverviewPanel project bundle card', () => {
   test('navigates to the imported Project\'s newest Case overview (by createdAt) after a successful import', async () => {
     const user = userEvent.setup()
     const base = buildSampleWorkspace('2026-08-23T01:02:03.000Z')
-    // The mocked importProjectFile below never touches the real repository, so `refresh()`
+    // The mocked replaceProjectFile below never touches the real repository, so `refresh()`
     // (called after import) reads back whatever this repository was already seeded with —
     // stand in for "the state right after a real import" by seeding the second Project's
     // Alternative/Cases up front, exactly as a real importBundle would have written them.
@@ -123,7 +127,7 @@ describe('OverviewPanel project bundle card', () => {
       cases: [...base.cases, seededOlderCase, newerCase],
     }
     const repository = new InMemoryWorkspaceRepository(data)
-    vi.mocked(importProjectFile).mockResolvedValue({
+    vi.mocked(replaceProjectFile).mockResolvedValue({
       project: importedProject, alternatives: 1, cases: 2, scenarios: 0, runs: 0, legacyArtifacts: 0,
     })
     const onImported = vi.fn()

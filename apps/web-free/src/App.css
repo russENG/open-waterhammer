@@ -3102,9 +3102,6 @@ select.input--narrow {
 .tree-project-tool-actions button:disabled { opacity: .45; cursor: not-allowed; }
 .tree-project-file-input { position: absolute; width: 1px; height: 1px; opacity: 0; overflow: hidden; }
 .tree-project-message { margin: 9px 0 0; color: var(--green); font: 600 .56rem/1.5 var(--mono); }
-.tree-project-switcher { display: grid; gap: 5px; margin: 0 4px 14px; }
-.tree-project-switcher label { color: var(--ink-soft); font: 700 .53rem var(--mono); letter-spacing: .06em; }
-.tree-project-switcher select { width: 100%; min-height: 34px; padding: 6px 8px; color: var(--ink); background: var(--white); border: 1px solid var(--ink); font: 600 .58rem var(--mono); }
 .tree-project-row { display: grid; grid-template-columns: 25px 1fr; gap: 8px; padding: 0 4px 18px; border-bottom: 2px solid var(--ink); }
 .tree-expander, .icon-button { width: 25px; height: 25px; display: grid; place-items: center; padding: 0; color: inherit; background: transparent; border: 1px solid currentColor; cursor: pointer; }
 .tree-project-row h2 { margin: 3px 0 5px; color: var(--ink); font: 700 .94rem/1.3 var(--sans, sans-serif); }
