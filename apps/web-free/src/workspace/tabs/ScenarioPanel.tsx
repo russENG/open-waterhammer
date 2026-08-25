@@ -31,15 +31,15 @@ export function ScenarioPanel({ scenario, locked }: { scenario?: Scenario; locke
   }
 
   return <div className="panel-stack">
-    <div className="panel-title-row"><div><span className="eyebrow">BOUNDARY RECORD / 03</span><h1>シナリオ</h1><p>境界条件、操作イベント、防護工条件を Run から独立したスナップショットとして記録します。</p></div>{locked && <span className="lock-note">計算済み・固定 · 複製して編集</span>}</div>
+    <div className="panel-title-row"><div><span className="eyebrow">境界条件の記録 / 03</span><h1>シナリオ</h1><p>境界条件、操作イベント、防護工条件を計算結果から独立したスナップショットとして記録します。</p></div>{locked && <span className="lock-note">計算済み・固定 · 複製して編集</span>}</div>
     <fieldset disabled={locked || busy} className="scenario-fieldset">
       <label className="field-wide"><span>シナリオ名</span><input value={name} onChange={(eventObject) => setName(eventObject.target.value)} /></label>
       <div className="json-editor-grid">
-        <label><span>Boundary conditions</span><textarea value={boundary} onChange={(eventObject) => setBoundary(eventObject.target.value)} spellCheck={false} /></label>
-        <label><span>Event settings</span><textarea value={event} onChange={(eventObject) => setEvent(eventObject.target.value)} spellCheck={false} /></label>
-        <label><span>Protection settings</span><textarea value={protection} onChange={(eventObject) => setProtection(eventObject.target.value)} spellCheck={false} /></label>
+        <label><span>境界条件</span><textarea value={boundary} onChange={(eventObject) => setBoundary(eventObject.target.value)} spellCheck={false} /></label>
+        <label><span>操作イベント</span><textarea value={event} onChange={(eventObject) => setEvent(eventObject.target.value)} spellCheck={false} /></label>
+        <label><span>防護工条件</span><textarea value={protection} onChange={(eventObject) => setProtection(eventObject.target.value)} spellCheck={false} /></label>
       </div>
-      <button className="primary-button" onClick={() => void save()} type="button">Save scenario</button>
+      <button className="primary-button" onClick={() => void save()} type="button">シナリオを保存</button>
     </fieldset>
     {message && <p className="inline-message" role="status">{message}</p>}
   </div>

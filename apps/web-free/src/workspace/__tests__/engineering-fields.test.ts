@@ -222,9 +222,9 @@ describe('RunKind engineering field catalog', () => {
     expect(engineeringFieldsFor('transient_network', renamed).some(({ path }) => path === 'network.nodes.V-02.closeTime')).toBe(true)
     expect(validateEngineeringState('transient_network', renamed)).toEqual([])
 
-    expect(() => renameEngineeringRecordKey(state, nodes, 'V-01', 'R-01')).toThrow(/already exists/i)
-    expect(() => renameEngineeringRecordKey(state, nodes, 'V-01', '  ')).toThrow(/non-blank/i)
-    expect(() => removeEngineeringCollectionItem(state, nodes, 'V-01' as never)).toThrow(/referenced/i)
+    expect(() => renameEngineeringRecordKey(state, nodes, 'V-01', 'R-01')).toThrow(/同じIDが既にあります/)
+    expect(() => renameEngineeringRecordKey(state, nodes, 'V-01', '  ')).toThrow(/IDを入力してください/)
+    expect(() => removeEngineeringCollectionItem(state, nodes, 'V-01' as never)).toThrow(/管路から参照されている/)
 
     const added = addEngineeringCollectionItem(state, nodes)
     const removed = removeEngineeringCollectionItem(added, nodes, 'R-02' as never)
@@ -374,7 +374,7 @@ describe('RunKind engineering field catalog', () => {
     ]))
 
     const steadyNodes = ENGINEERING_COLLECTIONS.steady_network_python.find(({ path }) => path === 'nodes')!
-    expect(() => removeEngineeringCollectionItem(ENGINEERING_TEMPLATES.steady_network_python, steadyNodes, 0)).toThrow(/referenced/i)
+    expect(() => removeEngineeringCollectionItem(ENGINEERING_TEMPLATES.steady_network_python, steadyNodes, 0)).toThrow(/管路から参照されている/)
   })
 
   test('updates nested model and Scenario paths and rejects missing or non-positive required values', () => {
@@ -533,7 +533,7 @@ describe('RunKind engineering field catalog', () => {
     const nodes = ENGINEERING_COLLECTIONS.transient_network.find(({ path }) => path === 'network.nodes')!
 
     for (const unsafe of ['R.02', '__proto__', 'constructor', 'prototype']) {
-      expect(() => renameEngineeringRecordKey(state, nodes, 'V-01', unsafe), unsafe).toThrow(/ASCII letters, numbers, '_' or '-'/)
+      expect(() => renameEngineeringRecordKey(state, nodes, 'V-01', unsafe), unsafe).toThrow(/半角英数字/)
       const unsafeNodes = JSON.parse(`{"${unsafe}":{"type":"reservoir","head":80}}`) as JsonValue
       const advanced = updateEngineeringValue(state, { target: 'model', path: 'network.nodes' }, unsafeNodes)
       expect(validateEngineeringState('transient_network', advanced), unsafe).toContainEqual(expect.objectContaining({ path: 'network.nodes' }))

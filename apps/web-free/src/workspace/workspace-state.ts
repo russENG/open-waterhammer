@@ -65,7 +65,7 @@ export function resolveWorkspaceRoute(
   const candidateProject = data.projects.find(({ id }) => id === candidate.projectId)
   const recentProject = data.projects.find(({ id }) => id === recent?.projectId)
   const project = candidateProject ?? recentProject ?? newestByUpdatedAt(data.projects)
-  if (!project) throw new Error('Workspace has no Project')
+  if (!project) throw new Error('プロジェクトがありません')
 
   const projectAlternatives = new Set(
     data.alternatives.filter(({ projectId }) => projectId === project.id).map(({ id }) => id),
@@ -78,7 +78,7 @@ export function resolveWorkspaceRoute(
     ? data.cases.find(({ id }) => id === recent.caseId)
     : undefined
   const caseRecord = candidateCase ?? recentCase ?? newestByUpdatedAt(projectCases)
-  if (!caseRecord) throw new Error('Project has no Case')
+  if (!caseRecord) throw new Error('プロジェクトに比較案がありません')
 
   return {
     projectId: project.id,
@@ -100,6 +100,6 @@ export function toggleComparisonCase(
 ): { selection: string[]; error?: string } {
   const unique = [...new Set(selection)]
   if (unique.includes(caseId)) return { selection: unique.filter((id) => id !== caseId) }
-  if (unique.length >= 4) return { selection: unique, error: '比較できる Case は最大4件です。' }
+  if (unique.length >= 4) return { selection: unique, error: '比較できる比較案は最大4件です。' }
   return { selection: [...unique, caseId] }
 }

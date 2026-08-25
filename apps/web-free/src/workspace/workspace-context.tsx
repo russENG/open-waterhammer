@@ -36,7 +36,7 @@ export interface WorkspaceContextValue {
   saveModel(caseId: string, kind: RunKind, input: JsonValue, scenario?: Scenario): Promise<void>
   saveGeoDrafts(caseId: string, drafts: JsonValue, sourceCrs: string, localTransform?: LocalTransformDefinition): Promise<void>
   saveScenario(scenario: Scenario): Promise<void>
-  importExcelInputs(caseId: string, mapped: Partial<Record<RunKind, JsonValue>>, raw: JsonValue): Promise<void>
+  importExcelInputs(caseId: string, mapped: Partial<Record<RunKind, JsonValue>>, raw: JsonValue, eventSettings?: JsonValue): Promise<void>
 }
 
 const WorkspaceContext = createContext<WorkspaceContextValue | null>(null)
@@ -47,6 +47,14 @@ function uuid(): string {
 
 function now(): string {
   return new Date().toISOString()
+}
+
+function asObject(value: JsonValue | undefined): Record<string, JsonValue> {
+  return value && typeof value === 'object' && !Array.isArray(value) ? value : {}
+}
+
+function isNonEmptyObject(value: JsonValue | undefined): value is Record<string, JsonValue> {
+  return Object.keys(asObject(value)).length > 0
 }
 
 function modelsFrom(caseRecord: Case): Record<string, JsonValue> {
@@ -104,16 +112,16 @@ export function WorkspaceProvider({
     const scenario = data.scenarios.find(({ caseId: owner }) => owner === caseId)
     const alternative = data.alternatives.find(({ id }) => id === caseRecord?.alternativeId)
     const project = data.projects.find(({ id }) => id === alternative?.projectId)
-    if (!caseRecord || !scenario || !project) throw new Error('Run context is incomplete')
-    if (caseRecord.state !== 'draft') throw new Error('Locked or archived Case must be forked before execution')
+    if (!caseRecord || !scenario || !project) throw new Error('計算に必要な比較案、シナリオ、またはプロジェクトが不足しています')
+    if (caseRecord.state !== 'draft') throw new Error('計算済み・固定または保管済みの比較案は、複製して編集してから計算してください')
     const gate = evaluateRunGate(kind, caseRecord)
     if (!gate.canRun) {
       throw new Error(gate.reason === 'topology_invalid'
-        ? 'The persisted GIS topology has validation errors; fix it or save a complete network input for this Run kind'
-        : 'A persisted valid GIS topology or a complete network input is required before Run')
+        ? '保存済みのGIS管路網に検証エラーがあります。修正するか、この計算用の管路網入力を保存してください'
+        : '計算前に、有効なGIS管路網または完全な管路網入力を保存してください')
     }
     const model = modelsFrom(caseRecord)[kind]
-    if (model === undefined) throw new Error(`Run input is missing: ${kind}`)
+    if (model === undefined) throw new Error(`計算の入力条件がありません：${kind}`)
     const registry = executors ?? await defaultExecutors(callProtocol)
     const calculated = await runCalculation({
       repository,
@@ -130,7 +138,7 @@ export function WorkspaceProvider({
 
   const createFrom = useCallback((caseId: string) => guarded(async () => {
     const source = data.cases.find(({ id }) => id === caseId)
-    if (!source) throw new Error('Source Case not found')
+    if (!source) throw new Error('複製元の比較案が見つかりません')
     const alternative = data.alternatives.find(({ id }) => id === source.alternativeId)
     const project = data.projects.find(({ id }) => id === alternative?.projectId)
     const timestamp = now()
@@ -151,7 +159,7 @@ export function WorkspaceProvider({
   }), [data, guarded, refresh, repository])
 
   const fork = useCallback((caseId: string, reason: string) => guarded(async () => {
-    if (!reason.trim()) throw new Error('A non-blank revision reason is required')
+    if (!reason.trim()) throw new Error('変更理由を入力してください')
     const timestamp = now()
     const child = await repository.forkCase(caseId, { id: uuid(), revisionReason: reason, timestamp })
     const parentScenarios = data.scenarios.filter(({ caseId: owner }) => owner === caseId)
@@ -172,7 +180,7 @@ export function WorkspaceProvider({
 
   const saveModel = useCallback((caseId: string, kind: RunKind, input: JsonValue, scenario?: Scenario) => guarded(async () => {
     const current = data.cases.find(({ id }) => id === caseId)
-    if (!current) throw new Error('Case not found')
+    if (!current) throw new Error('比較案が見つかりません')
     const root = current.modelSnapshot && typeof current.modelSnapshot === 'object' && !Array.isArray(current.modelSnapshot)
       ? structuredClone(current.modelSnapshot) : {}
     const edited: Case = {
@@ -187,9 +195,9 @@ export function WorkspaceProvider({
     await refresh()
   }), [data.cases, data.scenarios, guarded, refresh, repository])
 
-  const importExcelInputs = useCallback((caseId: string, mapped: Partial<Record<RunKind, JsonValue>>, raw: JsonValue) => guarded(async () => {
+  const importExcelInputs = useCallback((caseId: string, mapped: Partial<Record<RunKind, JsonValue>>, raw: JsonValue, eventSettings?: JsonValue) => guarded(async () => {
     const current = data.cases.find(({ id }) => id === caseId)
-    if (!current) throw new Error('Case not found')
+    if (!current) throw new Error('比較案が見つかりません')
     const root = current.modelSnapshot && typeof current.modelSnapshot === 'object' && !Array.isArray(current.modelSnapshot)
       ? structuredClone(current.modelSnapshot) : {}
     const edited: Case = {
@@ -202,13 +210,26 @@ export function WorkspaceProvider({
       modelSnapshot: { ...root, runInputs: { ...modelsFrom(current), ...mapped }, excelImport: raw },
       updatedAt: now(),
     }
-    await repository.saveDraftCase(edited, data.scenarios.filter(({ caseId: owner }) => owner === caseId))
+    // Excel 由来の操作条件（等価閉そく時間など）はモデルではなくシナリオ側に入るため、
+    // 同じ保存でシナリオの eventSettings にも重ねる。分けて保存すると、後から保存した
+    // 側が直前の書き込みを古い値で上書きしてしまう。
+    const scenarios = data.scenarios.filter(({ caseId: owner }) => owner === caseId)
+    const merged = isNonEmptyObject(eventSettings)
+      ? scenarios.map((scenario, index) => (index === 0
+        ? {
+          ...scenario,
+          eventSettings: { ...asObject(scenario.eventSettings), ...eventSettings },
+          updatedAt: now(),
+        }
+        : scenario))
+      : scenarios
+    await repository.saveDraftCase(edited, merged)
     await refresh()
   }), [data.cases, data.scenarios, guarded, refresh, repository])
 
   const saveGeoDrafts = useCallback((caseId: string, drafts: JsonValue, sourceCrs: string, localTransform?: LocalTransformDefinition) => guarded(async () => {
     const current = data.cases.find(({ id }) => id === caseId)
-    if (!current) throw new Error('Case not found')
+    if (!current) throw new Error('比較案が見つかりません')
     const root = current.modelSnapshot && typeof current.modelSnapshot === 'object' && !Array.isArray(current.modelSnapshot)
       ? structuredClone(current.modelSnapshot) : {}
     const edited: Case = {
@@ -222,7 +243,7 @@ export function WorkspaceProvider({
 
   const saveScenario = useCallback((scenario: Scenario) => guarded(async () => {
     const current = data.cases.find(({ id }) => id === scenario.caseId)
-    if (!current) throw new Error('Case not found')
+    if (!current) throw new Error('比較案が見つかりません')
     await repository.saveDraftCase(current, [{ ...scenario, updatedAt: now() }])
     await refresh()
   }), [data.cases, guarded, refresh, repository])

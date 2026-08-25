@@ -35,19 +35,19 @@ export function registerSupportedProjections(): string[] {
 export function transformCoordinate(coordinate: Coordinate, source: string, destination: string): Coordinate {
   registerSupportedProjections()
   if (source === 'LOCAL:XY' || destination === 'LOCAL:XY') {
-    throw new Error('Local XY requires an explicit transform')
+    throw new Error('ローカルXYには座標変換の明示設定が必要です')
   }
-  if (!getProjection(source) || !getProjection(destination)) throw new Error(`Unsupported CRS: ${source} → ${destination}`)
+  if (!getProjection(source) || !getProjection(destination)) throw new Error(`未対応の座標系です：${source} → ${destination}`)
   return transform(coordinate, source, destination) as Coordinate
 }
 
 export function validateLocalTransform(definition: LocalTransformDefinition): { valid: boolean; error?: string } {
-  if (!definition.proj4.trim()) return { valid: false, error: 'Local XY Proj4 definition is required' }
+  if (!definition.proj4.trim()) return { valid: false, error: 'ローカルXYのProj4定義を入力してください' }
   try {
     proj4.defs('LOCAL:XY', definition.proj4)
     register(proj4)
     const probe = transform([0, 0], 'LOCAL:XY', 'EPSG:4326') as Coordinate
-    if (!probe.every(Number.isFinite)) throw new Error('transform returned non-finite coordinates')
+    if (!probe.every(Number.isFinite)) throw new Error('座標変換の結果が有限の数値になりません')
     return { valid: true }
   } catch (error) {
     return { valid: false, error: `Local XY transform is invalid: ${error instanceof Error ? error.message : String(error)}` }
@@ -79,7 +79,7 @@ export function exportFeaturesToWgs84<T extends { coordinate: Coordinate }>(
   sourceCrs: string,
   localTransform?: (coordinate: Coordinate) => Coordinate,
 ): T[] {
-  if (sourceCrs === 'LOCAL:XY' && !localTransform) throw new Error('Local XY requires an explicit transform before WGS84 export')
+  if (sourceCrs === 'LOCAL:XY' && !localTransform) throw new Error('WGS84へ書き出す前にローカルXYの座標変換を設定してください')
   return features.map((feature) => ({
     ...feature,
     coordinate: sourceCrs === 'LOCAL:XY'
@@ -96,10 +96,10 @@ export function transformGeometryToWgs84(
   localTransform?: (coordinate: Coordinate) => Coordinate,
 ): GeoJsonGeometry {
   if (sourceCrs === 'LOCAL:XY' && !localTransform) {
-    throw new Error('Local XY requires an explicit transform before WGS84 export')
+    throw new Error('WGS84へ書き出す前にローカルXYの座標変換を設定してください')
   }
   const convert = (coordinates: unknown): unknown => {
-    if (!Array.isArray(coordinates)) throw new Error(`Invalid ${geometry.type} coordinates`)
+    if (!Array.isArray(coordinates)) throw new Error(`${geometry.type}の座標が正しくありません`)
     if (coordinates.length >= 2 && typeof coordinates[0] === 'number' && typeof coordinates[1] === 'number') {
       const coordinate: Coordinate = [coordinates[0], coordinates[1]]
       return sourceCrs === 'LOCAL:XY'

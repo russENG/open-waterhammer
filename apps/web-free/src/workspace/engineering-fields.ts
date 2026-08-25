@@ -633,13 +633,13 @@ export function renameEngineeringRecordKey(
   from: string,
   to: string,
 ): EngineeringState {
-  if (collection.kind !== 'record') throw new Error('Only object-keyed collections can be renamed')
+  if (collection.kind !== 'record') throw new Error('この項目のIDは変更できません')
   const trimmed = to.trim()
-  if (!trimmed) throw new Error('A non-blank identifier is required')
-  if (!isPathSafeRecordId(trimmed)) throw new Error("ID must use only ASCII letters, numbers, '_' or '-' and cannot be __proto__, constructor, or prototype")
+  if (!trimmed) throw new Error('IDを入力してください')
+  if (!isPathSafeRecordId(trimmed)) throw new Error("IDには半角英数字、'_'、'-'のみを使用してください。予約語は使用できません")
   const current = readEngineeringValue(state, collection)
-  if (!current || typeof current !== 'object' || Array.isArray(current) || !(from in current)) throw new Error(`Record key does not exist: ${from}`)
-  if (trimmed !== from && trimmed in current) throw new Error(`Identifier already exists: ${trimmed}`)
+  if (!current || typeof current !== 'object' || Array.isArray(current) || !(from in current)) throw new Error(`変更元のIDが見つかりません：${from}`)
+  if (trimmed !== from && trimmed in current) throw new Error(`同じIDが既にあります：${trimmed}`)
   const renamed = Object.fromEntries(Object.entries(current).map(([key, value]) => [key === from ? trimmed : key, value])) as JsonValue
   const next = updateEngineeringValue(state, collection, renamed)
   return collection.target === 'model' && collection.path === 'network.nodes'
@@ -652,7 +652,7 @@ export function removeEngineeringCollectionItem(state: EngineeringState, collect
   if (collection.kind === 'record') {
     if (!current || typeof current !== 'object' || Array.isArray(current) || typeof index !== 'string' || !(index in current)) return state
     if (collection.target === 'model' && collection.path === 'network.nodes' && containsReference(state.model, index)) {
-      throw new Error(`${index} is referenced by a pipe and cannot be removed`)
+      throw new Error(`${index}は管路から参照されているため削除できません`)
     }
     const next = structuredClone(current) as Record<string, JsonValue>
     delete next[index]
@@ -662,7 +662,7 @@ export function removeEngineeringCollectionItem(state: EngineeringState, collect
   if (typeof index !== 'number') return state
   const row = current[index]
   if (collection.target === 'model' && collection.path === 'nodes' && row && typeof row === 'object' && !Array.isArray(row) && typeof row.id === 'string' && containsReference(state.model, row.id)) {
-    throw new Error(`${row.id} is referenced by a pipe and cannot be removed`)
+    throw new Error(`${row.id}は管路から参照されているため削除できません`)
   }
   const next = structuredClone(current)
   next.splice(index, 1)

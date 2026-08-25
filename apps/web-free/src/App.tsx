@@ -72,8 +72,8 @@ export default function App() {
   }, [docsPage, workspace])
 
   if (docsPage) return <DocumentationShell page={docsPage} />
-  if (bootError) return <div className="boot-screen boot-screen--error" role="alert"><span>WORKSPACE ERROR</span><h1>ローカル Workspace を開けませんでした</h1><p>{bootError}</p><button onClick={() => window.location.reload()}>Reload</button></div>
-  if (!workspace) return <div className="boot-screen" role="status"><div className="boot-mark"><i /><i /><i /></div><span>OPEN WATERHAMMER / alpha</span><h1>Local workspace</h1><p>IndexedDB と設計証跡を確認しています…</p></div>
+  if (bootError) return <div className="boot-screen boot-screen--error" role="alert"><span>作業画面エラー</span><h1>ローカル作業画面を開けませんでした</h1><p>{bootError}</p><button onClick={() => window.location.reload()}>再読み込み</button></div>
+  if (!workspace) return <div className="boot-screen" role="status"><div className="boot-mark"><i /><i /><i /></div><span>OPEN WATERHAMMER / alpha</span><h1>ローカル作業画面</h1><p>IndexedDB と設計証跡を確認しています…</p></div>
   if (workspace.data.projects.length === 0) return <WorkspaceStart workspace={workspace} onReady={(data) => setWorkspace({ ...workspace, data })} />
   return <WorkspaceApp repository={workspace.repository} initialData={workspace.data} />
 }
@@ -104,15 +104,15 @@ function WorkspaceStart({ workspace, onReady }: { workspace: BrowserWorkspace; o
 
   return <main className="workspace-start">
     <header className="workspace-start__brand"><span className="mark-lines" aria-hidden="true"><i /><i /><i /></span><div><strong>OPEN WATERHAMMER</strong><small>水撃圧の設計比較ワークスペース</small></div><b>alpha</b></header>
-    <section className="workspace-start__intro"><span>LOCAL-FIRST WORKSPACE</span><h1>作業を始める</h1><p>新しい検討を始めるか、架空データ入りのサンプルで操作を確認できます。</p></section>
+    <section className="workspace-start__intro"><span>ブラウザ内に保存する作業画面</span><h1>作業を始める</h1><p>新しい検討を始めるか、架空データ入りのサンプルで操作を確認できます。</p></section>
     <div className="workspace-start__choices">
       <form className="start-card" onSubmit={submit}>
-        <span className="start-card__number">01</span><div><small>EMPTY PROJECT</small><h2>新規プロジェクト作成</h2><p>空の入力条件と「編集中」の比較案を1件作成します。</p></div>
+        <span className="start-card__number">01</span><div><small>空のプロジェクト</small><h2>新規プロジェクト作成</h2><p>空の入力条件と「編集中」の比較案を1件作成します。</p></div>
         <label><span>プロジェクト名</span><input value={projectName} onChange={(event) => setProjectName(event.target.value)} placeholder="例：○○幹線 水撃圧検討" autoFocus /></label>
         <button className="start-card__button" disabled={busy !== null}>{busy === 'blank' ? '作成中…' : '作成する'}</button>
       </form>
       <article className="start-card start-card--sample">
-        <span className="start-card__number">02</span><div><small>SAMPLE PROJECT</small><h2>サンプルを開く</h2><p>入力、シナリオ、比較案が入ったサンプルで画面を確認できます。</p></div>
+        <span className="start-card__number">02</span><div><small>サンプルプロジェクト</small><h2>サンプルを開く</h2><p>入力、シナリオ、比較案が入ったサンプルで画面を確認できます。</p></div>
         <div className="sample-project"><span>サンプルデータ</span><strong>サンプル：N地区東部幹線水路</strong><small>実在する路線・施設とは関係ありません</small></div>
         <button className="start-card__button" type="button" onClick={() => void run('sample')} disabled={busy !== null}>{busy === 'sample' ? '準備中…' : 'このサンプルを開く'}</button>
       </article>
@@ -125,14 +125,14 @@ function WorkspaceStart({ workspace, onReady }: { workspace: BrowserWorkspace; o
 function DocumentationShell({ page }: { page: AppPage }) {
   const topic = new URLSearchParams(window.location.hash.split('?')[1] ?? '').get('topic') ?? undefined
   return <div className="docs-app">
-    <header className="docs-header"><a className="docs-brand" href="#/"><span>OWH</span><div><strong>OPEN WATERHAMMER</strong><small>documentation & design references</small></div></a><div className="product-context"><span className="alpha-label">alpha</span><span className="support-label">設計比較支援</span></div><nav aria-label="サービス内メニュー"><a href="#/">作業画面</a><a className={page === 'reference' ? 'active' : ''} href="#/docs/reference">設計基準</a><a className={page === 'library' ? 'active' : ''} href="#/docs/library">計算ライブラリ</a><a className={page === 'design-flow' ? 'active' : ''} href="#/docs/design-flow">設計フロー</a><a className={page === 'hydraulic' ? 'active' : ''} href="#/docs/hydraulic">水理設計の視点</a><a className={page === 'about' ? 'active' : ''} href="#/docs/about">このサイトについて</a></nav></header>
-    <main className="docs-main"><Suspense fallback={<div className="panel-loading" role="status"><span /><p>Loading documentation…</p></div>}>
+    <header className="docs-header"><a className="docs-brand" href="#/"><span>OWH</span><div><strong>OPEN WATERHAMMER</strong><small>設計資料・技術情報</small></div></a><div className="product-context"><span className="alpha-label">alpha</span><span className="support-label">設計比較支援</span></div><nav aria-label="サービス内メニュー"><a href="#/">作業画面</a><a className={page === 'reference' ? 'active' : ''} href="#/docs/reference">設計基準</a><a className={page === 'library' ? 'active' : ''} href="#/docs/library">計算ライブラリ</a><a className={page === 'design-flow' ? 'active' : ''} href="#/docs/design-flow">設計フロー</a><a className={page === 'hydraulic' ? 'active' : ''} href="#/docs/hydraulic">水理設計の視点</a><a className={page === 'about' ? 'active' : ''} href="#/docs/about">このサイトについて</a></nav></header>
+    <main className="docs-main"><Suspense fallback={<div className="panel-loading" role="status"><span /><p>設計資料を読み込んでいます…</p></div>}>
       {page === 'reference' && <ReferencePage initialTopicId={topic} />}
       {page === 'library' && <LibraryPage initialAnchor={topic} />}
       {page === 'design-flow' && <DesignFlowPage />}
       {page === 'hydraulic' && <HydraulicOverviewPage />}
       {page === 'about' && <AboutPage />}
     </Suspense></main>
-    <footer className="product-footer"><div><strong>alpha · 設計比較支援</strong><span>documentation preserved</span></div><p><b>適用限界：</b>自動評価は設計比較支援のための参考情報です。入力条件、適用基準、数値解法の妥当性は設計者が個別に確認してください。</p></footer>
+    <footer className="product-footer"><div><strong>alpha · 設計比較支援</strong><span>設計資料を記録</span></div><p><b>適用限界：</b>自動評価は設計比較支援のための参考情報です。入力条件、適用基準、数値解法の妥当性は設計者が個別に確認してください。</p></footer>
   </div>
 }

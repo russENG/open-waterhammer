@@ -63,7 +63,7 @@ describe('ReportsPanel deliverable Excel button', () => {
     renderPanel([])
     const button = screen.getByRole('button', { name: /水理計算書・検討書/ })
     expect(button).toBeDisabled()
-    expect(screen.getByText(/joukowsky_allievi|longitudinal_hydraulics/)).toBeVisible()
+    expect(screen.getByText(/Joukowsky \/ Allievi|縦断水理計算/)).toBeVisible()
   })
 
   test('stays disabled when the only Run is the wrong kind or did not succeed', () => {
@@ -96,8 +96,8 @@ describe('ReportsPanel deliverable Excel button', () => {
 
   test('the existing Excel report and Run JSON buttons and the applicability box are unaffected', () => {
     renderPanel([])
-    expect(screen.getByRole('button', { name: /Excel report/ })).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: /Run JSON/ })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /Excel帳票/ })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /計算記録JSON/ })).toBeInTheDocument()
     expect(screen.getByText('alpha · 設計比較支援')).toBeVisible()
   })
 })

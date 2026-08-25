@@ -56,11 +56,11 @@ const CONCLUSION_RUN_KINDS: Record<MethodConclusion, RunKind[]> = {
  * import する側なので、逆方向の import は循環になる）。
  */
 const RUN_KIND_LABEL: Partial<Record<RunKind, string>> = {
-  empirical_pressure: 'Empirical pressure（経験則による概略値）',
+  empirical_pressure: '経験式による水撃圧（概略値）',
   joukowsky_allievi: 'Joukowsky / Allievi（急閉・緩閉の比較式）',
-  transient_single_pipe: 'Transient single pipe（特性曲線法・単一路線）',
-  transient_network: 'Transient network（分岐・合流の過渡解析）',
-  transient_pump: 'Pump transient（停止・始動イベント）',
+  transient_single_pipe: '単一管路の過渡解析（特性曲線法）',
+  transient_network: '管路網の過渡解析（分岐・合流）',
+  transient_pump: 'ポンプ過渡解析（停止・始動イベント）',
 }
 
 export function MethodSelectionGuide({ onRecommend }: Props) {

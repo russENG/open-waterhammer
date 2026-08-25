@@ -4,6 +4,7 @@ import type { Run } from '@open-waterhammer/contracts'
 import { downloadCsv } from '../utils/csv'
 import { downloadPng, downloadSvg } from '../utils/svgExport'
 import { createLinkedFocus, type LinkedFocus } from '../workspace/focus'
+import { assessmentStatusLabel, runKindLabel, runStatusLabel } from '../workspace/run-display-labels'
 import { deriveRunVisuals, type PlotLine } from './run-visuals'
 
 type Series = { id: string; seconds: number[]; values: number[] }
@@ -101,14 +102,14 @@ export function ResultsPanel({ runs, selectedRun, focus, onSelectRun, onFocus }:
   const envelopeYRange = envelope ? extent([...envelope.maximum, ...envelope.minimum, ...envelope.steady]) : undefined
   const profileYRange = envelope ? extent(envelope.steady) : undefined
   return <div className="panel-stack results-panel">
-    <div className="panel-title-row"><div><span className="eyebrow">RUN EVIDENCE / 05</span><h1>結果</h1><p>summary、圧力包絡、縦断、時系列を同じ永続化済み Run 証跡から描画します。</p></div>{run && <select className="run-selector" value={run.id} onChange={(event) => { const found = runs.find(({ id }) => id === event.target.value); if (found) onSelectRun(found) }}>{[...runs].reverse().map((item) => <option value={item.id} key={item.id}>{item.kind} · {item.status}</option>)}</select>}</div>
+    <div className="panel-title-row"><div><span className="eyebrow">計算証跡 / 05</span><h1>結果</h1><p>要約、圧力包絡、縦断、時系列を同じ保存済み計算結果から描画します。</p></div>{run && <select className="run-selector" aria-label="表示する計算結果" value={run.id} onChange={(event) => { const found = runs.find(({ id }) => id === event.target.value); if (found) onSelectRun(found) }}>{[...runs].reverse().map((item) => <option value={item.id} key={item.id}>{runKindLabel(item.kind)} · {runStatusLabel(item.status)}</option>)}</select>}</div>
     {!run ? <div className="comparison-empty"><span>R—00</span><p>解析で計算を実行してください。</p></div> : <>
-      <div className="result-summary-strip"><article><span>STATUS</span><strong>{run.status}</strong></article><article><span>ASSESSMENT</span><strong>{run.assessment.status}</strong></article>{visuals!.summaryMetrics.slice(0, 2).map((metric) => <article key={metric.path}><span>{metric.path}</span><strong>{metric.value.toPrecision(5)}</strong></article>)}</div>
+      <div className="result-summary-strip"><article><span>計算状態</span><strong>{runStatusLabel(run.status)}</strong></article><article><span>評価</span><strong>{assessmentStatusLabel(run.assessment.status)}</strong></article>{visuals!.summaryMetrics.slice(0, 2).map((metric) => <article key={metric.path}><span>{metric.path}</span><strong>{metric.value.toPrecision(5)}</strong></article>)}</div>
       <div className="result-visual-grid">
         <section className="notebook-card chart-card chart-card--wide">
-          <div className="chart-heading"><div><span className="eyebrow">TIME SERIES</span><h2>Persisted trace</h2></div><span>{timeSeries?.id ?? 'no time series'}</span></div>
+          <div className="chart-heading"><div><span className="eyebrow">時系列</span><h2>保存済みの時系列</h2></div><span>{timeSeries?.id ?? '記録なし'}</span></div>
           {timePath && timeSeries ? <>
-            <svg ref={timeSeriesSvgRef} viewBox="0 0 640 220" role="img" aria-label={`Time series for ${timeSeries.id}`}>
+            <svg ref={timeSeriesSvgRef} viewBox="0 0 640 220" role="img" aria-label={`${timeSeries.id}の時系列`}>
               <defs><pattern id="graph-paper" width="40" height="40" patternUnits="userSpaceOnUse"><path d="M40 0H0V40" fill="none" stroke="currentColor" strokeOpacity=".12" /></pattern></defs>
               <rect width="640" height="220" fill="url(#graph-paper)" />
               <g transform="translate(20 20)">
@@ -118,39 +119,39 @@ export function ResultsPanel({ runs, selectedRun, focus, onSelectRun, onFocus }:
             </svg>
             <ChartLegend items={[{ label: `${timeSeries.id} · H` }]} />
             <ChartActions svgRef={timeSeriesSvgRef} filenameBase={`time-series-${timeSeries.id}`} rows={seriesRows(timeSeries, 'H')} />
-          </> : <div className="empty-ledger"><span>∿</span><p>この Run に時系列はありません。</p></div>}
+          </> : <div className="empty-ledger"><span>∿</span><p>この計算結果に時系列はありません。</p></div>}
         </section>
         <section className="notebook-card envelope-card">
-          <div className="chart-heading"><div><span className="eyebrow">ENVELOPE</span><h2>Persisted pressure bounds</h2></div><span>{envelope?.id ?? 'not recorded'}</span></div>
+          <div className="chart-heading"><div><span className="eyebrow">圧力包絡</span><h2>保存済みの最大・最小水頭</h2></div><span>{envelope?.id ?? '記録なし'}</span></div>
           {envelope ? <div className="envelope-sketch">
-            <svg ref={envelopeSvgRef} viewBox="0 0 360 180" role="img" aria-label={`Pressure envelope for ${envelope.id}`}>
+            <svg ref={envelopeSvgRef} viewBox="0 0 360 180" role="img" aria-label={`${envelope.id}の圧力包絡`}>
               <path className="ground-line" d={envelopeSteady} transform="translate(10 20)" />
               <path className="envelope-max" d={envelopeMaximum} transform="translate(10 20)" />
               <path className="envelope-min" d={envelopeMinimum} transform="translate(10 20)" />
               {visuals?.profileCursorRatio !== undefined && <line x1={10 + visuals.profileCursorRatio * 340} x2={10 + visuals.profileCursorRatio * 340} y1="5" y2="165" className="linked-chart-cursor" />}
               <g transform="translate(10 20)"><AxisTicks xRange={envelopeXRange} yRange={envelopeYRange} width={340} height={140} xUnit="m" yUnit="m" xDigits={0} yDigits={1} /></g>
             </svg>
-            <ChartLegend items={[{ label: 'H steady' }, { label: 'H max', className: 'legend-max' }, { label: 'H min', className: 'legend-min' }]} />
+            <ChartLegend items={[{ label: '定常水頭 H' }, { label: '最大水頭 H', className: 'legend-max' }, { label: '最小水頭 H', className: 'legend-min' }]} />
             <ChartActions svgRef={envelopeSvgRef} filenameBase={`envelope-${envelope.id}`} rows={envelopeRows(envelope)} />
           </div> : <div className="empty-ledger"><span>—</span><p>包絡線は記録されていません。</p></div>}
         </section>
-        <section className="notebook-card findings-card"><div className="chart-heading"><div><span className="eyebrow">ASSESSMENT</span><h2>Linked findings</h2></div><span>{run.assessment.findings.length}</span></div>{run.assessment.findings.length ? <ol>{run.assessment.findings.map((finding) => <li key={`${finding.ruleId}-${finding.targetRef}`}><button aria-pressed={focus?.targetRef === finding.targetRef} onClick={() => onFocus(createLinkedFocus(finding))}><span className="ng-marker">NG</span><div><strong>{finding.targetRef} · {finding.location ?? 'location unknown'}</strong><small>{finding.ruleId} / {String(finding.observedValue)} &gt; {String(finding.threshold)} {finding.unit}</small></div><span>SYNC ↗</span></button></li>)}</ol> : <div className="empty-ledger"><span>✓</span><p>finding はありません。</p></div>}</section>
+        <section className="notebook-card findings-card"><div className="chart-heading"><div><span className="eyebrow">評価</span><h2>関連する指摘事項</h2></div><span>{run.assessment.findings.length}</span></div>{run.assessment.findings.length ? <ol>{run.assessment.findings.map((finding) => <li key={`${finding.ruleId}-${finding.targetRef}`}><button aria-pressed={focus?.targetRef === finding.targetRef} onClick={() => onFocus(createLinkedFocus(finding))}><span className="ng-marker">NG</span><div><strong>{finding.targetRef} · {finding.location ?? '位置情報なし'}</strong><small>{finding.ruleId} / {String(finding.observedValue)} &gt; {String(finding.threshold)} {finding.unit}</small></div><span>連動 ↗</span></button></li>)}</ol> : <div className="empty-ledger"><span>✓</span><p>指摘事項はありません。</p></div>}</section>
         <section className="notebook-card profile-card">
-          <div className="chart-heading"><div><span className="eyebrow">LONGITUDINAL</span><h2>Persisted profile</h2></div><span>{focus?.profileCursor ?? envelope?.id ?? 'not recorded'}</span></div>
+          <div className="chart-heading"><div><span className="eyebrow">縦断</span><h2>保存済みの縦断図</h2></div><span>{focus?.profileCursor ?? envelope?.id ?? '記録なし'}</span></div>
           {envelope ? <div className="profile-plot">
-            <svg ref={profileSvgRef} viewBox="0 0 360 150" role="img" aria-label={`Longitudinal profile for ${envelope.id}`}>
+            <svg ref={profileSvgRef} viewBox="0 0 360 150" role="img" aria-label={`${envelope.id}の縦断図`}>
               <path d={envelopeSteady} transform="translate(10 5)" className="ground-line" />
               {visuals?.profileCursorRatio !== undefined && <line x1={10 + visuals.profileCursorRatio * 340} x2={10 + visuals.profileCursorRatio * 340} y1="5" y2="145" className="linked-chart-cursor profile-cursor-line" />}
               <g transform="translate(10 5)"><AxisTicks xRange={envelopeXRange} yRange={profileYRange} width={340} height={140} xUnit="m" yUnit="m" xDigits={0} yDigits={1} /></g>
             </svg>
             <div className="profile-ruler"><span>0</span><span>{envelope.distance.at(-1)?.toFixed(0)} m</span></div>
-            <ChartLegend items={[{ label: 'H steady' }]} />
+            <ChartLegend items={[{ label: '定常水頭 H' }]} />
             <ChartActions svgRef={profileSvgRef} filenameBase={`profile-${envelope.id}`} rows={envelopeRows(envelope)} />
           </div> : <div className="empty-ledger"><span>—</span><p>縦断データは記録されていません。</p></div>}
         </section>
         {speedSeries && <section className="notebook-card chart-card speed-card">
-          <div className="chart-heading"><div><span className="eyebrow">PUMP SPEED</span><h2>Persisted rotational speed</h2></div><span>{speedSeries.id}</span></div>
-          <svg ref={speedSvgRef} viewBox="0 0 640 220" role="img" aria-label={`Pump speed for ${speedSeries.id}`}>
+          <div className="chart-heading"><div><span className="eyebrow">ポンプ回転速度</span><h2>保存済みの回転速度</h2></div><span>{speedSeries.id}</span></div>
+          <svg ref={speedSvgRef} viewBox="0 0 640 220" role="img" aria-label={`${speedSeries.id}のポンプ回転速度`}>
             <defs><pattern id="graph-paper-speed" width="40" height="40" patternUnits="userSpaceOnUse"><path d="M40 0H0V40" fill="none" stroke="currentColor" strokeOpacity=".12" /></pattern></defs>
             <rect width="640" height="220" fill="url(#graph-paper-speed)" />
             <g transform="translate(20 20)">

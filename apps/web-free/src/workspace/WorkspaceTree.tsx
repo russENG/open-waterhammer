@@ -9,7 +9,7 @@ function labelOf(caseRecord: Case): string {
   if (caseRecord.revisionReason) return caseRecord.revisionReason
   const model = caseRecord.modelSnapshot
   if (model && typeof model === 'object' && !Array.isArray(model) && typeof model.designLabel === 'string') return model.designLabel
-  return `Case ${caseRecord.id.slice(0, 8)}`
+  return `比較案 ${caseRecord.id.slice(0, 8)}`
 }
 
 export function WorkspaceTree({
@@ -37,7 +37,7 @@ export function WorkspaceTree({
   const selected = data.cases.find(({ id }) => id === caseId)!
   const alternatives = data.alternatives.filter(({ projectId: owner }) => owner === projectId)
   return (
-    <aside className="workspace-tree" aria-label="Project Alternative Case tree">
+    <aside className="workspace-tree" aria-label="プロジェクト・代替案・比較案ツリー">
       {data.projects.length > 1 && <div className="tree-project-switcher">
         <label htmlFor="workspace-project-switcher">プロジェクト切替</label>
         <select id="workspace-project-switcher" value={projectId} onChange={(event) => onSelectProject(event.target.value)}>
@@ -49,7 +49,7 @@ export function WorkspaceTree({
       </div>}
       <div className="tree-project-row">
         <button className="tree-expander" aria-expanded={open} onClick={() => setOpen((value) => !value)}>{open ? '−' : '+'}</button>
-        <div><span className="tree-kicker">PROJECT</span><h2>{projectDisplayName(project)}</h2><small>{project.crs} · {project.standardSelection.version}</small></div>
+        <div><span className="tree-kicker">プロジェクト</span><h2>{projectDisplayName(project)}</h2><small>{project.crs} · {project.standardSelection.version}</small></div>
       </div>
       {open && <div className="tree-branches">
         {alternatives.map((alternative) => {
@@ -62,7 +62,7 @@ export function WorkspaceTree({
                   <span className={`state-dot state-dot--${caseRecord.state}`} aria-hidden="true" />
                   <span><strong>{String(index + 1).padStart(2, '0')} · {labelOf(caseRecord)}</strong><small>{caseStateLabel(caseRecord.state)}{caseRecord.parentCaseId ? ` · ↳ ${caseRecord.parentCaseId.slice(0, 6)}` : ' · 起点'}</small></span>
                 </button>
-                <label className="compare-check"><input type="checkbox" checked={comparison.includes(caseRecord.id)} onChange={() => onToggleComparison(caseRecord.id)} aria-label={`${labelOf(caseRecord)}を比較に追加`} /><span>CMP</span></label>
+                <label className="compare-check"><input type="checkbox" checked={comparison.includes(caseRecord.id)} onChange={() => onToggleComparison(caseRecord.id)} aria-label={`${labelOf(caseRecord)}を比較に追加`} /><span>比較</span></label>
               </li>)}
             </ol>
           </section>

@@ -44,14 +44,14 @@ describe('OverviewPanel project bundle card', () => {
 
   test('clicking export invokes exportProjectFile with the repository and Project id, then downloads the result', async () => {
     const user = userEvent.setup()
-    const bundle = { name: 'sample-project.owhproj', bytes: new Uint8Array([9, 9, 9]) }
+    const bundle = { name: 'sample.owhproj', bytes: new Uint8Array([9, 9, 9]) }
     vi.mocked(exportProjectFile).mockResolvedValue(bundle)
     const { repository, project } = renderInWorkspace()
 
     await user.click(screen.getByRole('button', { name: /プロジェクトを書き出し/ }))
 
     expect(exportProjectFile).toHaveBeenCalledWith(repository, project.id)
-    await screen.findByText(/sample-project\.owhproj/)
+    await screen.findByText(/sample\.owhproj/)
     expect(downloadProjectFile).toHaveBeenCalledWith(bundle)
   })
 

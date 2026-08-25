@@ -4,6 +4,7 @@ import { useState } from 'react'
 import { buildReportInput, generateDeliverableExcel } from '../../reports/deliverable-reports'
 import { APPLICABILITY_LIMITATIONS, buildRunJsonExport, generatePersistedRunExcel } from '../../reports/run-exports'
 import { useWorkspace } from '../workspace-context'
+import { runKindLabel, runStatusLabel } from '../run-display-labels'
 
 const XLSX_MIME = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
 
@@ -52,7 +53,7 @@ export function ReportsPanel({ runs }: { runs: Run[] }) {
       const copy = new Uint8Array(bytes.byteLength)
       copy.set(bytes)
       download(copy.buffer, `run-${selected.id}.xlsx`, XLSX_MIME)
-      setMessage('Excel report exported from persisted Run')
+      setMessage('保存済みの計算結果からExcel帳票を書き出しました')
     } catch (error) {
       setMessage(error instanceof Error ? error.message : String(error))
     }
@@ -61,7 +62,7 @@ export function ReportsPanel({ runs }: { runs: Run[] }) {
   function json() {
     if (!selected) return
     download(buildRunJsonExport(selected), `run-${selected.id}.json`, 'application/json;charset=utf-8')
-    setMessage('Run JSON exported')
+    setMessage('計算記録JSONを書き出しました')
   }
 
   async function deliverable() {
@@ -72,20 +73,20 @@ export function ReportsPanel({ runs }: { runs: Run[] }) {
       copy.set(bytes)
       const baseName = reportInput.meta.projectName ? reportInput.meta.projectName.replace(/[\\/:*?"<>|]/g, '_') : 'unnamed'
       download(copy.buffer, `waterhammer-report-${baseName}.xlsx`, XLSX_MIME)
-      setMessage('水理計算書・検討書を出力しました（再計算なし・保存済み Run から生成）')
+      setMessage('水理計算書・検討書を書き出しました（再計算せず、保存済みの計算結果から生成）')
     } catch (error) {
       setMessage(error instanceof Error ? error.message : String(error))
     }
   }
 
   return <div className="panel-stack reports-panel">
-    <div className="panel-title-row"><div><span className="eyebrow">EVIDENCE EXPORT / 07</span><h1>帳票</h1><p>再計算せず、保存済み Run の manifest・summary・assessment をそのまま成果にします。</p></div></div>
+    <div className="panel-title-row"><div><span className="eyebrow">証跡の書き出し / 07</span><h1>帳票</h1><p>再計算せず、保存済みの計算結果と計算記録をそのまま成果品にします。</p></div></div>
     <div className="reports-grid">
-      <section className="notebook-card report-selector"><div className="card-heading"><span>R</span><div><h2>Persisted Run</h2><p>エクスポート対象を選択</p></div></div>
-        {runs.length ? <label><span>Run record</span><select value={selected?.id} onChange={(event) => setSelectedId(event.target.value)}>{[...runs].reverse().map((run) => <option key={run.id} value={run.id}>{run.kind} · {run.status} · {new Date(run.updatedAt).toLocaleString('ja-JP')}</option>)}</select></label> : <div className="empty-ledger"><span>∅</span><p>保存済み Run がありません。</p></div>}
+      <section className="notebook-card report-selector"><div className="card-heading"><span>R</span><div><h2>保存済みの計算結果</h2><p>書き出す対象を選択</p></div></div>
+        {runs.length ? <label><span>計算結果</span><select value={selected?.id} onChange={(event) => setSelectedId(event.target.value)}>{[...runs].reverse().map((run) => <option key={run.id} value={run.id}>{runKindLabel(run.kind)} · {runStatusLabel(run.status)} · {new Date(run.updatedAt).toLocaleString('ja-JP')}</option>)}</select></label> : <div className="empty-ledger"><span>∅</span><p>保存済みの計算結果がありません。</p></div>}
       </section>
-      <section className="notebook-card report-manifest"><div className="card-heading"><span>M</span><div><h2>Manifest summary</h2><p>証跡に含まれる正準情報</p></div></div>{selected ? <dl className="condition-list"><div><dt>Product</dt><dd>{selected.manifest.productVersion}</dd></div><div><dt>Method</dt><dd>{selected.manifest.method}</dd></div><div><dt>Engine / runtime</dt><dd>{selected.manifest.engine} / {selected.manifest.runtime}</dd></div><div><dt>Rule IDs</dt><dd>{selected.assessment.findings.map(({ ruleId }) => ruleId).join(', ') || 'finding none'}</dd></div></dl> : null}</section>
-      <section className="notebook-card export-actions"><div className="card-heading"><span>⇩</span><div><h2>Export files</h2><p>ブラウザからローカル保存</p></div></div><button className="export-button" disabled={!selected} onClick={() => void excel()}><strong>Excel report</strong><small>.xlsx · generateRunReport</small></button><button className="export-button" disabled={!selected} onClick={json}><strong>Run JSON</strong><small>.json · canonical evidence</small></button><button className="export-button" disabled={!reportInput} onClick={() => void deliverable()}><strong>水理計算書・検討書</strong><small>.xlsx · 成果品様式（再計算なし）</small></button>{!reportInput && <p className="inline-message">成功した joukowsky_allievi または longitudinal_hydraulics の Run がまだありません。</p>}{message && <p role="status" className="inline-message">{message}</p>}</section>
+      <section className="notebook-card report-manifest"><div className="card-heading"><span>M</span><div><h2>計算記録の要約</h2><p>証跡に含まれる正準情報</p></div></div>{selected ? <dl className="condition-list"><div><dt>製品</dt><dd>{selected.manifest.productVersion}</dd></div><div><dt>計算方式</dt><dd>{selected.manifest.method}</dd></div><div><dt>エンジン / 実行環境</dt><dd>{selected.manifest.engine} / {selected.manifest.runtime}</dd></div><div><dt>規則ID</dt><dd>{selected.assessment.findings.map(({ ruleId }) => ruleId).join(', ') || '該当なし'}</dd></div></dl> : null}</section>
+      <section className="notebook-card export-actions"><div className="card-heading"><span>⇩</span><div><h2>ファイルの書き出し</h2><p>ブラウザからローカルに保存</p></div></div><button className="export-button" disabled={!selected} onClick={() => void excel()}><strong>Excel帳票</strong><small>.xlsx · 計算結果の帳票</small></button><button className="export-button" disabled={!selected} onClick={json}><strong>計算記録JSON</strong><small>.json · 正準化された計算証跡</small></button><button className="export-button" disabled={!reportInput} onClick={() => void deliverable()}><strong>水理計算書・検討書</strong><small>.xlsx · 成果品様式（再計算なし）</small></button>{!reportInput && <p className="inline-message">Joukowsky / Allieviまたは縦断水理計算の成功した計算結果がまだありません。</p>}{message && <p role="status" className="inline-message">{message}</p>}</section>
     </div>
     <div className="limitations-box"><strong>alpha · 設計比較支援</strong><p>{APPLICABILITY_LIMITATIONS}</p></div>
   </div>

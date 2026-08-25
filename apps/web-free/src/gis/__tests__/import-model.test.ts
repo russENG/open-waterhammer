@@ -13,12 +13,12 @@ const geojson = {
 
 describe('GeoJSON import wizard model', () => {
   test('requires source CRS and explicit node/pipe attribute mapping instead of guessing', () => {
-    expect(() => importGeoJsonDrafts(geojson, { sourceCrs: '', node: {}, pipe: {} })).toThrow(/source CRS/i)
-    expect(() => importGeoJsonDrafts(geojson, { sourceCrs: 'EPSG:4326', node: {}, pipe: {} })).toThrow(/attribute mapping/i)
+    expect(() => importGeoJsonDrafts(geojson, { sourceCrs: '', node: {}, pipe: {} })).toThrow(/読み込み元の座標系/)
+    expect(() => importGeoJsonDrafts(geojson, { sourceCrs: 'EPSG:4326', node: {}, pipe: {} })).toThrow(/属性割り当て/)
     expect(() => importGeoJsonDrafts(geojson, {
       sourceCrs: 'EPSG:4326', node: { id: '   ', elevation: 'elev' },
       pipe: { id: 'code', startNodeId: 'from', endNodeId: 'to', innerDiameter: 'dia' },
-    })).toThrow(/attribute mapping/i)
+    })).toThrow(/属性割り当て/)
   })
 
   test('retains invalid and unconnected elements as drafts with element-level errors', () => {

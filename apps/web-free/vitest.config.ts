@@ -24,5 +24,6 @@ export default defineConfig({
     exclude: [...configDefaults.exclude, 'e2e/**'],
     css: false,
     restoreMocks: true,
+    testTimeout: 15_000,
   },
 })

@@ -11,7 +11,7 @@ describe('RunInspector recursive Differences', () => {
 
     render(<RunInspector run={run} baseline={baseline} />)
 
-    const differencesSection = screen.getByRole('heading', { name: 'Differences' }).closest('section')!
+    const differencesSection = screen.getByRole('heading', { name: '差分' }).closest('section')!
     expect(within(differencesSection).getByText('pipes.P-01.waveSpeed')).toBeVisible()
     expect(within(differencesSection).getByText('+15.00')).toBeVisible()
   })
@@ -24,7 +24,7 @@ describe('RunInspector recursive Differences', () => {
 
     render(<RunInspector run={run} baseline={baseline} />)
 
-    const differencesSection = screen.getByRole('heading', { name: 'Differences' }).closest('section')!
+    const differencesSection = screen.getByRole('heading', { name: '差分' }).closest('section')!
     expect(within(differencesSection).getAllByText('+5.000')).toHaveLength(24)
     expect(within(differencesSection).getByText('他 6 件')).toBeVisible()
   })

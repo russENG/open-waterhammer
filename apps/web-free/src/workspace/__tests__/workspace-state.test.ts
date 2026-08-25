@@ -47,7 +47,7 @@ describe('workspace routing and comparison state', () => {
     expect(canCompareCases(selected)).toBe(true)
     expect(toggleComparisonCase(selected, '99999999-9999-4999-8999-999999999999')).toEqual({
       selection: selected,
-      error: '比較できる Case は最大4件です。',
+      error: '比較できる比較案は最大4件です。',
     })
     expect(canCompareCases(selected.slice(0, 1))).toBe(false)
     expect(canCompareCases(selected.slice(0, 2))).toBe(true)

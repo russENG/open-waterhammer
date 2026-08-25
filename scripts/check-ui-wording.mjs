@@ -18,7 +18,8 @@
  * 使い方:
  *   node scripts/check-ui-wording.mjs
  *
- * 禁止語の追加: 下の FORBIDDEN 配列に { term, reason, suggest } を追加。
+ * 正規表記: docs/ui-terminology.md
+ * 禁止語の追加: 辞書を更新したうえで、下の FORBIDDEN 配列にもルールを追加する。
  */
 
 import { readFileSync, readdirSync, statSync } from 'node:fs';
@@ -33,6 +34,51 @@ const TARGET_DIRS = [
 
 /** @type {{ term: RegExp, reason: string, suggest: string }[]} */
 const FORBIDDEN = [
+  {
+    term: /\bdrafts?\b/i,
+    reason: '内部状態名を利用者向け画面に表示しない。',
+    suggest: '状態は「編集中」、データは「編集中データ」を使う',
+  },
+  {
+    term: /\blocked\b/i,
+    reason: '内部状態名を利用者向け画面に表示しない。',
+    suggest: '「計算済み・固定」を使う',
+  },
+  {
+    term: /\barchived\b/i,
+    reason: '内部状態名を利用者向け画面に表示しない。',
+    suggest: '「保管済み」を使う',
+  },
+  {
+    term: /\bfork(?:ed|ing)?\b/i,
+    reason: '内部の派生操作名を利用者向け画面に表示しない。',
+    suggest: '操作は「複製して編集」、系譜は「複製元」を使う',
+  },
+  {
+    term: /\bworkspace\b/i,
+    reason: '英語の内部・機能名を利用者向け画面に表示しない。',
+    suggest: '「作業画面」または「設計比較ワークスペース」を使う',
+  },
+  {
+    term: /\bprojects?\b/i,
+    reason: '基本用語は日本語表記に統一する。',
+    suggest: '「プロジェクト」を使う',
+  },
+  {
+    term: /\balternatives?\b/i,
+    reason: '基本用語は日本語表記に統一する。',
+    suggest: '「代替案」を使う',
+  },
+  {
+    term: /\bcases?\b/i,
+    reason: '内部の比較単位名を利用者向け画面に表示しない。',
+    suggest: '設計比較の単位は「比較案」、水理分野の固有用語は「計算ケース」を使う',
+  },
+  {
+    term: /\bruns?\b/i,
+    reason: '内部の計算実行名を利用者向け画面に表示しない。',
+    suggest: '操作は「計算」、保存物は「計算結果」または「計算記録」を使う',
+  },
   {
     term: /準拠/,
     reason: '限定条件を超えた包括的な適合性の印象を与える。',
@@ -137,7 +183,7 @@ function processFile(file) {
     }
 
     // (4) JSX 式コンテナ内の単純な文字列リテラル {'foo'}
-    if (ts.isJsxExpression(node) && node.expression) {
+    if (ts.isJsxExpression(node) && node.expression && !ts.isJsxAttribute(node.parent)) {
       const v = getStringValue(node.expression);
       if (v) checkString(v, file, node.expression.getStart(sf), sf);
     }

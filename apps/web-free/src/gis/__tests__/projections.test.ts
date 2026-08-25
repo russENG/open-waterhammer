@@ -34,7 +34,7 @@ describe('GIS projections and offline basemap policy', () => {
 
   test('local XY cannot be exported as WGS84 without an explicit transform', () => {
     const draft = [{ id: 'N-1', coordinate: [100, 200] as [number, number] }]
-    expect(() => exportFeaturesToWgs84(draft, 'LOCAL:XY')).toThrow(/explicit transform/i)
+    expect(() => exportFeaturesToWgs84(draft, 'LOCAL:XY')).toThrow(/座標変換を設定/)
     expect(exportFeaturesToWgs84(draft, 'LOCAL:XY', ([x, y]) => [139 + x / 100000, 35 + y / 100000]))
       .toEqual([{ id: 'N-1', coordinate: [139.001, 35.002] }])
   })

@@ -47,10 +47,10 @@ export function importGeoJsonDrafts(
   collection: GeoJsonFeatureCollection,
   mapping: AttributeMapping,
 ): HydraulicDraft[] {
-  if (!mapping.sourceCrs.trim()) throw new Error('Source CRS is required')
+  if (!mapping.sourceCrs.trim()) throw new Error('読み込み元の座標系を指定してください')
   const mappedKeys = [mapping.node.id, mapping.node.elevation, mapping.pipe.id, mapping.pipe.startNodeId, mapping.pipe.endNodeId, mapping.pipe.innerDiameter]
   if (mappedKeys.some((key) => typeof key !== 'string' || key.trim() === '')) {
-    throw new Error('Explicit node and pipe attribute mapping is required')
+    throw new Error('節点と管路の属性割り当てを指定してください')
   }
   return collection.features.map((feature, index) => {
     const properties = feature.properties ?? {}

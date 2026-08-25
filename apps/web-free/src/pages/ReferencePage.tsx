@@ -173,7 +173,7 @@ export function ReferencePage({ initialTopicId }: { initialTopicId?: string } = 
                   <span className="ref-source-short" style={{ color: src.color }}>{src.shortLabel}</span>
                   <span className="ref-source-name">{src.fullLabel}</span>
                   {loaded
-                    ? <span className="ref-source-status ref-source-status--ok">OK</span>
+                    ? <span className="ref-source-status ref-source-status--ok">登録済み</span>
                     : <span className="ref-source-status ref-source-status--none">未登録</span>
                   }
                 </button>

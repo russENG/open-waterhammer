@@ -35,7 +35,7 @@ describe('MethodSelectionGuide', () => {
     // The question wizard should be gone once a conclusion is reached.
     expect(screen.queryByRole('button', { name: 'はい' })).not.toBeInTheDocument()
 
-    const empiricalButton = screen.getByRole('button', { name: /Empirical pressure/ })
+    const empiricalButton = screen.getByRole('button', { name: /経験式による水撃圧/ })
     const joukowskyButton = screen.getByRole('button', { name: /Joukowsky \/ Allievi/ })
     expect(empiricalButton).toBeVisible()
     expect(joukowskyButton).toBeVisible()
@@ -55,10 +55,10 @@ describe('MethodSelectionGuide', () => {
     await user.click(screen.getByRole('button', { name: 'はい' }))
 
     // Only the pump recommendation should be offered for this conclusion.
-    expect(screen.queryByRole('button', { name: /Empirical pressure/ })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /経験式による水撃圧/ })).not.toBeInTheDocument()
     expect(screen.queryByRole('button', { name: /Transient single pipe/ })).not.toBeInTheDocument()
 
-    const pumpButton = screen.getByRole('button', { name: /Pump transient/ })
+    const pumpButton = screen.getByRole('button', { name: /ポンプ過渡解析/ })
     await user.click(pumpButton)
     expect(onRecommend).toHaveBeenCalledExactlyOnceWith('transient_pump')
   })
@@ -67,7 +67,7 @@ describe('MethodSelectionGuide', () => {
     const user = userEvent.setup()
     setupAnalysisPanel()
 
-    expect(screen.getByRole('radio', { name: /Wave speed/ })).toBeChecked()
+    expect(screen.getByRole('radio', { name: /波速/ })).toBeChecked()
 
     const summary = screen.getByText('計算方法の選び方（§8.3.2 参照）')
     const details = summary.closest('details')
@@ -80,10 +80,10 @@ describe('MethodSelectionGuide', () => {
     // Drive the same empirical-conclusion path as above, scoped inside AnalysisPanel now.
     await user.click(screen.getByRole('button', { name: 'いいえ' }))
     await user.click(screen.getByRole('button', { name: 'はい' }))
-    await user.click(screen.getByRole('button', { name: /Empirical pressure/ }))
+    await user.click(screen.getByRole('button', { name: /経験式による水撃圧/ }))
 
-    expect(screen.getByRole('radio', { name: /Empirical pressure/ })).toBeChecked()
-    expect(screen.getByRole('radio', { name: /Wave speed/ })).not.toBeChecked()
-    expect(screen.getByRole('heading', { level: 2, name: 'Empirical pressure' })).toBeVisible()
+    expect(screen.getByRole('radio', { name: /経験式による水撃圧/ })).toBeChecked()
+    expect(screen.getByRole('radio', { name: /波速/ })).not.toBeChecked()
+    expect(screen.getByRole('heading', { level: 2, name: '経験式による水撃圧' })).toBeVisible()
   })
 })
