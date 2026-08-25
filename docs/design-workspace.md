@@ -346,13 +346,18 @@ findings は契約スキーマのリテラルキー（`targetRef`/`observedValue
 
 ## 11. Excel 入出力
 
+ExcelとWeb入力の責任分界、項目対応、再読込時の上書き規則は
+[Excel入力とWeb入力の責任分界](./excel-web-input-policy.md)を正とする。
+
 - **入力**: テンプレートダウンロード（`@open-waterhammer/excel-io` の `generateTemplate`）と
   ワークブック取込（`parseWorkbook`）を Model＋GIS タブに提供する。取込結果は
   `mapWorkbookToRunInputs` で各 `RunKind` の `runInputs` 候補（`wave_speed`/`joukowsky_allievi`/
   `longitudinal_hydraulics`/`steady_network_python`/`steady_network_epanet`）にマッピングされ、
   省略・既定値化した項目は理由付きの警告として返す。生のワークブックデータ全体も
   `modelSnapshot.excelImport` として保持し、帳票生成時の詳細情報源にする。取込は **draft の Case
-  にのみ**でき、書き込むのは `runInputs`（ドラフト）のみ——取込の時点で計算は一切走らない。
+  にのみ**でき、書き込むのは `runInputs` と先頭シナリオの対応する操作条件だけで、取込の時点で
+  計算は一切走らない。検証エラーが1件でもある場合は更新せず、既存入力と競合する再読込は利用者の
+  確認後にだけ実行する。
   **既知の制約**: Excel の節点シートには需要流量（demand）の列がないため、`steady_network_python`/
   `steady_network_epanet` を Excel 取込だけで構成すると、貯水池以外の節点はすべて需要ゼロの
   `junction` になる（＝計算結果の流量がすべてゼロになる）。定常網計算で Excel 取込を使う場合は、

@@ -26,6 +26,8 @@ Open Waterhammer の利用者向け画面で使う用語と表記を定める。
 | offline build | バージョン固定のオフライン版 | 公開サイトと区別し、組織内で配信する静的成果物を指す |
 | static hosting | 静的配信 | 技術構成の説明に限って使用する |
 | evidence preserved | 証跡保持 | 計算条件・結果・由来情報を保持することを表す |
+| source of truth / master | 正本 | 複数の入力元がある場合に、以後の確認・修正で基準とするデータを指す。初出では何が正本か具体的に書く |
+| initial import / initial input | 初期一括入力 | Excelからプロジェクト開始時のデータをまとめて読み込む用途を指す |
 
 ## 作業状態
 
@@ -68,6 +70,7 @@ Open Waterhammer の利用者向け画面で使う用語と表記を定める。
 | Import | 読み込む |
 | Open Project | プロジェクトを開く |
 | Replace Project | プロジェクトを置き換える |
+| Re-import | 読み直す / 再読込 | ボタンは動作が分かる「確認して上書き」を優先する |
 | Cancel | キャンセル |
 | Close | 閉じる |
 

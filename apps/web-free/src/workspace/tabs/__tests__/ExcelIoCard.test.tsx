@@ -17,8 +17,12 @@ import { generateTemplate, parseWorkbook } from '@open-waterhammer/excel-io'
 const mockedParseWorkbook = vi.mocked(parseWorkbook)
 const mockedGenerateTemplate = vi.mocked(generateTemplate)
 
-function setup(caseOverrides: Partial<{ state: 'draft' | 'locked' | 'archived' }> = {}) {
+function setup(
+  caseOverrides: Partial<{ state: 'draft' | 'locked' | 'archived' }> = {},
+  options: { emptyInputs?: boolean } = {},
+) {
   const data = buildSampleWorkspace('2026-08-23T01:02:03.000Z')
+  if (options.emptyInputs) data.cases[0]!.modelSnapshot = { runInputs: {} }
   const repository = new InMemoryWorkspaceRepository(data)
   const caseRecord = { ...data.cases[0]!, ...caseOverrides }
   render(
@@ -40,6 +44,7 @@ const validWorkbookData = {
   cases: [{
     id: 'CALC-99', name: 'アップロードケース', operationType: 'valve_close' as const,
     targetFacilityId: 'V-01', initialVelocity: 1.1, initialHead: 28,
+    closeTime: 2.5,
   }],
   measurementPoints: [],
 }
@@ -71,14 +76,16 @@ describe('ExcelIoCard', () => {
     expect(modelSnapshot.excelImport).toBeUndefined()
   })
 
-  test('a successful upload maps and persists runInputs + excelImport in one save', async () => {
+  test('the first upload maps and persists runInputs + excelImport without an overwrite confirmation', async () => {
     const user = userEvent.setup()
     mockedParseWorkbook.mockResolvedValueOnce({ data: validWorkbookData, errors: [], warnings: [] })
-    const { repository, caseRecord } = setup()
+    const { repository, caseRecord } = setup({}, { emptyInputs: true })
 
     const file = new File(['dummy'], 'good.xlsx', { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' })
     const input = screen.getByLabelText(/xlsx/i)
     await user.upload(input, file)
+
+    expect(screen.queryByRole('dialog', { name: /Excel再読込/ })).not.toBeInTheDocument()
 
     await waitFor(async () => {
       const snapshot = await repository.snapshot()
@@ -89,7 +96,55 @@ describe('ExcelIoCard', () => {
       expect((runInputs.wave_speed as { pipe: { id: string } }).pipe.id).toBe('P-99')
       expect((runInputs.joukowsky_allievi as { calculationCase: { id: string } }).calculationCase.id).toBe('CALC-99')
     })
-    expect(await screen.findByText(/wave_speed/)).toBeVisible()
+    expect(await screen.findByText(/波速計算/)).toBeVisible()
+  })
+
+  test('requires confirmation before replacing mapped inputs and retains unrelated inputs', async () => {
+    const user = userEvent.setup()
+    mockedParseWorkbook.mockResolvedValueOnce({ data: validWorkbookData, errors: [], warnings: [] })
+    const { repository, caseRecord } = setup()
+    const before = await repository.snapshot()
+    const beforeCase = before.cases.find(({ id }) => id === caseRecord.id)!
+    const beforeInputs = (beforeCase.modelSnapshot as { runInputs: Record<string, unknown> }).runInputs
+
+    await user.upload(
+      screen.getByLabelText(/xlsx/i),
+      new File(['dummy'], 'replace.xlsx', { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' }),
+    )
+
+    const dialog = await screen.findByRole('dialog', { name: /Excel再読込/ })
+    expect(dialog).toHaveTextContent('現在の入力を上書きしますか')
+    let snapshot = await repository.snapshot()
+    expect((snapshot.cases.find(({ id }) => id === caseRecord.id)!.modelSnapshot as Record<string, unknown>).excelImport).toBeUndefined()
+
+    await user.click(screen.getByRole('button', { name: '確認して上書き' }))
+    await waitFor(async () => {
+      snapshot = await repository.snapshot()
+      const persisted = snapshot.cases.find(({ id }) => id === caseRecord.id)!
+      const modelSnapshot = persisted.modelSnapshot as { runInputs: Record<string, unknown> }
+      expect((modelSnapshot.runInputs.wave_speed as { pipe: { id: string } }).pipe.id).toBe('P-99')
+      expect(modelSnapshot.runInputs.transient_single_pipe).toEqual(beforeInputs.transient_single_pipe)
+    })
+  })
+
+  test('does not import partial data when workbook validation reports errors', async () => {
+    const user = userEvent.setup()
+    mockedParseWorkbook.mockResolvedValueOnce({
+      data: validWorkbookData,
+      errors: [{ sheet: '管路・節点', row: 3, field: 'inner_diameter', message: '管内径が不正です' }],
+      warnings: [],
+    })
+    const { repository, caseRecord } = setup({}, { emptyInputs: true })
+
+    await user.upload(
+      screen.getByLabelText(/xlsx/i),
+      new File(['dummy'], 'partial.xlsx', { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' }),
+    )
+
+    expect(await screen.findByText(/データは更新していません/)).toBeVisible()
+    const snapshot = await repository.snapshot()
+    const persisted = snapshot.cases.find(({ id }) => id === caseRecord.id)!
+    expect((persisted.modelSnapshot as Record<string, unknown>).excelImport).toBeUndefined()
   })
 
   test('disables the upload input with a reason when the Case is not a draft', () => {

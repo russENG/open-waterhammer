@@ -456,6 +456,13 @@ function addInstructionSheet(wb: ExcelJS.Workbook): ExcelJS.Worksheet {
   ws.getRow(1).font = { bold: true, size: 14, color: { argb: "FF1F3864" } };
   push([]);
 
+  head("■ このExcelの役割 / Role of this workbook");
+  push(["初期一括入力", "このExcelはプロジェクト開始時の一括入力に使用します。"]);
+  push(["読込後の正本", "読込後はWeb画面のプロジェクトデータを確認・修正し、その値を正本とします。"]);
+  push(["保存・共有・再開", ".owhproj を使用します。Webでの変更はこのExcelへ自動的に書き戻されません。"]);
+  push(["再読込", "対応する計算入力を上書きします。元の状態を残す場合は、先に .owhproj を書き出してください。"]);
+  push([]);
+
   head("■ 色の意味（入力するセルの見分け方） / Legend");
   push(["◎必須", "必ず入力してください", "Required — must be filled in"]);
   const legendRequired = ws.rowCount;
