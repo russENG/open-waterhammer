@@ -7,7 +7,7 @@ describe('self-hosted browser Python runtime', () => {
     expect(resolvePyodideIndexUrl('/open-waterhammer/', 'https://design.example')).toBe('https://design.example/open-waterhammer/pyodide/')
     expect(PYODIDE_RUNTIME_ASSETS).toEqual([
       'pyodide-lock.json',
-      'pyodide.asm.js',
+      'pyodide.asm.mjs',
       'pyodide.asm.wasm',
       'pyodide.js',
       'pyodide.mjs',
