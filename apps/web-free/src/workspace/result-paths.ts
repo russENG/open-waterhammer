@@ -63,10 +63,35 @@ function formatNumber(value: number): string {
   return Number(value.toPrecision(6)).toString()
 }
 
-function formatValue(value: JsonValue): string {
+/**
+ * プロトコル上の列挙値を画面用の日本語にする。
+ * 解析フォームの選択肢と同じ語を使い、画面ごとに用語がぶれないようにする。
+ */
+const ENUM_LABELS: Record<string, Record<string, string>> = {
+  operationType: {
+    valve_close: '弁閉鎖', valve_open: '弁開放',
+    pump_stop: 'ポンプ停止', pump_start: 'ポンプ始動', combined: '複合操作',
+  },
+  operation: { close: '閉鎖', open: '開放' },
+  closureType: { rapid: '急閉そく', slow: '緩閉そく', numerical_required: '数値解析要' },
+  mode: { trip: 'ポンプ停止', start: 'ポンプ始動' },
+  type: {
+    reservoir: '貯水池・水源', junction: '分岐・接合点', tank: '水槽',
+    valve: 'バルブ', pump: 'ポンプ', demand: '需要節点',
+    air_chamber: '空気室', surge_tank: 'サージタンク', air_release_valve: '空気弁',
+  },
+}
+
+function formatValue(path: string, value: JsonValue): string {
   if (typeof value === 'number') return formatNumber(value)
   if (typeof value === 'boolean') return value ? 'あり' : 'なし'
+  if (typeof value === 'string') return ENUM_LABELS[leafKey(path)]?.[value] ?? value
   return String(value)
+}
+
+/** 値と単位をまとめて表示用の文字列にする（一覧・差分表・証跡パネルで共通）。 */
+export function describeResultValue(path: string, value: JsonValue): string {
+  return withUnit(path, formatValue(path, value))
 }
 
 function withUnit(path: string, text: string): string {
@@ -96,7 +121,7 @@ export function summariseResult(summary: JsonValue): ResultRow[] {
     }
     // 適用外の項目（急閉そくケースのアリエビ値など）は行ごと出さない。
     if (value === null || value === undefined) continue
-    scalars.push({ label: describeResultPath(path), value: withUnit(path, formatValue(value)) })
+    scalars.push({ label: describeResultPath(path), value: describeResultValue(path, value) })
   }
 
   const seriesRows = [...series.entries()].map(([path, values]): ResultRow => ({

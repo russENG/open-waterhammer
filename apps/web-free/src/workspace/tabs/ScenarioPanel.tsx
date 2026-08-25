@@ -1,7 +1,7 @@
 import type { JsonValue, Scenario } from '@open-waterhammer/contracts'
 import { useState } from 'react'
 
-import { describeResultPath, flattenComparisonValue } from '../result-paths'
+import { describeResultPath, describeResultValue, flattenComparisonValue } from '../result-paths'
 import { useWorkspace } from '../workspace-context'
 
 function objectText(value: unknown): string {
@@ -20,7 +20,7 @@ function summaryRows(value: unknown): Array<{ path: string; label: string; text:
   if (!value || typeof value !== 'object' || Array.isArray(value)) return []
   return flattenComparisonValue(value as JsonValue)
     .filter(([, leaf]) => leaf !== null && leaf !== undefined && leaf !== '')
-    .map(([path, leaf]) => ({ path, label: describeResultPath(path), text: String(leaf) }))
+    .map(([path, leaf]) => ({ path, label: describeResultPath(path), text: describeResultValue(path, leaf) }))
 }
 
 export function ScenarioPanel({
