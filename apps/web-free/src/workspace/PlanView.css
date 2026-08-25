@@ -1,0 +1,30 @@
+.plan-view { display: grid; gap: 10px; min-width: 0; }
+.plan-view-heading { display: grid; grid-template-columns: auto 1fr auto; align-items: center; gap: 10px; font-size: .68rem; }
+.plan-view-heading > strong { color: var(--ink); font-size: .78rem; }
+.plan-view-heading > span { color: var(--ink-soft); }
+.plan-view-issues { color: var(--green); font-size: .62rem; }
+.plan-view-issues--warning { color: var(--orange); }
+.plan-view-canvas { min-height: 260px; overflow: auto; border: 1px solid color-mix(in srgb, var(--navy) 18%, transparent); background-color: #f8f5eb; background-image: linear-gradient(color-mix(in srgb, var(--navy) 7%, transparent) 1px, transparent 1px), linear-gradient(90deg, color-mix(in srgb, var(--navy) 7%, transparent) 1px, transparent 1px); background-size: 22px 22px; }
+.plan-view-canvas svg { display: block; width: 100%; min-width: 520px; height: 280px; }
+.plan-pipe polyline { fill: none; stroke: var(--navy); stroke-width: 6; stroke-linecap: round; stroke-linejoin: round; vector-effect: non-scaling-stroke; }
+.plan-pipe text, .plan-node-label { fill: var(--ink); font: 600 13px var(--mono); text-anchor: middle; paint-order: stroke; stroke: #f8f5eb; stroke-width: 4px; stroke-linejoin: round; }
+.plan-pipe--disconnected polyline { stroke: var(--orange); stroke-dasharray: 10 7; }
+.plan-pipe--missing polyline { stroke: #b52828; stroke-dasharray: 5 6; }
+.plan-node-symbol { fill: #fffaf0; stroke: var(--navy); stroke-width: 3; vector-effect: non-scaling-stroke; }
+.plan-node-symbol path { fill: none; }
+.plan-node-symbol text { fill: var(--navy); stroke: none; font: 700 11px var(--mono); text-anchor: middle; }
+.plan-node-symbol--junction { fill: var(--navy); }
+.plan-node--disconnected .plan-node-symbol, .plan-node--isolated .plan-node-symbol { stroke: var(--orange); }
+.plan-node--missing .plan-node-symbol { stroke: #b52828; }
+.plan-view-legend { display: flex; flex-wrap: wrap; gap: 14px; color: var(--ink-soft); font-size: .62rem; }
+.plan-view-legend span { display: inline-flex; align-items: center; gap: 5px; }
+.plan-view-legend i { display: inline-block; width: 20px; height: 8px; }
+.legend-line { border-top: 4px solid var(--navy); }
+.legend-node { width: 9px !important; height: 9px !important; border-radius: 50%; background: var(--navy); }
+.legend-warning { border-top: 4px dashed var(--orange); }
+.plan-view-error-list { margin: 0; padding-left: 18px; color: #8c351d; font-size: .64rem; }
+
+@media (max-width: 720px) {
+  .plan-view-heading { grid-template-columns: 1fr auto; }
+  .plan-view-heading > span { grid-column: 1 / -1; grid-row: 2; }
+}

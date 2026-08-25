@@ -75,30 +75,29 @@ describe('deriveSchematic', () => {
 })
 
 describe('OverviewPanel schematic rendering', () => {
-  test('renders elevations and pipe dimensions derived from the real model instead of the hardcoded sample', () => {
+  test('renders the plan view from the canonical model', () => {
     const record = caseWith({
-      runInputs: {
-        steady_network_python: {
-          pipes: [{ id: 'P-99', upstreamNodeId: 'R-09', downstreamNodeId: 'J-09', innerDiameter: 0.45, length: 733 }],
-          nodes: [
-            { id: 'R-09', elevation: 123.45, type: 'reservoir' },
-            { id: 'J-09', elevation: 45.6, type: 'demand' },
-          ],
-        },
+      canonicalModel: {
+        schema: 'open-waterhammer/hydraulic-model', version: 1, source: 'gis', crs: 'EPSG:6677',
+        nodes: [
+          { id: 'R-09', kind: 'reservoir', elevation: 123.45, coordinate: { x: 0, y: 0 } },
+          { id: 'J-09', kind: 'junction', elevation: 45.6, coordinate: { x: 100, y: 50 } },
+        ],
+        pipes: [{ id: 'P-99', fromNodeId: 'R-09', toNodeId: 'J-09', material: 'ductile_iron', innerDiameter: 0.45, wallThickness: 0.01, length: 733, roughnessC: 130 }],
+        measurementPoints: [], hydraulicUnits: [],
       },
     })
 
     render(createElement(OverviewPanel, { project: projectFixture, caseRecord: record, runs: [] }))
 
-    expect(screen.getByText('EL 123.45')).toBeVisible()
-    expect(screen.getByText('EL 45.60')).toBeVisible()
-    expect(screen.getByText('φ450 / 733 m')).toBeVisible()
-    expect(screen.queryByText('EL 100.00')).not.toBeInTheDocument()
+    expect(screen.getByText('実座標平面図')).toBeVisible()
+    expect(screen.getByText('P-99')).toBeVisible()
+    expect(screen.getByRole('img', { name: 'R-09、貯水池・水槽、接続済み' })).toBeVisible()
   })
 
   test('shows a placeholder when the Case has no usable model data', () => {
     render(createElement(OverviewPanel, { project: projectFixture, caseRecord: caseWith({ runInputs: {}, geoDrafts: [] }), runs: [] }))
 
-    expect(screen.getByText('モデル未設定')).toBeVisible()
+    expect(screen.getByText('管路・節点モデルが未設定です')).toBeVisible()
   })
 })

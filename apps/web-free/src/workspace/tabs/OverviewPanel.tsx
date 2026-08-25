@@ -4,7 +4,8 @@ import { useRef, useState } from 'react'
 import { downloadProjectFile, exportProjectFile, replaceProjectFile } from '../project-transfer'
 import { caseStateLabel } from '../case-state-labels'
 import { assessmentStatusLabel, runKindLabel, runStatusLabel } from '../run-display-labels'
-import { deriveSchematic, type SchematicPipe } from '../schematic'
+import { derivePlanDiagram } from '../plan-view'
+import { PlanView } from '../PlanView'
 import { useWorkspaceOptional } from '../workspace-context'
 import { newestCaseIdForProject } from '../workspace-state'
 
@@ -14,16 +15,6 @@ function modelMetrics(caseRecord: Case) {
     ? Object.keys(root.runInputs).length : 0
   const geo = root && typeof root === 'object' && !Array.isArray(root) && Array.isArray(root.geoDrafts) ? root.geoDrafts.length : 0
   return { inputs, geo }
-}
-
-function formatElevation(elevation?: number): string {
-  return elevation === undefined ? 'EL —' : `EL ${elevation.toFixed(2)}`
-}
-
-function formatPipeDimensions(pipe: SchematicPipe): string {
-  const diameter = pipe.diameter === undefined ? '—' : String(Math.round(pipe.diameter * 1000))
-  const length = pipe.length === undefined ? '—' : String(pipe.length)
-  return `φ${diameter} / ${length} m`
 }
 
 /**
@@ -120,9 +111,9 @@ function ProjectTransferCard({ project, onImported }: { project: Project; onImpo
   </section>
 }
 
-export function OverviewPanel({ project, caseRecord, scenario, runs, onImported }: { project: Project; caseRecord: Case; scenario?: Scenario; runs: Run[]; onImported?: (projectId: string, caseId: string) => void }) {
+export function OverviewPanel({ project, caseRecord, runs, onImported }: { project: Project; caseRecord: Case; scenario?: Scenario; runs: Run[]; onImported?: (projectId: string, caseId: string) => void }) {
   const metrics = modelMetrics(caseRecord)
-  const schematic = deriveSchematic(caseRecord)
+  const plan = derivePlanDiagram(caseRecord)
   const latest = runs.at(-1)
   return <div className="panel-stack overview-panel">
     <div className="panel-title-row"><div><span className="eyebrow">管理票 / 01</span><h1>設計条件の俯瞰</h1><p>入力・シナリオ・計算証跡を一枚のフィールドノートとして整理します。</p></div><span className={`state-ticket state-ticket--${caseRecord.state}`}>{caseStateLabel(caseRecord.state)}</span></div>
@@ -143,11 +134,8 @@ export function OverviewPanel({ project, caseRecord, scenario, runs, onImported 
         </dl>
       </section>
       <section className="notebook-card schematic-card">
-        <div className="card-heading"><span>02</span><div><h2>水理縦断</h2><p>{scenario?.name ?? 'シナリオ未設定'}</p></div></div>
-        {schematic ? <div className="pipe-schematic" aria-label="水理モデル模式図">
-          <span className="reservoir-symbol" title={schematic.upstream.id}>R</span><i /><b>{schematic.pipe.id ?? '—'}</b><i /><span className="junction-symbol" title={schematic.downstream.id}>J</span>
-          <small>{formatElevation(schematic.upstream.elevation)}</small><small>{formatPipeDimensions(schematic.pipe)}</small><small>{formatElevation(schematic.downstream.elevation)}</small>
-        </div> : <p className="muted">モデル未設定</p>}
+        <div className="card-heading"><span>02</span><div><h2>管路平面図</h2><p>正準水理モデルから自動表示</p></div></div>
+        <PlanView diagram={plan} />
       </section>
       <section className="notebook-card activity-card">
         <div className="card-heading"><span>03</span><div><h2>最近の計算証跡</h2><p>ローカルに保存された計算結果</p></div></div>
