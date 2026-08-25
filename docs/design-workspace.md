@@ -286,19 +286,22 @@ owh run <bundle> --case <id> --scenario <id> --out <new-bundle> [--python <path>
 （`steady_network_*` は `pipes[]`/`nodes[]`、`transient_network`/`transient_protection_device` は
 `network.pipes[]`/`network.nodes{}` を必須で読み、他の7種は単一管路または測点列のみを読む）。
 
-GIS のインポートドラフト（`modelSnapshot.geoDrafts`）と、Run が実際に消費する `runInputs[kind]` は
-**独立した並行データ**であり、GIS ドラフトから `runInputs` へ自動的に合流する経路は存在しない
-（フォーム入力・Excel 取込（§11）がそれぞれ独立に `runInputs` を書く）。そのためゲートは OR 条件で
-判定する:
+GIS の編集中データ（`modelSnapshot.geoDrafts`）と、Run が実際に消費する `runInputs[kind]` は
+**独立した並行データ**である。GISの同一IDの座標・中心線は正準水理モデルへ統合されるが、GISデータ
+だけから `runInputs` を自動作成する経路はない（フォーム入力・Excel取込（§11）がそれぞれ
+`runInputs` を書く）。現行ゲートは次の OR 条件で判定する:
 
 - 永続化された GIS ドラフトが有効（`validateHydraulicDrafts` が通る）、**または**
 - 保存済み `runInputs[kind]` が構造的に完結したネットワーク（空でない節点・管路配列/レコード）を
   持っている
 
-いずれも満たさない場合、GIS ドラフトが1件もなければ `topology_required`、ドラフトはあるが検証エラー
+いずれも満たさない場合、GISデータが1件もなければ `topology_required`、データはあるが検証エラー
 を含む場合は `topology_invalid` を返す。参照整合性（存在しない節点 ID の参照など）はこのゲートでは
 見ない——それは Analysis タブの保存時検証と、最終防衛線としての Python プロトコル側の入力検証
 （不正な入力は失敗 Run として記録される）が担う。
+
+このゲートで有効と判定されるのはGISのID・接続・内径までであり、完全な解析入力が揃ったという意味では
+ない。alpha版の保証範囲と将来ロードマップは[GIS機能のalpha版範囲](./gis-alpha-scope.md)を参照する。
 
 ---
 
@@ -406,3 +409,9 @@ ExcelとWeb入力の責任分界、項目対応、再読込時の上書き規則
 ## 14. 正準水理モデル
 
 管路・節点・測点・水理ユニットの責務、ER図、正本・派生規則、Excel/GIS/数値解析への変換は[正準水理モデル](./canonical-hydraulic-model.md) に定める。
+
+---
+
+## 15. GIS機能の範囲
+
+GeoJSON読込、座標変換、接続検証、地図表示、WGS84書出しの対応状況と、GIS・Excel・正準モデルの責任分界は[GIS機能のalpha版範囲](./gis-alpha-scope.md)に定める。

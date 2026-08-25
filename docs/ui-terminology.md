@@ -70,6 +70,7 @@ Open Waterhammer の利用者向け画面で使う用語と表記を定める。
 | Save input | 入力条件を保存 |
 | Run calculation | 計算を実行 |
 | Import as drafts | 編集中データとして読み込む |
+| GIS draft | 編集中GISデータ / 編集中データ（`draft`は内部名に限り、画面には表示しない） |
 | Export | 書き出す |
 | Import | 読み込む |
 | Open Project | プロジェクトを開く |
