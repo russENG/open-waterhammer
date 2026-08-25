@@ -1,4 +1,11 @@
 import type { RunKind } from '@open-waterhammer/contracts'
+import {
+  buildCanonicalHydraulicModel,
+  canonicalToLongitudinalInput,
+  canonicalToSteadyNetwork,
+  type CanonicalHydraulicModel,
+  type CanonicalModelIssue,
+} from '@open-waterhammer/core'
 import type { WorkbookData } from '@open-waterhammer/excel-io'
 
 /**
@@ -9,62 +16,24 @@ import type { WorkbookData } from '@open-waterhammer/excel-io'
  * 型そのもの（packages/excel-io/src/types.ts）であり、これは
  * `workspace/sample-workspace.ts` の `SAMPLE_RUN_INPUTS` および
  * `packages/core-py/open_waterhammer/protocol.py` の
- * `_wave_speed` / `_joukowsky_allievi` / `_longitudinal` が読む
+ * `_wave_speed` / `_joukowsky_allievi` が読む
  * `model.pipe` / `model.calculationCase` / `model.points[]` と
- * フィールド名が完全一致する（キー変換なしでそのまま使える）。
+ * フィールド名が一致する。縦断入力は測点表を直接使わず、
+ * 正準水理モデルから管路の正本値を参照して導出する。
  *
- * 唯一の翻訳が必要な箇所は 管路網（steady_network_python /
- * steady_network_epanet）のノード種別: Excel の `Node.nodeType`
+ * 管路網（steady_network_python / steady_network_epanet）のノード種別は
+ * Excel の `Node.nodeType`
  * (`reservoir|junction|tank|pump_node|valve_node`) と
  * `NetworkNodeDef.type` (`reservoir|demand|junction`,
  * packages/core/src/steady-network.ts) は別の enum。
  */
 
-type PipeRow = WorkbookData['pipes'][number]
 type NodeRow = WorkbookData['nodes'][number]
-type NetworkNodeType = 'reservoir' | 'demand' | 'junction'
 
 export interface ExcelScenarioInput {
   sourceCaseId: string
   name: string
   eventSettings: Record<string, unknown>
-}
-
-/**
- * Excel の節点種別 → 管路網ノード種別。
- * `reservoir` と `junction` のみ直接対応する。`tank` / `pump_node` /
- * `valve_node` には対応する種別が管路網モデルに存在しないため、
- * 呼び出し側で `junction` にフォールバックし警告を出す。
- */
-const NETWORK_NODE_TYPE_BY_EXCEL_TYPE: Partial<Record<NodeRow['nodeType'], NetworkNodeType>> = {
-  reservoir: 'reservoir',
-  junction: 'junction',
-}
-
-function toNetworkPipe(pipe: PipeRow): Record<string, unknown> {
-  return {
-    id: pipe.id,
-    upstreamNodeId: pipe.startNodeId,
-    downstreamNodeId: pipe.endNodeId,
-    innerDiameter: pipe.innerDiameter,
-    length: pipe.length,
-    roughnessC: pipe.roughnessCoeff,
-  }
-}
-
-function toNetworkNode(node: NodeRow, warnings: string[]): Record<string, unknown> {
-  const mappedType = NETWORK_NODE_TYPE_BY_EXCEL_TYPE[node.nodeType]
-  if (!mappedType) {
-    warnings.push(`節点 ${node.id}: 節点種別「${node.nodeType}」は管路網モデルに直接対応する種別がないため、junction として取り込みました。解析タブで確認してください。`)
-  }
-  const type = mappedType ?? 'junction'
-  const result: Record<string, unknown> = { id: node.id, elevation: node.elevation, type }
-  if (node.hydraulicGrade !== undefined) {
-    result.head = node.hydraulicGrade
-  } else if (type === 'reservoir') {
-    warnings.push(`節点 ${node.id}: reservoir ですが動水位（hydraulic_grade）が未入力のため head を設定していません。解析タブで確認してください。`)
-  }
-  return result
 }
 
 /**
@@ -77,6 +46,8 @@ export function mapWorkbookToRunInputs(data: WorkbookData): {
   runInputs: Partial<Record<RunKind, unknown>>
   eventSettings: Record<string, unknown>
   scenarios: ExcelScenarioInput[]
+  canonicalModel: CanonicalHydraulicModel
+  canonicalIssues: CanonicalModelIssue[]
   warnings: string[]
 } {
   const warnings: string[] = []
@@ -98,6 +69,13 @@ export function mapWorkbookToRunInputs(data: WorkbookData): {
       ...(item.closeTime !== undefined ? { closeTime: item.closeTime } : {}),
     },
   }))
+  const canonical = buildCanonicalHydraulicModel({
+    source: 'excel',
+    nodes: data.nodes,
+    pipes: data.pipes,
+    measurementPoints: data.measurementPoints,
+  })
+  warnings.push(...canonical.issues.map(({ message }) => message))
 
   const pipe = data.pipes[0]
   const calculationCase = data.cases[0]
@@ -120,20 +98,27 @@ export function mapWorkbookToRunInputs(data: WorkbookData): {
   }
 
   if (data.measurementPoints.length > 0) {
-    runInputs.longitudinal_hydraulics = { points: data.measurementPoints, staticWaterLevel: 0 }
+    const longitudinal = canonicalToLongitudinalInput(canonical.model, 0)
+    runInputs.longitudinal_hydraulics = longitudinal.value ?? { points: data.measurementPoints, staticWaterLevel: 0 }
+    if (!longitudinal.value) warnings.push('測点と管路の対応を解決できないため、後方互換用に測点表の重複値を使って縦断入力を作成しました。')
     warnings.push('longitudinal_hydraulics の静水位（staticWaterLevel）は既定値 0 で作成しました。解析タブで実際の値を確認・入力してください。')
   }
 
   if (data.pipes.length > 0 && data.nodes.length > 0) {
-    const network = {
-      pipes: data.pipes.map(toNetworkPipe),
-      nodes: data.nodes.map((node) => toNetworkNode(node, warnings)),
+    for (const node of data.nodes) {
+      if (!(['reservoir', 'junction'] as NodeRow['nodeType'][]).includes(node.nodeType)) warnings.push(`節点 ${node.id}: 節点種別「${node.nodeType}」は定常管路網で junction として扱います。`)
+      if (node.nodeType === 'reservoir' && node.hydraulicGrade === undefined) warnings.push(`節点 ${node.id}: reservoir の固定水頭が未入力です。解析タブで確認してください。`)
     }
-    runInputs.steady_network_python = network
-    runInputs.steady_network_epanet = network
+    const network = canonicalToSteadyNetwork(canonical.model)
+    if (network.value) {
+      runInputs.steady_network_python = network.value
+      runInputs.steady_network_epanet = network.value
+    } else {
+      warnings.push(...network.issues.map(({ message }) => message))
+    }
   } else if (data.pipes.length > 0 || data.nodes.length > 0) {
     warnings.push('管路・節点シートに管路と節点の両方が揃っていないため、steady_network_python / steady_network_epanet の入力は作成しませんでした。')
   }
 
-  return { runInputs, eventSettings, scenarios, warnings }
+  return { runInputs, eventSettings, scenarios, canonicalModel: canonical.model, canonicalIssues: canonical.issues, warnings }
 }

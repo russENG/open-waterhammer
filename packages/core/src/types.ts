@@ -129,6 +129,12 @@ export interface MeasurementPoint {
   id: string;
   /** 測点名（任意） */
   name?: string;
+  /** 属する管路ID。新規入力では明示を推奨し、旧データは取込時に補完する。 */
+  pipeId?: string;
+  /** 節点と同一位置の場合のみ設定する参照。 */
+  nodeId?: string;
+  /** 管路始点からの実延長 [m]。省略時は取込順と管長から補完する。 */
+  distanceAlongPipe?: number;
   /** 単距離 Lh [m] — 前測点からの水平距離 */
   horizontalDistance: number;
   /** 地盤高 GL [m] */

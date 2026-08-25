@@ -114,6 +114,8 @@ export async function createProjectFromExcel(
   data.cases[0]!.modelSnapshot = {
     runInputs: mapped.runInputs as JsonValue,
     excelImport: workbook as unknown as JsonValue,
+    canonicalModel: mapped.canonicalModel as unknown as JsonValue,
+    canonicalIssues: mapped.canonicalIssues as unknown as JsonValue,
     geoDrafts: [],
     geoSourceCrs: project.crs,
   }

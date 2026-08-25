@@ -159,6 +159,9 @@ const CASE_COLS: readonly ColumnDef[] = [
 const POINT_COLS: readonly ColumnDef[] = [
   { id: "point_id", ja: "測点ID", cls: "required", width: 12 },
   { id: "point_name", ja: "測点名", cls: "optional", width: 14 },
+  { id: "pipe_id", ja: "所属管路ID", cls: "optional", width: 12 },
+  { id: "node_id", ja: "同一位置の節点ID", cls: "optional", width: 15 },
+  { id: "distance_along_pipe", ja: "管路始点からの実延長 [m]", cls: "optional", width: 18 },
   { id: "horizontal_distance", ja: "単距離 Lh [m]", cls: "required", width: 14 },
   { id: "ground_level", ja: "地盤高 GL [m]", cls: "required", width: 14 },
   { id: "pipe_centerline_elevation", ja: "管中心高 FH [m]", cls: "required", width: 17 },
@@ -382,6 +385,7 @@ function addMeasurementPointsSheet(wb: ExcelJS.Workbook, points: MeasurementPoin
   ws.addRow(POINT_COLS.map(headerText));
   const dataRows = points.map((pt) => [
     pt.id, pt.name ?? "",
+    pt.pipeId ?? "", pt.nodeId ?? "", pt.distanceAlongPipe ?? "",
     pt.horizontalDistance, pt.groundLevel, pt.pipeCenterHeight,
     pt.pipeLength, pt.flowRate, pt.diameter, pt.roughnessC,
     pt.bendLossCoeff, pt.valveLossCoeff, pt.branchLossCoeff,
@@ -524,6 +528,9 @@ function addInstructionSheet(wb: ExcelJS.Workbook): ExcelJS.Worksheet {
   push([]);
 
   head("■ 測点データの入力について / Notes on measurement points");
+  push(["所属管路ID", "新規入力では指定を推奨します。管径・粗度・管路延長は管路データが正本です。"]);
+  push(["同一位置の節点ID", "測点が分岐、端点、貯水槽、ポンプ、バルブと同一位置にある場合だけ指定します。"]);
+  push(["管路始点からの実延長", "平面図・縦断図と管路上の位置を対応させる距離 [m] です。"]);
   push(["管中心高 FH", "管路中心の標高 [m]（= GL − 土被り − D/2）"]);
   push(["管長 SL", "実延長（斜距離）[m]。単距離 Lh は水平距離"]);
   push(["損失係数 fb / fv / fβ", "無次元 [-]。速度水頭 hv に乗じて損失水頭になります"]);

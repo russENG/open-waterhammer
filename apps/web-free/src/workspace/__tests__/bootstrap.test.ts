@@ -94,6 +94,7 @@ describe('browser workspace bootstrap', () => {
     expect(created.data.cases[0]?.state).toBe('draft')
     const snapshot = created.data.cases[0]!.modelSnapshot as Record<string, unknown>
     expect(snapshot.excelImport).toEqual(workbook)
+    expect(snapshot.canonicalModel).toMatchObject({ schema: 'open-waterhammer/hydraulic-model', version: 1, source: 'excel' })
     expect((snapshot.runInputs as Record<string, unknown>).wave_speed).toBeDefined()
     expect(created.data.scenarios).toHaveLength(2)
     expect(created.data.scenarios.map(({ name }) => name).sort()).toEqual(['ポンプ停止', '末端弁閉鎖'].sort())

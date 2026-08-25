@@ -8,3 +8,4 @@ export * from "./longitudinal-hydraulic.js";
 export * from "./steady-to-moc.js";
 export * from "./steady-network.js";
 export * from "./session.js";
+export * from "./canonical-model.js";

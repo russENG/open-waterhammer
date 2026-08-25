@@ -357,7 +357,7 @@ ExcelとWeb入力の責任分界、項目対応、再読込時の上書き規則
   `longitudinal_hydraulics`/`steady_network_python`/`steady_network_epanet`）にマッピングされ、
   省略・既定値化した項目は理由付きの警告として返す。生のワークブックデータ全体も
   `modelSnapshot.excelImport` として保持し、帳票生成時の詳細情報源にする。取込は **draft の Case
-  にのみ**でき、書き込むのは `runInputs` と先頭シナリオの対応する操作条件だけで、取込の時点で
+  にのみ**でき、`runInputs`、正準水理モデル、およびExcelの各行に対応するシナリオを書き込む。取込の時点で
   計算は一切走らない。検証エラーが1件でもある場合は更新せず、既存入力と競合する再読込は利用者の
   確認後にだけ実行する。
   **既知の制約**: Excel の節点シートには需要流量（demand）の列がないため、`steady_network_python`/
@@ -400,3 +400,9 @@ ExcelとWeb入力の責任分界、項目対応、再読込時の上書き規則
   対象外。
 - ブランチ `feature/design-workspace` はローカルに留め、`main`/`master` へのマージ・push は行って
   いない（ユーザー承認済みの意思決定、A10）。統合は別途の判断に委ねる。
+
+---
+
+## 14. 正準水理モデル
+
+管路・節点・測点・水理ユニットの責務、ER図、正本・派生規則、Excel/GIS/数値解析への変換は[正準水理モデル](./canonical-hydraulic-model.md) に定める。

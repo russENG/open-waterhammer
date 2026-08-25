@@ -92,6 +92,7 @@ describe('ExcelIoCard', () => {
       const persisted = snapshot.cases.find(({ id }) => id === caseRecord.id)!
       const modelSnapshot = persisted.modelSnapshot as Record<string, unknown>
       expect(modelSnapshot.excelImport).toEqual(validWorkbookData)
+      expect(modelSnapshot.canonicalModel).toMatchObject({ schema: 'open-waterhammer/hydraulic-model', version: 1, source: 'excel' })
       const runInputs = modelSnapshot.runInputs as Record<string, unknown>
       expect((runInputs.wave_speed as { pipe: { id: string } }).pipe.id).toBe('P-99')
       expect((runInputs.joukowsky_allievi as { calculationCase: { id: string } }).calculationCase.id).toBe('CALC-99')

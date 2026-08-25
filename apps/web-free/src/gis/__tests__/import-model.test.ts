@@ -1,6 +1,7 @@
+import { buildCanonicalHydraulicModel } from '@open-waterhammer/core'
 import { describe, expect, test } from 'vitest'
 
-import { importGeoJsonDrafts, validateHydraulicDrafts } from '../import-model'
+import { importGeoJsonDrafts, mergeDraftGeometryIntoCanonicalModel, validateHydraulicDrafts } from '../import-model'
 
 const geojson = {
   type: 'FeatureCollection' as const,
@@ -69,5 +70,31 @@ describe('GeoJSON import wizard model', () => {
       '接続元が未入力です。',
       '内径は0より大きい数値が必要です。',
     ]))
+  })
+
+  test('merges matching GIS geometry into the canonical model without replacing hydraulic properties', () => {
+    const canonical = buildCanonicalHydraulicModel({
+      source: 'excel',
+      nodes: [
+        { id: 'N-1', elevation: 12, nodeType: 'junction' },
+        { id: 'N-X', elevation: 10, nodeType: 'junction' },
+      ],
+      pipes: [{
+        id: 'P-1', startNodeId: 'N-1', endNodeId: 'N-X', pipeType: 'ductile_iron',
+        innerDiameter: 0.3, wallThickness: 0.007, length: 100, roughnessCoeff: 130,
+      }],
+      measurementPoints: [],
+    }).model
+    const drafts = importGeoJsonDrafts({ ...geojson, features: geojson.features.slice(0, 2) }, {
+      sourceCrs: 'EPSG:4326',
+      node: { id: 'code', elevation: 'elev' },
+      pipe: { id: 'code', startNodeId: 'from', endNodeId: 'to', innerDiameter: 'dia' },
+    })
+    const merged = mergeDraftGeometryIntoCanonicalModel(canonical, drafts, 'EPSG:4326')
+
+    expect(merged.issues).toEqual([])
+    expect(merged.model.nodes.find(({ id }) => id === 'N-1')?.coordinate).toEqual({ x: 139.7, y: 35.6 })
+    expect(merged.model.pipes[0]?.centerline).toHaveLength(2)
+    expect(merged.model.pipes[0]).toMatchObject({ innerDiameter: 0.3, roughnessC: 130 })
   })
 })

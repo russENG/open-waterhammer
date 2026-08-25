@@ -7,11 +7,14 @@ import {
   type JsonValue,
   type RunKind,
 } from '@open-waterhammer/contracts'
+import { buildCanonicalHydraulicModel, type MeasurementPoint } from '@open-waterhammer/core'
 import type { WorkspaceData } from '@open-waterhammer/workspace'
+
+import { mergeDraftGeometryIntoCanonicalModel, type HydraulicDraft } from '../gis/import-model'
 
 const pipe = {
   id: 'P-01', name: '第1号幹線', startNodeId: 'R-01', endNodeId: 'J-01',
-  pipeType: 'ductile_iron', innerDiameter: 0.3, wallThickness: 0.007,
+  pipeType: 'ductile_iron' as const, innerDiameter: 0.3, wallThickness: 0.007,
   length: 500, roughnessCoeff: 130,
 }
 
@@ -36,6 +39,11 @@ const transientNetwork = {
     'V-01': { type: 'valve', Q0: 0.07, H0v: 30, closeTime: 2, operation: 'close' },
   },
 }
+
+const longitudinalPoints: MeasurementPoint[] = [
+  { id: 'STA-000', pipeId: 'P-01', nodeId: 'R-01', distanceAlongPipe: 0, horizontalDistance: 0, groundLevel: 100, pipeCenterHeight: 98, pipeLength: 0, flowRate: 0.03, diameter: 0.3, roughnessC: 130, bendLossCoeff: 0, valveLossCoeff: 0, branchLossCoeff: 0 },
+  { id: 'STA-500', pipeId: 'P-01', nodeId: 'J-01', distanceAlongPipe: 500, horizontalDistance: 500, groundLevel: 90, pipeCenterHeight: 88, pipeLength: 500, flowRate: 0.03, diameter: 0.3, roughnessC: 130, bendLossCoeff: 0.2, valveLossCoeff: 0, branchLossCoeff: 0 },
+]
 
 // Dedicated network for transient_protection_device (does NOT share transientNetwork):
 // R-01 --P-01-- J-01 --P-02-- V-01. V-01 keeps the same closing-valve event as
@@ -91,10 +99,7 @@ export const SAMPLE_RUN_INPUTS: Record<RunKind, JsonValue> = {
   steady_network_epanet: network,
   longitudinal_hydraulics: {
     caseName: '取水支線縦断', staticWaterLevel: 142, waterhammerRatio: 0.2,
-    points: [
-      { id: 'STA-000', horizontalDistance: 0, groundLevel: 100, pipeCenterHeight: 98, pipeLength: 0, flowRate: 0.03, diameter: 0.3, roughnessC: 130, bendLossCoeff: 0, valveLossCoeff: 0, branchLossCoeff: 0 },
-      { id: 'STA-500', horizontalDistance: 500, groundLevel: 90, pipeCenterHeight: 88, pipeLength: 500, flowRate: 0.03, diameter: 0.3, roughnessC: 130, bendLossCoeff: 0.2, valveLossCoeff: 0, branchLossCoeff: 0 },
-    ],
+    points: longitudinalPoints as unknown as JsonValue,
     allowablePressureMpa: 0.75,
   },
   transient_single_pipe: { pipe },
@@ -114,6 +119,21 @@ const geoDrafts: JsonValue = [
   { sourceFeatureId: 'J-01', id: 'J-01', kind: 'node', geometry: { type: 'Point', coordinates: [139.708, 35.684] }, properties: { elevation: 88 }, errors: [] },
   { sourceFeatureId: 'P-01', id: 'P-01', kind: 'pipe', geometry: { type: 'LineString', coordinates: [[139.700, 35.680], [139.708, 35.684]] }, properties: { startNodeId: 'R-01', endNodeId: 'J-01', innerDiameter: 0.3 }, errors: [] },
 ]
+
+const sampleCanonicalModel = mergeDraftGeometryIntoCanonicalModel(
+  buildCanonicalHydraulicModel({
+    source: 'web',
+    crs: 'EPSG:4326',
+    pipes: [pipe],
+    nodes: [
+      { id: 'R-01', nodeType: 'reservoir', elevation: 100, hydraulicGrade: 142 },
+      { id: 'J-01', nodeType: 'junction', elevation: 88 },
+    ],
+    measurementPoints: longitudinalPoints,
+  }).model,
+  geoDrafts as unknown as HydraulicDraft[],
+  'EPSG:4326',
+).model
 
 export function buildSampleWorkspace(timestamp = new Date().toISOString()): WorkspaceData {
   const project = {
@@ -136,7 +156,7 @@ export function buildSampleWorkspace(timestamp = new Date().toISOString()): Work
     id: `33333333-3333-4333-8333-${String(index + 1).padStart(12, '0')}`,
     parentCaseId: index === 0 ? null : `33333333-3333-4333-8333-${String(index).padStart(12, '0')}`,
     ...(index === 0 ? {} : { revisionReason: reason }),
-    modelSnapshot: { runInputs: SAMPLE_RUN_INPUTS, geoDrafts, geoSourceCrs: 'EPSG:4326', designLabel: reason },
+    modelSnapshot: { runInputs: SAMPLE_RUN_INPUTS, canonicalModel: sampleCanonicalModel as unknown as JsonValue, geoDrafts, geoSourceCrs: 'EPSG:4326', designLabel: reason },
     createdAt: timestamp,
     updatedAt: new Date(new Date(timestamp).getTime() + index * 1000).toISOString(),
   }))

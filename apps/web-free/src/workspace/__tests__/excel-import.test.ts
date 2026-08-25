@@ -62,13 +62,17 @@ describe('mapWorkbookToRunInputs', () => {
     expect(scenarios[1]?.eventSettings).toMatchObject({ sourceExcelCaseId: 'CALC-02', operationType: 'pump_stop' })
   })
 
-  test('measurementPoints populate longitudinal_hydraulics.points 1:1 and staticWaterLevel defaults with a warning', () => {
+  test('measurement points are linked to canonical pipes before longitudinal input is derived', () => {
     const fixture = baseFixture()
-    const { runInputs, warnings } = mapWorkbookToRunInputs(fixture)
+    const { runInputs, warnings, canonicalModel, canonicalIssues } = mapWorkbookToRunInputs(fixture)
 
-    const longitudinal = runInputs.longitudinal_hydraulics as { points: unknown[]; staticWaterLevel: number }
+    const longitudinal = runInputs.longitudinal_hydraulics as { points: Array<Record<string, unknown>>; staticWaterLevel: number }
     expect(longitudinal.points.length).toBe(2)
-    expect(longitudinal.points).toEqual(fixture.measurementPoints)
+    expect(longitudinal.points[0]).toMatchObject({ id: 'STA-000', pipeId: 'P-01', distanceAlongPipe: 0, diameter: 0.3, roughnessC: 130 })
+    expect(longitudinal.points[1]).toMatchObject({ id: 'STA-500', pipeId: 'P-01', distanceAlongPipe: 500, diameter: 0.3, roughnessC: 130 })
+    expect(canonicalModel.measurementPoints.map(({ pipeId }) => pipeId)).toEqual(['P-01', 'P-01'])
+    expect(canonicalModel.hydraulicUnits).toHaveLength(1)
+    expect(canonicalIssues.filter(({ code }) => code === 'POINT_PIPE_INFERRED')).toHaveLength(2)
     expect(longitudinal.staticWaterLevel).toBe(0)
     expect(warnings.some((warning) => warning.includes('staticWaterLevel') || warning.includes('静水位'))).toBe(true)
   })
@@ -150,5 +154,16 @@ describe('mapWorkbookToRunInputs', () => {
   test('does not mutate the input WorkbookData (raw stays intact for the caller to persist)', () => {
     const fixture = deepFreeze(baseFixture())
     expect(() => mapWorkbookToRunInputs(fixture)).not.toThrow()
+  })
+
+  test('uses pipe diameter and roughness as the authoritative values when old point columns disagree', () => {
+    const fixture = baseFixture()
+    fixture.measurementPoints[1]!.diameter = 0.25
+    fixture.measurementPoints[1]!.roughnessC = 100
+
+    const { runInputs, canonicalIssues } = mapWorkbookToRunInputs(fixture)
+    const point = (runInputs.longitudinal_hydraulics as { points: Array<{ diameter: number; roughnessC: number }> }).points[1]!
+    expect(point).toMatchObject({ diameter: 0.3, roughnessC: 130 })
+    expect(canonicalIssues.map(({ code }) => code)).toEqual(expect.arrayContaining(['DUPLICATE_DIAMETER_IGNORED', 'DUPLICATE_ROUGHNESS_IGNORED']))
   })
 })

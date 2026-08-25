@@ -15,6 +15,7 @@
   },
   "dependencies": {
     "@open-waterhammer/contracts": "*",
+    "@open-waterhammer/core": "*",
     "@open-waterhammer/excel-io": "*",
     "@open-waterhammer/runner": "*",
     "@open-waterhammer/sample-data": "*",

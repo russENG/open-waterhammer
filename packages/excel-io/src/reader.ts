@@ -370,6 +370,12 @@ function parseMeasurementPoints(wb: ExcelJS.Workbook, errors: ParseError[]): Mea
     };
     const ptName = str(row["point_name"] ?? row["測点名"]);
     if (ptName) pt.name = ptName;
+    const pipeId = str(row["pipe_id"] ?? row["所属管路ID"]);
+    if (pipeId) pt.pipeId = pipeId;
+    const nodeId = str(row["node_id"] ?? row["同一位置の節点ID"]);
+    if (nodeId) pt.nodeId = nodeId;
+    const distanceAlongPipe = num(row["distance_along_pipe"] ?? row["管路始点からの実延長"]);
+    if (distanceAlongPipe !== undefined) pt.distanceAlongPipe = distanceAlongPipe;
     const other = num(row["other_minor_loss_head"] ?? row["other_loss"] ?? row["その他損失"]);
     if (other !== undefined) pt.otherLoss = other;
     points.push(pt);

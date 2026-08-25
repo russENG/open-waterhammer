@@ -22,6 +22,8 @@ interface PendingImport {
   raw: WorkbookData
   eventSettings: JsonValue
   scenarios: ExcelScenarioInput[]
+  canonicalModel: JsonValue
+  canonicalIssues: JsonValue
   conflictingKinds: RunKind[]
 }
 
@@ -76,6 +78,8 @@ export function ExcelIoCard({ caseRecord }: { caseRecord: Case }) {
         pending.raw as unknown as JsonValue,
         pending.eventSettings,
         pending.scenarios,
+        pending.canonicalModel,
+        pending.canonicalIssues,
       )
       setPendingImport(null)
       setStatus(pending.kinds.length > 0
@@ -125,6 +129,8 @@ export function ExcelIoCard({ caseRecord }: { caseRecord: Case }) {
         raw: result.data,
         eventSettings: mapped.eventSettings as JsonValue,
         scenarios: mapped.scenarios,
+        canonicalModel: mapped.canonicalModel as unknown as JsonValue,
+        canonicalIssues: mapped.canonicalIssues as unknown as JsonValue,
         conflictingKinds,
       }
       if (hasPreviousExcelImport(caseRecord) || conflictingKinds.length > 0) {

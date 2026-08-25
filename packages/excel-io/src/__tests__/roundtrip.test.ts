@@ -8,7 +8,7 @@ import { PRODUCT_VERSION } from "@open-waterhammer/contracts";
 import { generateTemplate } from "../template.js";
 import { parseWorkbook } from "../reader.js";
 import { getSheetNames, loadWorkbook } from "./test-helpers.js";
-import type { Pipe, Node, CalculationCase } from "@open-waterhammer/core";
+import type { Pipe, Node, CalculationCase, MeasurementPoint } from "@open-waterhammer/core";
 
 // ─── テスト用フィクスチャ ─────────────────────────────────────────────────────
 
@@ -70,11 +70,18 @@ const testCases: CalculationCase[] = [
   },
 ];
 
+const testPoints: MeasurementPoint[] = [{
+  id: "MP-01", name: "始点測点", pipeId: "P-01", nodeId: "N-01", distanceAlongPipe: 0,
+  horizontalDistance: 0, groundLevel: 50, pipeCenterHeight: 49, pipeLength: 0,
+  flowRate: 0.1, diameter: 0.3, roughnessC: 130,
+  bendLossCoeff: 0, valveLossCoeff: 0, branchLossCoeff: 0,
+}];
+
 // ─── ラウンドトリップテスト ────────────────────────────────────────────────────
 
 describe("Excel ラウンドトリップ（generateTemplate → parseWorkbook）", async () => {
   // 1回だけ生成・パースして使い回す
-  const buf = await generateTemplate({ meta: testMeta, pipes: testPipes, nodes: testNodes, cases: testCases });
+  const buf = await generateTemplate({ meta: testMeta, pipes: testPipes, nodes: testNodes, cases: testCases, measurementPoints: testPoints });
   const result = await parseWorkbook(buf);
 
   test("パースエラーが 0 件", () => {
@@ -174,6 +181,14 @@ describe("Excel ラウンドトリップ（generateTemplate → parseWorkbook）
       assert.equal(c.operationType, "valve_close");
       assert.ok(Math.abs(c.initialVelocity - 1.0) < 1e-6);
       assert.ok(Math.abs(c.initialHead - 30.0) < 1e-6);
+    });
+  });
+
+  describe("測点データ", () => {
+    test("管路・節点参照と管路始点からの距離が一致", () => {
+      assert.equal(result.data.measurementPoints[0]?.pipeId, "P-01");
+      assert.equal(result.data.measurementPoints[0]?.nodeId, "N-01");
+      assert.equal(result.data.measurementPoints[0]?.distanceAlongPipe, 0);
     });
   });
 });

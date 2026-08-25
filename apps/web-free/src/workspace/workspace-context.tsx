@@ -7,6 +7,7 @@ import {
   type RunKind,
   type Scenario,
 } from '@open-waterhammer/contracts'
+import type { CanonicalHydraulicModel } from '@open-waterhammer/core'
 import {
   runCalculation,
   type CalculationExecutorRegistry,
@@ -15,6 +16,7 @@ import type { WorkspaceData, WorkspaceRepository } from '@open-waterhammer/works
 import { createContext, useCallback, useContext, useMemo, useState, type ReactNode } from 'react'
 
 import type { LocalTransformDefinition } from '../gis/projections'
+import { mergeDraftGeometryIntoCanonicalModel, type HydraulicDraft } from '../gis/import-model'
 import type { BrowserProtocolCaller } from '../runner/browser-runner'
 import { replaceWithBlankProject } from './bootstrap'
 import type { ExcelScenarioInput } from './excel-import'
@@ -41,7 +43,7 @@ export interface WorkspaceContextValue {
   saveGeoDrafts(caseId: string, drafts: JsonValue, sourceCrs: string, localTransform?: LocalTransformDefinition): Promise<void>
   saveScenario(scenario: Scenario): Promise<void>
   createScenario(caseId: string, name?: string): Promise<Scenario>
-  importExcelInputs(caseId: string, mapped: Partial<Record<RunKind, JsonValue>>, raw: JsonValue, eventSettings?: JsonValue, excelScenarios?: ExcelScenarioInput[]): Promise<void>
+  importExcelInputs(caseId: string, mapped: Partial<Record<RunKind, JsonValue>>, raw: JsonValue, eventSettings?: JsonValue, excelScenarios?: ExcelScenarioInput[], canonicalModel?: JsonValue, canonicalIssues?: JsonValue): Promise<void>
 }
 
 const WorkspaceContext = createContext<WorkspaceContextValue | null>(null)
@@ -60,6 +62,14 @@ function asObject(value: JsonValue | undefined): Record<string, JsonValue> {
 
 function isNonEmptyObject(value: JsonValue | undefined): value is Record<string, JsonValue> {
   return Object.keys(asObject(value)).length > 0
+}
+
+function canonicalModelOf(root: Record<string, JsonValue>): CanonicalHydraulicModel | undefined {
+  const value = root.canonicalModel
+  return value && typeof value === 'object' && !Array.isArray(value)
+    && value.schema === 'open-waterhammer/hydraulic-model' && value.version === 1
+    ? value as unknown as CanonicalHydraulicModel
+    : undefined
 }
 
 function modelsFrom(caseRecord: Case): Record<string, JsonValue> {
@@ -232,7 +242,7 @@ export function WorkspaceProvider({
     await refresh()
   }), [data.cases, data.scenarios, guarded, refresh, repository])
 
-  const importExcelInputs = useCallback((caseId: string, mapped: Partial<Record<RunKind, JsonValue>>, raw: JsonValue, eventSettings?: JsonValue, excelScenarios: ExcelScenarioInput[] = []) => guarded(async () => {
+  const importExcelInputs = useCallback((caseId: string, mapped: Partial<Record<RunKind, JsonValue>>, raw: JsonValue, eventSettings?: JsonValue, excelScenarios: ExcelScenarioInput[] = [], canonicalModel?: JsonValue, canonicalIssues?: JsonValue) => guarded(async () => {
     const current = data.cases.find(({ id }) => id === caseId)
     if (!current) throw new Error('比較案が見つかりません')
     const root = current.modelSnapshot && typeof current.modelSnapshot === 'object' && !Array.isArray(current.modelSnapshot)
@@ -244,7 +254,13 @@ export function WorkspaceProvider({
       // provenance for deliverable reports (src/reports/deliverable-reports.ts) and
       // traceability. Calculation never runs here; this only ever writes a draft (saveDraftCase
       // itself rejects a locked/archived Case, same rule as every other edit path).
-      modelSnapshot: { ...root, runInputs: { ...modelsFrom(current), ...mapped }, excelImport: raw },
+      modelSnapshot: {
+        ...root,
+        runInputs: { ...modelsFrom(current), ...mapped },
+        excelImport: raw,
+        ...(canonicalModel === undefined ? {} : { canonicalModel }),
+        ...(canonicalIssues === undefined ? {} : { canonicalIssues }),
+      },
       updatedAt: now(),
     }
     // Excel 由来の操作条件（等価閉そく時間など）はモデルではなくシナリオ側に入るため、
@@ -292,9 +308,22 @@ export function WorkspaceProvider({
     if (!current) throw new Error('比較案が見つかりません')
     const root = current.modelSnapshot && typeof current.modelSnapshot === 'object' && !Array.isArray(current.modelSnapshot)
       ? structuredClone(current.modelSnapshot) : {}
+    const canonical = canonicalModelOf(root)
+    const geometry = canonical && Array.isArray(drafts)
+      ? mergeDraftGeometryIntoCanonicalModel(canonical, drafts as unknown as HydraulicDraft[], sourceCrs)
+      : undefined
     const edited: Case = {
       ...current,
-      modelSnapshot: { ...root, geoDrafts: drafts, geoSourceCrs: sourceCrs, geoLocalTransform: localTransform ? { proj4: localTransform.proj4 } : null },
+      modelSnapshot: {
+        ...root,
+        geoDrafts: drafts,
+        geoSourceCrs: sourceCrs,
+        geoLocalTransform: localTransform ? { proj4: localTransform.proj4 } : null,
+        ...(geometry ? {
+          canonicalModel: geometry.model as unknown as JsonValue,
+          canonicalGeometryIssues: geometry.issues as unknown as JsonValue,
+        } : {}),
+      },
       updatedAt: now(),
     }
     await repository.saveDraftCase(edited, data.scenarios.filter(({ caseId: owner }) => owner === caseId))

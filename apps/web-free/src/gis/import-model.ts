@@ -123,3 +123,66 @@ export function validateHydraulicDrafts(drafts: HydraulicDraft[]): {
   }
   return { canRun: nodeIds.size > 0 && hasPipe && Object.keys(errorsByFeature).length === 0, errorsByFeature }
 }
+
+export interface CanonicalGeometryIssue {
+  entityId: string
+  message: string
+}
+
+function coordinate(value: unknown): CanonicalCoordinate | undefined {
+  if (!Array.isArray(value) || value.length < 2) return undefined
+  const x = Number(value[0])
+  const y = Number(value[1])
+  const z = value.length > 2 ? Number(value[2]) : undefined
+  if (!Number.isFinite(x) || !Number.isFinite(y) || (z !== undefined && !Number.isFinite(z))) return undefined
+  return z === undefined ? { x, y } : { x, y, z }
+}
+
+/**
+ * GISの形状をIDで正準水理モデルに重ねる。水理諸元は変更しない。
+ * GIS側にしかない要素は、必須諸元が揃うまで編集中データのまま保持する。
+ */
+export function mergeDraftGeometryIntoCanonicalModel(
+  model: CanonicalHydraulicModel,
+  drafts: HydraulicDraft[],
+  sourceCrs: string,
+): { model: CanonicalHydraulicModel; issues: CanonicalGeometryIssue[] } {
+  const issues: CanonicalGeometryIssue[] = []
+  const nodeGeometry = new Map<string, CanonicalCoordinate>()
+  const pipeGeometry = new Map<string, CanonicalCoordinate[]>()
+  const nodeIds = new Set(model.nodes.map(({ id }) => id))
+  const pipeIds = new Set(model.pipes.map(({ id }) => id))
+
+  for (const draft of drafts) {
+    if (draft.errors.length > 0) continue
+    if (draft.kind === 'node') {
+      if (!nodeIds.has(draft.id)) {
+        issues.push({ entityId: draft.id, message: `GIS節点 ${draft.id} は正準モデルにないため、形状を編集中データにのみ保持しました。` })
+        continue
+      }
+      const parsed = coordinate(draft.geometry?.coordinates)
+      if (parsed) nodeGeometry.set(draft.id, parsed)
+    }
+    if (draft.kind === 'pipe') {
+      if (!pipeIds.has(draft.id)) {
+        issues.push({ entityId: draft.id, message: `GIS管路 ${draft.id} は正準モデルにないため、形状を編集中データにのみ保持しました。` })
+        continue
+      }
+      const parsed = Array.isArray(draft.geometry?.coordinates)
+        ? draft.geometry.coordinates.map(coordinate).filter((item): item is CanonicalCoordinate => item !== undefined)
+        : []
+      if (parsed.length >= 2) pipeGeometry.set(draft.id, parsed)
+    }
+  }
+
+  return {
+    model: {
+      ...model,
+      crs: sourceCrs,
+      nodes: model.nodes.map((node) => nodeGeometry.has(node.id) ? { ...node, coordinate: nodeGeometry.get(node.id)! } : node),
+      pipes: model.pipes.map((pipe) => pipeGeometry.has(pipe.id) ? { ...pipe, centerline: pipeGeometry.get(pipe.id)! } : pipe),
+    },
+    issues,
+  }
+}
+import type { CanonicalCoordinate, CanonicalHydraulicModel } from '@open-waterhammer/core'
