@@ -3,6 +3,9 @@ import { useRef, useState } from 'react'
 
 import { downloadProjectFile, exportProjectFile, replaceProjectFile } from '../project-transfer'
 import { caseStateLabel } from '../case-state-labels'
+import type { LinkedFocus } from '../focus'
+import { deriveLongitudinalProfile } from '../longitudinal-profile'
+import { LongitudinalProfile } from '../LongitudinalProfile'
 import { assessmentStatusLabel, runKindLabel, runStatusLabel } from '../run-display-labels'
 import { derivePlanDiagram } from '../plan-view'
 import { PlanView } from '../PlanView'
@@ -78,7 +81,7 @@ function ProjectTransferCard({ project, onImported }: { project: Project; onImpo
   }
 
   return <section className="notebook-card project-transfer-card">
-    <div className="card-heading"><span>04</span><div><h2>プロジェクトファイル</h2><p>プロジェクト全体を書き出し・読み込みします</p></div></div>
+    <div className="card-heading"><span>05</span><div><h2>プロジェクトファイル</h2><p>プロジェクト全体を書き出し・読み込みします</p></div></div>
     <div className="excel-actions">
       <div className="excel-action-group">
         <div className="excel-action-label">書き出し</div>
@@ -111,9 +114,10 @@ function ProjectTransferCard({ project, onImported }: { project: Project; onImpo
   </section>
 }
 
-export function OverviewPanel({ project, caseRecord, runs, onImported }: { project: Project; caseRecord: Case; scenario?: Scenario; runs: Run[]; onImported?: (projectId: string, caseId: string) => void }) {
+export function OverviewPanel({ project, caseRecord, runs, focus, onFocus, onImported }: { project: Project; caseRecord: Case; scenario?: Scenario; runs: Run[]; focus?: LinkedFocus; onFocus?(focus: LinkedFocus): void; onImported?: (projectId: string, caseId: string) => void }) {
   const metrics = modelMetrics(caseRecord)
   const plan = derivePlanDiagram(caseRecord)
+  const profile = deriveLongitudinalProfile(caseRecord)
   const latest = runs.at(-1)
   return <div className="panel-stack overview-panel">
     <div className="panel-title-row"><div><span className="eyebrow">管理票 / 01</span><h1>設計条件の俯瞰</h1><p>入力・シナリオ・計算証跡を一枚のフィールドノートとして整理します。</p></div><span className={`state-ticket state-ticket--${caseRecord.state}`}>{caseStateLabel(caseRecord.state)}</span></div>
@@ -135,13 +139,17 @@ export function OverviewPanel({ project, caseRecord, runs, onImported }: { proje
       </section>
       <section className="notebook-card schematic-card">
         <div className="card-heading"><span>02</span><div><h2>管路平面図</h2><p>正準水理モデルから自動表示</p></div></div>
-        <PlanView diagram={plan} />
+        <PlanView diagram={plan} focus={focus} onFocus={onFocus} />
       </section>
       <section className="notebook-card activity-card">
         <div className="card-heading"><span>03</span><div><h2>最近の計算証跡</h2><p>ローカルに保存された計算結果</p></div></div>
         {runs.length ? <ol className="run-ledger">{[...runs].reverse().slice(0, 4).map((run) => <li key={run.id}><time>{new Date(run.updatedAt).toLocaleString('ja-JP')}</time><strong>{runKindLabel(run.kind)}</strong><span className={`assessment assessment--${run.assessment.status}`}>{assessmentStatusLabel(run.assessment.status)}</span></li>)}</ol> : <div className="empty-ledger"><span>∅</span><p>解析から計算を実行すると、計算記録と結果がここに保存されます。</p></div>}
       </section>
     </div>
+    <section className="notebook-card longitudinal-input-card">
+      <div className="card-heading"><span>04</span><div><h2>入力測点の縦断図</h2><p>計算前の地盤高・管中心高を確認</p></div></div>
+      <LongitudinalProfile diagram={profile} mode="input" focus={focus} onFocus={onFocus} />
+    </section>
     <ProjectTransferCard project={project} onImported={onImported} />
   </div>
 }

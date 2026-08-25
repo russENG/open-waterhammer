@@ -1,5 +1,7 @@
 import type { NodeType } from '@open-waterhammer/core'
+import type { KeyboardEvent } from 'react'
 
+import type { LinkedFocus } from './focus'
 import type { PlanDiagram, PlanNode, PlanPoint } from './plan-view'
 import './PlanView.css'
 
@@ -25,7 +27,17 @@ function NodeSymbol({ node }: { node: PlanNode }) {
   return <g className="plan-node-symbol plan-node-symbol--junction"><circle cx={x} cy={y} r="9" /></g>
 }
 
-export function PlanView({ diagram }: { diagram?: PlanDiagram }) {
+function focusFor(id: string): LinkedFocus {
+  return { targetRef: id, mapFeatureId: id, profileCursor: id, envelopeSeriesId: id, timeSeriesId: id }
+}
+
+function activateOnKeyboard(event: KeyboardEvent<SVGGElement>, action: () => void) {
+  if (event.key !== 'Enter' && event.key !== ' ') return
+  event.preventDefault()
+  action()
+}
+
+export function PlanView({ diagram, focus, onFocus }: { diagram?: PlanDiagram; focus?: LinkedFocus; onFocus?(focus: LinkedFocus): void }) {
   if (!diagram) return <p className="muted">管路・節点モデルが未設定です</p>
   const errorCount = diagram.issues.length
   return <div className="plan-view">
@@ -37,18 +49,24 @@ export function PlanView({ diagram }: { diagram?: PlanDiagram }) {
     <div className="plan-view-canvas">
       <svg viewBox={`0 0 ${diagram.width} ${diagram.height}`} role="img" aria-label={`${diagram.mode === 'real-coordinates' ? '実座標平面図' : '管路網模式図'}、管路${diagram.pipes.length}件、節点${diagram.nodes.length}件`}>
         <g className="plan-pipes">
-          {diagram.pipes.map((pipe) => <g key={pipe.id} className={`plan-pipe plan-pipe--${pipe.status}`}>
+          {diagram.pipes.map((pipe) => {
+            const selected = focus?.mapFeatureId === pipe.id
+            const action = () => onFocus?.(focusFor(pipe.id))
+            return <g key={pipe.id} className={`plan-pipe plan-pipe--${pipe.status}${selected ? ' plan-pipe--selected' : ''}`} role={onFocus ? 'button' : undefined} tabIndex={onFocus ? 0 : undefined} aria-label={`管路 ${pipe.id}、${pipe.fromNodeId}から${pipe.toNodeId}`} aria-pressed={onFocus ? selected : undefined} onClick={action} onKeyDown={(event) => activateOnKeyboard(event, action)}>
             <polyline points={pointsAttribute(pipe.points)} />
             <title>{`${pipe.id}：${pipe.fromNodeId} → ${pipe.toNodeId}${pipe.innerDiameter === undefined ? '' : `、管内径 ${Math.round(pipe.innerDiameter * 1000)} mm`}`}</title>
             {pipe.points.length >= 2 && <text x={(pipe.points[0]!.x + pipe.points.at(-1)!.x) / 2} y={(pipe.points[0]!.y + pipe.points.at(-1)!.y) / 2 - 9}>{pipe.id}</text>}
-          </g>)}
+          </g>})}
         </g>
         <g className="plan-nodes">
-          {diagram.nodes.map((node) => <g key={node.id} className={`plan-node plan-node--${node.status}`} role="img" aria-label={`${node.id}、${NODE_KIND_LABEL[node.kind]}、${node.status === 'valid' ? '接続済み' : '要確認'}`}>
+          {diagram.nodes.map((node) => {
+            const selected = focus?.mapFeatureId === node.id
+            const action = () => onFocus?.(focusFor(node.id))
+            return <g key={node.id} className={`plan-node plan-node--${node.status}${selected ? ' plan-node--selected' : ''}`} role={onFocus ? 'button' : 'img'} tabIndex={onFocus ? 0 : undefined} aria-label={`${node.id}、${NODE_KIND_LABEL[node.kind]}、${node.status === 'valid' ? '接続済み' : '要確認'}`} aria-pressed={onFocus ? selected : undefined} onClick={action} onKeyDown={(event) => activateOnKeyboard(event, action)}>
             <NodeSymbol node={node} />
             <text className="plan-node-label" x={node.point.x} y={node.point.y + 34}>{node.id}</text>
             <title>{`${node.name ?? node.id}：${NODE_KIND_LABEL[node.kind]}${node.elevation === undefined ? '' : `、標高 ${node.elevation} m`}`}</title>
-          </g>)}
+          </g>})}
         </g>
       </svg>
     </div>

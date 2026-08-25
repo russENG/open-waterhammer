@@ -118,11 +118,11 @@ export function WorkspaceLayout() {
   }
 
   let panel
-  if (selection.tab === 'overview') panel = <OverviewPanel project={project} caseRecord={caseRecord} scenario={scenario} runs={caseRuns} onImported={(importedProjectId, importedCaseId) => navigate(canonicalPath(importedProjectId, importedCaseId, 'overview'))} />
+  if (selection.tab === 'overview') panel = <OverviewPanel project={project} caseRecord={caseRecord} scenario={scenario} runs={caseRuns} focus={focus} onFocus={setFocus} onImported={(importedProjectId, importedCaseId) => navigate(canonicalPath(importedProjectId, importedCaseId, 'overview'))} />
   if (selection.tab === 'model-gis') panel = <Suspense fallback={<PanelLoading label="GIS" />}><ExcelIoCard key={`excel-${caseRecord.id}`} caseRecord={caseRecord} /><GisPanel key={caseRecord.id} caseRecord={caseRecord} projectCrs={project.crs} locked={caseRecord.state !== 'draft'} focus={focus} /></Suspense>
   if (selection.tab === 'scenario') panel = <ScenarioPanel key={scenario?.id} caseId={caseRecord.id} scenarios={caseScenarios} scenario={scenario} locked={caseRecord.state !== 'draft'} onSelect={setSelectedScenarioId} />
   if (selection.tab === 'analysis') panel = <AnalysisPanel key={`${caseRecord.id}-${scenario?.id}`} caseRecord={caseRecord} scenarios={caseScenarios} scenario={scenario} onScenarioSelect={setSelectedScenarioId} onRunSelected={(run) => setSelectedRunId(run.id)} />
-  if (selection.tab === 'results') panel = <Suspense fallback={<PanelLoading label="results visualization" />}><ResultsPanel runs={caseRuns} selectedRun={selectedRun} focus={focus} onSelectRun={(run: Run) => setSelectedRunId(run.id)} onFocus={setFocus} /></Suspense>
+  if (selection.tab === 'results') panel = <Suspense fallback={<PanelLoading label="results visualization" />}><ResultsPanel caseRecord={caseRecord} runs={caseRuns} selectedRun={selectedRun} focus={focus} onSelectRun={(run: Run) => setSelectedRunId(run.id)} onFocus={setFocus} /></Suspense>
   if (selection.tab === 'compare') panel = <ComparePanel cases={comparedCases} scenarios={data.scenarios} runs={data.runs} />
   if (selection.tab === 'reports') panel = <Suspense fallback={<PanelLoading label="report tools" />}><ReportsPanel runs={caseRuns} /></Suspense>
 

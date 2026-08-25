@@ -10,12 +10,15 @@
 .plan-pipe text, .plan-node-label { fill: var(--ink); font: 600 13px var(--mono); text-anchor: middle; paint-order: stroke; stroke: #f8f5eb; stroke-width: 4px; stroke-linejoin: round; }
 .plan-pipe--disconnected polyline { stroke: var(--orange); stroke-dasharray: 10 7; }
 .plan-pipe--missing polyline { stroke: #b52828; stroke-dasharray: 5 6; }
+.plan-pipe[role="button"], .plan-node[role="button"] { cursor: pointer; }
+.plan-pipe--selected polyline { stroke: var(--orange); stroke-width: 10; }
 .plan-node-symbol { fill: #fffaf0; stroke: var(--navy); stroke-width: 3; vector-effect: non-scaling-stroke; }
 .plan-node-symbol path { fill: none; }
 .plan-node-symbol text { fill: var(--navy); stroke: none; font: 700 11px var(--mono); text-anchor: middle; }
 .plan-node-symbol--junction { fill: var(--navy); }
 .plan-node--disconnected .plan-node-symbol, .plan-node--isolated .plan-node-symbol { stroke: var(--orange); }
 .plan-node--missing .plan-node-symbol { stroke: #b52828; }
+.plan-node--selected .plan-node-symbol { stroke: var(--orange); stroke-width: 6; }
 .plan-view-legend { display: flex; flex-wrap: wrap; gap: 14px; color: var(--ink-soft); font-size: .62rem; }
 .plan-view-legend span { display: inline-flex; align-items: center; gap: 5px; }
 .plan-view-legend i { display: inline-block; width: 20px; height: 8px; }

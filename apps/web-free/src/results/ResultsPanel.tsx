@@ -1,9 +1,11 @@
 import { useRef } from 'react'
-import type { Run } from '@open-waterhammer/contracts'
+import type { Case, Run } from '@open-waterhammer/contracts'
 
 import { downloadCsv } from '../utils/csv'
 import { downloadPng, downloadSvg } from '../utils/svgExport'
 import { createLinkedFocus, type LinkedFocus } from '../workspace/focus'
+import { deriveLongitudinalProfile } from '../workspace/longitudinal-profile'
+import { LongitudinalProfile } from '../workspace/LongitudinalProfile'
 import { assessmentStatusLabel, runKindLabel, runStatusLabel } from '../workspace/run-display-labels'
 import { deriveRunVisuals, type PlotLine } from './run-visuals'
 
@@ -78,13 +80,13 @@ function ChartActions({ svgRef, filenameBase, rows }: { svgRef: SvgRef; filename
   </div>
 }
 
-export function ResultsPanel({ runs, selectedRun, focus, onSelectRun, onFocus }: { runs: Run[]; selectedRun?: Run; focus?: LinkedFocus; onSelectRun(run: Run): void; onFocus(focus: LinkedFocus): void }) {
+export function ResultsPanel({ caseRecord, runs, selectedRun, focus, onSelectRun, onFocus }: { caseRecord: Case; runs: Run[]; selectedRun?: Run; focus?: LinkedFocus; onSelectRun(run: Run): void; onFocus(focus: LinkedFocus): void }) {
   const timeSeriesSvgRef = useRef<SVGSVGElement>(null)
   const envelopeSvgRef = useRef<SVGSVGElement>(null)
-  const profileSvgRef = useRef<SVGSVGElement>(null)
   const speedSvgRef = useRef<SVGSVGElement>(null)
 
   const run = selectedRun ?? runs.at(-1)
+  const longitudinalProfile = deriveLongitudinalProfile(caseRecord, runs, run?.id)
   const visuals = run ? deriveRunVisuals(run, focus) : undefined
   const timeSeries = visuals?.timeSeries
   const speedSeries = visuals?.speedSeries
@@ -100,7 +102,6 @@ export function ResultsPanel({ runs, selectedRun, focus, onSelectRun, onFocus }:
   const envelopeSteady = envelope ? chartPath(envelope.distance, envelope.steady, 340, 140) : ''
   const envelopeXRange = envelope ? extent(envelope.distance) : undefined
   const envelopeYRange = envelope ? extent([...envelope.maximum, ...envelope.minimum, ...envelope.steady]) : undefined
-  const profileYRange = envelope ? extent(envelope.steady) : undefined
   return <div className="panel-stack results-panel">
     <div className="panel-title-row"><div><span className="eyebrow">計算証跡 / 05</span><h1>結果</h1><p>要約、圧力包絡、縦断、時系列を同じ保存済み計算結果から描画します。</p></div>{run && <select className="run-selector" aria-label="表示する計算結果" value={run.id} onChange={(event) => { const found = runs.find(({ id }) => id === event.target.value); if (found) onSelectRun(found) }}>{[...runs].reverse().map((item) => <option value={item.id} key={item.id}>{runKindLabel(item.kind)} · {runStatusLabel(item.status)}</option>)}</select>}</div>
     {!run ? <div className="comparison-empty"><span>R—00</span><p>解析で計算を実行してください。</p></div> : <>
@@ -137,17 +138,8 @@ export function ResultsPanel({ runs, selectedRun, focus, onSelectRun, onFocus }:
         </section>
         <section className="notebook-card findings-card"><div className="chart-heading"><div><span className="eyebrow">評価</span><h2>関連する指摘事項</h2></div><span>{run.assessment.findings.length}</span></div>{run.assessment.findings.length ? <ol>{run.assessment.findings.map((finding) => <li key={`${finding.ruleId}-${finding.targetRef}`}><button aria-pressed={focus?.targetRef === finding.targetRef} onClick={() => onFocus(createLinkedFocus(finding))}><span className="ng-marker">NG</span><div><strong>{finding.targetRef} · {finding.location ?? '位置情報なし'}</strong><small>{finding.ruleId} / {String(finding.observedValue)} &gt; {String(finding.threshold)} {finding.unit}</small></div><span>連動 ↗</span></button></li>)}</ol> : <div className="empty-ledger"><span>✓</span><p>指摘事項はありません。</p></div>}</section>
         <section className="notebook-card profile-card">
-          <div className="chart-heading"><div><span className="eyebrow">縦断</span><h2>保存済みの縦断図</h2></div><span>{focus?.profileCursor ?? envelope?.id ?? '記録なし'}</span></div>
-          {envelope ? <div className="profile-plot">
-            <svg ref={profileSvgRef} viewBox="0 0 360 150" role="img" aria-label={`${envelope.id}の縦断図`}>
-              <path d={envelopeSteady} transform="translate(10 5)" className="ground-line" />
-              {visuals?.profileCursorRatio !== undefined && <line x1={10 + visuals.profileCursorRatio * 340} x2={10 + visuals.profileCursorRatio * 340} y1="5" y2="145" className="linked-chart-cursor profile-cursor-line" />}
-              <g transform="translate(10 5)"><AxisTicks xRange={envelopeXRange} yRange={profileYRange} width={340} height={140} xUnit="m" yUnit="m" xDigits={0} yDigits={1} /></g>
-            </svg>
-            <div className="profile-ruler"><span>0</span><span>{envelope.distance.at(-1)?.toFixed(0)} m</span></div>
-            <ChartLegend items={[{ label: '定常水頭 H' }]} />
-            <ChartActions svgRef={profileSvgRef} filenameBase={`profile-${envelope.id}`} rows={envelopeRows(envelope)} />
-          </div> : <div className="empty-ledger"><span>—</span><p>縦断データは記録されていません。</p></div>}
+          <div className="chart-heading"><div><span className="eyebrow">縦断</span><h2>入力と計算結果の縦断図</h2></div><span>{focus?.profileCursor ?? '測点未選択'}</span></div>
+          <LongitudinalProfile diagram={longitudinalProfile} mode="result" focus={focus} onFocus={onFocus} />
         </section>
         {speedSeries && <section className="notebook-card chart-card speed-card">
           <div className="chart-heading"><div><span className="eyebrow">ポンプ回転速度</span><h2>保存済みの回転速度</h2></div><span>{speedSeries.id}</span></div>

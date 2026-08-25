@@ -72,6 +72,7 @@ Open Waterhammer の利用者向け画面で使う用語と表記を定める。
 | Import as drafts | 編集中データとして読み込む |
 | GIS draft | 編集中GISデータ / 編集中データ（`draft`は内部名に限り、画面には表示しない） |
 | Auto layout / schematic | 模式図（「位置・距離は実座標ではありません」を併記する） |
+| Input profile / result profile | 入力確認図（計算前） / 計算結果重ね合わせ図 |
 | Export | 書き出す |
 | Import | 読み込む |
 | Open Project | プロジェクトを開く |
