@@ -214,6 +214,10 @@ export function buildCanonicalHydraulicModel(input: BuildCanonicalHydraulicModel
   }
 
   let cumulativeDistance = 0;
+  // 管路ごとの累積実延長。`distance_along_pipe` 列（Excelでは「○任意」）が空の測点に、
+  // 取込順と管長から距離を補う。管路参照が明示されていても補完は必要 —
+  // 距離が無いと水理ユニットが作れず、縦断計算の流量が 0 になってしまう。
+  const cumulativeByPipe = new Map<string, number>();
   const measurementPoints = input.measurementPoints.map((point, sequence): CanonicalMeasurementPoint => {
     cumulativeDistance += point.pipeLength;
     let pipe = point.pipeId ? pipeById.get(point.pipeId) : undefined;
@@ -224,6 +228,11 @@ export function buildCanonicalHydraulicModel(input: BuildCanonicalHydraulicModel
       pipe = inferred.pipe;
       distanceAlongPipe ??= inferred.distanceAlongPipe;
       if (pipe) issues.push({ severity: "warning", code: "POINT_PIPE_INFERRED", entityId: point.id, message: `測点 ${point.id} の管路参照を取込順と管長から ${pipe.id} と補完しました。` });
+    }
+    if (pipe) {
+      const runningDistance = (cumulativeByPipe.get(pipe.id) ?? 0) + point.pipeLength;
+      cumulativeByPipe.set(pipe.id, runningDistance);
+      distanceAlongPipe ??= runningDistance;
     }
     if (!pipe) issues.push({ severity: "error", code: "POINT_PIPE_UNRESOLVED", entityId: point.id, message: `測点 ${point.id} を管路に対応付けできません。` });
     if (pipe && distanceAlongPipe !== undefined && (distanceAlongPipe < 0 || distanceAlongPipe > pipe.length + 1e-9)) {

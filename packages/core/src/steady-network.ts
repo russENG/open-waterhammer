@@ -126,6 +126,42 @@ function hazenWilliamsLoss(D: number, C: number, Q: number, L: number): {
   return { velocity: V, velocityHead, hydraulicGradient: I, frictionLoss: hf };
 }
 
+/** 適用範囲外のトポロジ（ループ・複数貯水槽）を検出して警告文を返す */
+function detectOutOfScopeTopology(
+  pipes: NetworkPipeDef[],
+  reservoirs: NetworkNodeDef[],
+  visited: Set<string>,
+  parentPipe: Map<string, string>,
+): string[] {
+  const warnings: string[] = [];
+
+  // BFS の親管として使われず、かつ両端が到達済みの管路 = 閉路を構成する余分な辺
+  const usedPipeIds = new Set(parentPipe.values());
+  const excluded = pipes.filter(
+    p => !usedPipeIds.has(p.id)
+      && visited.has(p.upstreamNodeId)
+      && visited.has(p.downstreamNodeId),
+  );
+
+  if (excluded.length > 0) {
+    warnings.push(
+      `閉路（ループまたは複数貯水槽の並行流入）を検出しました: ${excluded.map(p => p.id).join(", ")}。`
+      + `本ソルバーは樹枝状管路網（ループなし・単一貯水槽）専用のため、これらの管路は計算から除外され、`
+      + `結果は実際の流量配分・水頭と一致しません。ループを含む管路網は EPANET 経路で計算してください。`,
+    );
+  }
+
+  if (reservoirs.length > 1) {
+    warnings.push(
+      `reservoir ノードが ${reservoirs.length} 個あります（${reservoirs.map(r => r.id).join(", ")}）。`
+      + `本ソルバーは各ノードへ最初に到達した経路だけを解くため、2 つ目以降の貯水槽からの流入は`
+      + `無視されます。複数の水源を持つ管路網は EPANET 経路で計算してください。`,
+    );
+  }
+
+  return warnings;
+}
+
 // ─── メイン計算 ──────────────────────────────────────────────────────────────
 
 /**
@@ -136,7 +172,11 @@ function hazenWilliamsLoss(D: number, C: number, Q: number, L: number): {
  *   - ループなし（樹枝状）
  *   - 各 demand ノードの需要流量は既知
  *
- * @throws {Error} ループ検出時、reservoir 未指定時
+ * 前提を外れた入力（ループ・複数貯水槽）は例外にせず `warnings` で報告する。
+ * 本ソルバーは閉路を構成する管路を計算から除外するため、その場合の結果は
+ * 実際の流量配分と一致しない。EPANET 経路（`calcSteadyNetworkEpanet`）を使うこと。
+ *
+ * reservoir が 1 つも無い場合は空の結果と警告を返す（例外は投げない）。
  */
 export function calcSteadyNetwork(input: SteadyNetworkInput): SteadyNetworkResult {
   const { pipes, nodes } = input;
@@ -199,6 +239,14 @@ export function calcSteadyNetwork(input: SteadyNetworkInput): SteadyNetworkResul
       warnings.push(`${n.id}: reservoir から到達できません`);
     }
   }
+
+  // 適用範囲の検証: 樹枝状（ループなし）・単一貯水槽の前提を外れていないか
+  //
+  // BFS は各ノードへ最初に到達した管路だけを親管として採用する。両端とも到達済み
+  // なのに親管として使われなかった管路は、閉路（環状ループ、または 2 つ目以降の
+  // 貯水槽からの流入経路）を構成する余分な辺である。本ソルバーはこれらを計算から
+  // 除外するため、結果は実際の流量配分と一致しない。
+  warnings.push(...detectOutOfScopeTopology(pipes, reservoirs, visited, parentPipe));
 
   // 逆順（葉→根）で需要を積み上げ
   const subtreeDemand = new Map<string, number>();

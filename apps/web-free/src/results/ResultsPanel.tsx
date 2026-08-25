@@ -4,9 +4,11 @@ import type { Case, Run } from '@open-waterhammer/contracts'
 import { downloadCsv } from '../utils/csv'
 import { downloadPng, downloadSvg } from '../utils/svgExport'
 import { createLinkedFocus, type LinkedFocus } from '../workspace/focus'
+import { findingRuleLabel, formatFindingValue } from '../workspace/result-paths'
 import { deriveLongitudinalProfile } from '../workspace/longitudinal-profile'
 import { LongitudinalProfile } from '../workspace/LongitudinalProfile'
-import { assessmentStatusLabel, runKindLabel, runStatusLabel } from '../workspace/run-display-labels'
+import { assessmentNote, assessmentStatusLabel, runKindLabel, runStatusLabel } from '../workspace/run-display-labels'
+import { formatMetric, headlineMetrics } from './headline-metrics'
 import { PressureWaveAnimator } from './PressureWaveAnimator'
 import { deriveRunVisuals, type PlotLine } from './run-visuals'
 
@@ -98,6 +100,8 @@ export function ResultsPanel({ caseRecord, runs, selectedRun, focus, onSelectRun
   const speedXRange = speedSeries ? extent(speedSeries.seconds) : undefined
   const speedYRange = speedSeries ? extent(speedSeries.values) : undefined
   const envelope = visuals?.envelope
+  // 方式ごとに「答え」を明示する。定義がない方式だけ従来の自動抽出に落とす。
+  const headline = run ? headlineMetrics(run) : []
   const envelopeMaximum = envelope ? chartPath(envelope.distance, envelope.maximum, 340, 140) : ''
   const envelopeMinimum = envelope ? chartPath(envelope.distance, envelope.minimum, 340, 140) : ''
   const envelopeSteady = envelope ? chartPath(envelope.distance, envelope.steady, 340, 140) : ''
@@ -106,7 +110,9 @@ export function ResultsPanel({ caseRecord, runs, selectedRun, focus, onSelectRun
   return <div className="panel-stack results-panel">
     <div className="panel-title-row"><div><span className="eyebrow">計算証跡 / 05</span><h1>結果</h1><p>要約、圧力包絡、縦断、時系列を同じ保存済み計算結果から描画します。</p></div>{run && <select className="run-selector" aria-label="表示する計算結果" value={run.id} onChange={(event) => { const found = runs.find(({ id }) => id === event.target.value); if (found) onSelectRun(found) }}>{[...runs].reverse().map((item) => <option value={item.id} key={item.id}>{runKindLabel(item.kind)} · {runStatusLabel(item.status)}</option>)}</select>}</div>
     {!run ? <div className="comparison-empty"><span>R—00</span><p>解析で計算を実行してください。</p></div> : <>
-      <div className="result-summary-strip"><article><span>計算状態</span><strong>{runStatusLabel(run.status)}</strong></article><article><span>評価</span><strong>{assessmentStatusLabel(run.assessment.status)}</strong></article>{visuals!.summaryMetrics.slice(0, 2).map((metric) => <article key={metric.path}><span>{metric.path}</span><strong>{metric.value.toPrecision(5)}</strong></article>)}</div>
+      <div className="result-summary-strip"><article><span>計算状態</span><strong>{runStatusLabel(run.status)}</strong></article><article><span>自動評価</span><strong>{assessmentStatusLabel(run.assessment.status)}</strong></article>{headline.length > 0
+        ? headline.map((metric) => <article key={metric.label}><span>{metric.label}{metric.unit && metric.unit !== '—' ? ` [${metric.unit}]` : ''}</span><strong>{formatMetric(metric)}</strong></article>)
+        : visuals!.summaryMetrics.slice(0, 2).map((metric) => <article key={metric.path}><span>{metric.path}</span><strong>{metric.value.toPrecision(5)}</strong></article>)}</div>
       <div className="result-visual-grid">
         {run.kind.startsWith('transient_') && <PressureWaveAnimator key={run.id} caseRecord={caseRecord} run={run} focus={focus} onFocus={onFocus} />}
         <section className="notebook-card chart-card chart-card--wide">
@@ -138,7 +144,7 @@ export function ResultsPanel({ caseRecord, runs, selectedRun, focus, onSelectRun
             <ChartActions svgRef={envelopeSvgRef} filenameBase={`envelope-${envelope.id}`} rows={envelopeRows(envelope)} />
           </div> : <div className="empty-ledger"><span>—</span><p>包絡線は記録されていません。</p></div>}
         </section>
-        <section className="notebook-card findings-card"><div className="chart-heading"><div><span className="eyebrow">評価</span><h2>関連する指摘事項</h2></div><span>{run.assessment.findings.length}</span></div>{run.assessment.findings.length ? <ol>{run.assessment.findings.map((finding) => <li key={`${finding.ruleId}-${finding.targetRef}`}><button aria-pressed={focus?.targetRef === finding.targetRef} onClick={() => onFocus(createLinkedFocus(finding))}><span className="ng-marker">NG</span><div><strong>{finding.targetRef} · {finding.location ?? '位置情報なし'}</strong><small>{finding.ruleId} / {String(finding.observedValue)} &gt; {String(finding.threshold)} {finding.unit}</small></div><span>連動 ↗</span></button></li>)}</ol> : <div className="empty-ledger"><span>✓</span><p>指摘事項はありません。</p></div>}</section>
+        <section className="notebook-card findings-card"><div className="chart-heading"><div><span className="eyebrow">自動評価</span><h2>関連する指摘事項</h2></div><span>{run.assessment.findings.length}</span></div>{run.assessment.findings.length ? <ol>{run.assessment.findings.map((finding) => <li key={`${finding.ruleId}-${finding.targetRef}`}><button aria-pressed={focus?.targetRef === finding.targetRef} onClick={() => onFocus(createLinkedFocus(finding))}><span className={`ng-marker ng-marker--${run.assessment.status}`}>{assessmentStatusLabel(run.assessment.status)}</span><div><strong>{finding.targetRef} · {finding.location ?? '位置情報なし'}</strong><small>{findingRuleLabel(finding.ruleId)}：{formatFindingValue(finding.observedValue)} / 許容 {formatFindingValue(finding.threshold)} {finding.unit}</small></div><span>連動 ↗</span></button></li>)}</ol> : <div className="empty-ledger"><span>{run.assessment.status === 'needs_review' ? '?' : '✓'}</span><p>{assessmentNote(run)}</p></div>}</section>
         <section className="notebook-card profile-card">
           <div className="chart-heading"><div><span className="eyebrow">縦断</span><h2>入力と計算結果の縦断図</h2></div><span>{focus?.profileCursor ?? '測点未選択'}</span></div>
           <LongitudinalProfile diagram={longitudinalProfile} mode="result" focus={focus} onFocus={onFocus} />

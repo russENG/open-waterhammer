@@ -1,8 +1,8 @@
-import { PRODUCT_VERSION } from '@open-waterhammer/contracts'
 import type { Run } from '@open-waterhammer/contracts'
 import { lazy, Suspense, useEffect, useMemo, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 
+import { SITE_TITLE } from '../branding'
 import type { LinkedFocus } from './focus'
 import { downloadProjectFile, exportProjectFile, replaceProjectFile } from './project-transfer'
 import { PyodideStatusChip } from './PyodideStatusChip'
@@ -121,7 +121,7 @@ export function WorkspaceLayout() {
   if (selection.tab === 'overview') panel = <OverviewPanel project={project} caseRecord={caseRecord} scenario={scenario} runs={caseRuns} focus={focus} onFocus={setFocus} onImported={(importedProjectId, importedCaseId) => navigate(canonicalPath(importedProjectId, importedCaseId, 'overview'))} />
   if (selection.tab === 'model-gis') panel = <Suspense fallback={<PanelLoading label="GIS" />}><ExcelIoCard key={`excel-${caseRecord.id}`} caseRecord={caseRecord} /><GisPanel key={caseRecord.id} caseRecord={caseRecord} projectCrs={project.crs} locked={caseRecord.state !== 'draft'} focus={focus} /></Suspense>
   if (selection.tab === 'scenario') panel = <ScenarioPanel key={scenario?.id} caseId={caseRecord.id} scenarios={caseScenarios} scenario={scenario} locked={caseRecord.state !== 'draft'} onSelect={setSelectedScenarioId} />
-  if (selection.tab === 'analysis') panel = <AnalysisPanel key={`${caseRecord.id}-${scenario?.id}`} caseRecord={caseRecord} scenarios={caseScenarios} scenario={scenario} onScenarioSelect={setSelectedScenarioId} onRunSelected={(run) => setSelectedRunId(run.id)} />
+  if (selection.tab === 'analysis') panel = <AnalysisPanel key={`${caseRecord.id}-${scenario?.id}`} caseRecord={caseRecord} scenarios={caseScenarios} scenario={scenario} onScenarioSelect={setSelectedScenarioId} onRunSelected={(run) => setSelectedRunId(run.id)} onFork={() => setForkDialog(true)} />
   if (selection.tab === 'results') panel = <Suspense fallback={<PanelLoading label="results visualization" />}><ResultsPanel caseRecord={caseRecord} runs={caseRuns} selectedRun={selectedRun} focus={focus} onSelectRun={(run: Run) => setSelectedRunId(run.id)} onFocus={setFocus} /></Suspense>
   if (selection.tab === 'compare') panel = <ComparePanel cases={comparedCases} scenarios={data.scenarios} runs={data.runs} />
   if (selection.tab === 'reports') panel = <Suspense fallback={<PanelLoading label="report tools" />}><ReportsPanel runs={caseRuns} /></Suspense>
@@ -129,9 +129,9 @@ export function WorkspaceLayout() {
   return <div className="workspace-page">
     <a href="#workspace-main" className="skip-link">作業内容へ移動</a>
     <header className="product-header">
-      <div className="product-mark"><span className="mark-lines" aria-hidden="true"><i /><i /><i /></span><div><strong>OPEN WATERHAMMER</strong><small>水撃圧の設計比較ワークスペース</small></div></div>
-      <div className="product-context"><span className="alpha-label">alpha</span><span className="support-label">設計比較支援</span><span className="version-label">{`v${PRODUCT_VERSION}`}</span><PyodideStatusChip /></div>
-      <nav aria-label="サービス内メニュー"><Link to={canonicalPath(selection.projectId, selection.caseId, 'overview')}>作業画面</Link><a href="#/docs/reference">設計基準</a><a href="#/docs/library">計算ライブラリ</a><a href="#/docs/design-flow">設計フロー</a><a href="#/docs/hydraulic">水理設計の視点</a><a href="#/docs/about">このサイトについて</a></nav>
+      <div className="product-mark"><span className="mark-lines" aria-hidden="true"><i /><i /><i /></span><strong>{SITE_TITLE}</strong></div>
+      <div className="product-status"><PyodideStatusChip /></div>
+      <nav aria-label="サービス内メニュー"><Link to={canonicalPath(selection.projectId, selection.caseId, 'overview')}>作業画面</Link><a href="#/docs/reference">設計基準</a><a href="#/docs/library">計算ライブラリ</a><a href="#/docs/design-flow">設計フロー</a><a href="#/docs/hydraulic">水理設計の視点</a><a href="#/docs/about">このサイトについて</a><a href="demo/">デモ手順</a></nav>
     </header>
     <div className="workspace-grid">
       <WorkspaceTree projectId={selection.projectId} caseId={selection.caseId} comparison={comparison} onSelect={goToCase} onToggleComparison={toggleComparison} onCreate={() => void createNew()} onFork={() => setForkDialog(true)} onCreateProject={createProject} onImportProject={importProject} onExportProject={exportProject} projectActionDisabled={busy} />
@@ -143,7 +143,6 @@ export function WorkspaceLayout() {
       </main>
       <RunInspector run={selectedRun} baseline={baselineRun} />
     </div>
-    <footer className="product-footer"><div><strong>alpha · 設計比較支援</strong><span>ローカル保存 / 静的配信 / 証跡保持</span><nav aria-label="関連リンク"><a href="https://github.com/russENG/open-waterhammer" target="_blank" rel="noopener noreferrer">GitHub リポジトリ</a> ・ <a href="./notebooks/" target="_blank" rel="noreferrer">計算ノートブック ↗</a></nav></div><p><b>適用限界：</b>自動評価は設計比較支援のための参考情報です。入力条件、適用基準、数値解法の妥当性は設計者が個別に確認してください。</p></footer>
     {forkDialog && <div className="modal-backdrop"><section className="modal-sheet fork-dialog" role="dialog" aria-modal="true" aria-label="固定済みの比較案を複製"><div className="modal-heading"><div><span className="eyebrow">比較案の状態</span><h2>固定済みの比較案を複製</h2></div><button className="icon-button" aria-label="複製ダイアログを閉じる" onClick={() => setForkDialog(false)}>×</button></div><p>計算済み・固定の比較案は変更できません。変更理由を残して、編集可能な複製を作成します。</p><label><span>変更理由</span><textarea value={forkReason} onChange={(event) => setForkReason(event.target.value)} autoFocus /></label>{forkError && <p className="form-error">{forkError}</p>}<div className="modal-actions"><button onClick={() => setForkDialog(false)}>キャンセル</button><button className="primary-button" onClick={() => void submitFork()}>複製して編集</button></div></section></div>}
   </div>
 }

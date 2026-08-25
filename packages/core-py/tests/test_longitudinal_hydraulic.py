@@ -193,3 +193,60 @@ class TestLongitudinalCalc:
             r.static_pressure + r.waterhammer_pressure,
             abs_tol=1e-6,
         )
+
+
+# ─── 負圧区間の扱い (#40) ────────────────────────────────────────────────────
+
+
+class TestNegativeStaticPressure:
+    """静水圧が0以下の測点では、比例算定の水撃圧・設計内圧を出さない."""
+
+    def _run(self, **kwargs):
+        # 静水位を管中心高より低く置き、全測点を負圧にする。
+        return calc_longitudinal_hydraulic(
+            LongitudinalHydraulicInput(
+                points=make_test_points(),
+                static_water_level=400.0,
+                **kwargs,
+            )
+        )
+
+    def test_default_ratio_yields_none_instead_of_negative(self):
+        result = self._run()
+        assert all(r.pressure_head < 0 for r in result.point_results)
+        assert all(r.waterhammer_pressure is None for r in result.point_results)
+        assert all(r.design_pressure is None for r in result.point_results)
+        assert result.max_design_pressure == 0
+
+    def test_explicit_ratio_also_skipped(self):
+        result = self._run(waterhammer_ratio=0.4)
+        assert all(r.waterhammer_pressure is None for r in result.point_results)
+
+    def test_explicit_mpa_is_kept(self):
+        # 絶対値指定は設計者が明示した値なので、静水圧の符号によらず使う。
+        result = self._run(waterhammer_pressure_mpa=0.41)
+        for r in result.point_results:
+            assert r.waterhammer_pressure == 0.41
+            assert math.isclose(
+                r.design_pressure, r.static_pressure + 0.41, abs_tol=1e-12
+            )
+
+    def test_warning_is_emitted_once(self):
+        result = self._run()
+        matching = [w for w in result.warnings if "静水圧が0以下の測点" in w]
+        assert len(matching) == 1
+
+
+class TestWarningsAreSummarised:
+    """31測点あっても、同種の警告は1行にまとめる (#40 と併せた読みやすさ改善)."""
+
+    def test_velocity_and_negative_head_warnings_are_single_lines(self):
+        result = calc_longitudinal_hydraulic(
+            LongitudinalHydraulicInput(
+                points=make_test_points(),
+                static_water_level=400.0,
+            )
+        )
+        assert len([w for w in result.warnings if "推奨上限" in w]) <= 1
+        assert len([w for w in result.warnings if "推奨下限" in w]) <= 1
+        assert len([w for w in result.warnings if "負圧" in w]) == 1

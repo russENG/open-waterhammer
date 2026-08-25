@@ -87,12 +87,47 @@ describe('browser CalculationRunner adapter', () => {
         assessment: { status: 'needs_review', findings: [] },
         inputHash: calculationInputHash,
       }),
+      epanetInitialSolver: async () => ({
+        caseName: 'initial',
+        pipeResults: [{
+          pipeId: 'P-1', flow: 0.03, velocity: 0.42, velocityHead: 0.01,
+          frictionLoss: 1, minorLoss: 0, totalLoss: 1, hydraulicGradient: 0.01,
+        }],
+        nodeResults: [
+          { nodeId: 'R', head: 80, hydraulicGradeLine: 80, pressureHead: 80, pressureMpa: 0.78 },
+          { nodeId: 'V', head: 79, hydraulicGradeLine: 79, pressureHead: 79, pressureMpa: 0.77 },
+        ],
+        maxVelocity: 0.42,
+        maxPressureHead: 80,
+        warnings: [],
+      }),
     })
+
+    const transientModel = {
+      network: {
+        pipes: [{
+          id: 'P-1',
+          pipe: {
+            id: 'P-1', startNodeId: 'R', endNodeId: 'V', pipeType: 'ductile_iron',
+            innerDiameter: 0.3, wallThickness: 0.01, length: 100, roughnessCoeff: 130,
+          },
+          waveSpeed: 1000, nReaches: 2, upstreamNodeId: 'R', downstreamNodeId: 'V', initialFlow: 0.02,
+        }],
+        nodes: {
+          R: { type: 'reservoir', head: 80 },
+          V: { type: 'valve', Q0: 0.02, H0v: 70, closeTime: 2 },
+        },
+      },
+      options: { tMax: 2, initialFlow: 0.02 },
+    }
 
     for (const [index, kind] of RUN_KINDS.entries()) {
       const currentCase = {
         ...caseFixture,
         id: `33333333-3333-4333-8333-${String(index + 1).padStart(12, '0')}`,
+        modelSnapshot: kind === 'transient_network' || kind === 'transient_protection_device'
+          ? transientModel
+          : caseFixture.modelSnapshot,
       }
       const currentScenario = { ...scenarioFixture, id: `44444444-4444-4444-8444-${String(index + 1).padStart(12, '0')}`, caseId: currentCase.id }
       const repository = new InMemoryWorkspaceRepository({

@@ -1,4 +1,10 @@
-import { validateRun } from "@open-waterhammer/contracts";
+import {
+  SOFTWARE_DISCLAIMER,
+  SOFTWARE_LICENSE_ID,
+  SOFTWARE_LICENSE_URL,
+  SOFTWARE_SOURCE_URL,
+  validateRun,
+} from "@open-waterhammer/contracts";
 import type { Run } from "@open-waterhammer/contracts";
 import ExcelJS from "exceljs";
 
@@ -30,7 +36,10 @@ export async function generateRunReport(run: Run): Promise<Buffer> {
     ["Error", run.error === null ? "" : JSON.stringify(run.error)],
     ["Release label", "alpha"],
     ["Purpose", "設計比較支援"],
-    ["Applicability limitations", "適用限界：本ツールの自動評価は設計比較支援のための参考情報です。入力条件、適用基準、数値解法の妥当性は設計者が個別に確認してください。"],
+    ["License", SOFTWARE_LICENSE_ID],
+    ["License URL", SOFTWARE_LICENSE_URL],
+    ["Source code", SOFTWARE_SOURCE_URL],
+    ["Warranty disclaimer", SOFTWARE_DISCLAIMER],
     ["Rule ids", [...new Set(run.assessment.findings.map(({ ruleId }) => ruleId))].join(", ")],
   ]);
   addRows(workbook, "Manifest", [

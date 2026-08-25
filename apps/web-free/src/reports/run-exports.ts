@@ -1,8 +1,12 @@
-import type { Run } from '@open-waterhammer/contracts'
+import {
+  SOFTWARE_DISCLAIMER,
+  SOFTWARE_LICENSE_ID,
+  SOFTWARE_LICENSE_URL,
+  SOFTWARE_SOURCE_URL,
+  type Run,
+} from '@open-waterhammer/contracts'
 
 import { ensureBrowserBuffer } from './browser-buffer'
-
-export const APPLICABILITY_LIMITATIONS = '適用限界：本ツールの自動評価は設計比較支援のための参考情報です。入力条件、適用基準、数値解法の妥当性は設計者が個別に確認してください。'
 
 type RunReportGenerator = (run: Run) => Promise<Uint8Array>
 
@@ -10,7 +14,12 @@ export function buildRunJsonExport(run: Run): string {
   const ruleIds = [...new Set(run.assessment.findings.map(({ ruleId }) => ruleId))]
   return JSON.stringify({
     labels: ['alpha', '設計比較支援'],
-    applicabilityLimitations: APPLICABILITY_LIMITATIONS,
+    license: {
+      id: SOFTWARE_LICENSE_ID,
+      url: SOFTWARE_LICENSE_URL,
+      source: SOFTWARE_SOURCE_URL,
+    },
+    warrantyDisclaimer: SOFTWARE_DISCLAIMER,
     manifestSummary: {
       productVersion: run.manifest.productVersion,
       engine: run.manifest.engine,

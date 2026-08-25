@@ -13,7 +13,7 @@
 
 import ExcelJS from "exceljs";
 import type { SimpleFormulaResult, MeasurementPoint, LongitudinalHydraulicResult } from "@open-waterhammer/core";
-import { headToMpa } from "@open-waterhammer/core";
+import { headToMpa, judgeDesignPressure } from "@open-waterhammer/core";
 import type { WorkbookData, ProjectMeta } from "./types.js";
 
 // ─── 型定義 ───────────────────────────────────────────────────────────────────
@@ -32,6 +32,13 @@ export interface ReportInput {
 
 function n(v: number | undefined, d = 3): string {
   return v !== undefined ? v.toFixed(d) : "—";
+}
+
+function judgementLabel(status: string): string {
+  if (status === "ok") return "OK";
+  if (status === "warning") return "注意";
+  if (status === "ng") return "NG";
+  return "—";
 }
 
 function closureLabel(t: string): string {
@@ -112,6 +119,8 @@ function addResultSheet(wb: ExcelJS.Workbook, input: ReportInput): void {
     "ΔH Joukowsky [m]", "Hmax Allievi閉 [m]", "Hmin Allievi開 [m]",
     "水撃圧 [MPa]",
     "初期流速 V₀ [m/s]", "初期水頭 H₀ [m]",
+    // 設計水圧の判定（管路の許容圧力が入力されている場合のみ値が入る）
+    "設計水圧 [MPa]", "許容圧力 [MPa]", "余裕度 [%]", "判定",
     "警告",
   ];
 
@@ -122,6 +131,21 @@ function addResultSheet(wb: ExcelJS.Workbook, input: ReportInput): void {
     // 代表水撃圧水頭（MPa換算用）
     const deltaH = r.deltaH_joukowsky ?? r.hmax_allievi_close;
     const waterhammerMpa = deltaH !== undefined ? headToMpa(deltaH) : undefined;
+
+    // 設計水圧の判定。ハンマー水頭の採り方は protocol.py の _joukowsky_allievi と同じで、
+    // 急閉そくならジューコフスキー水頭、緩閉そくならアリエビ最大水頭 − H₀ を採る。
+    // 管路に許容圧力が入っていないケースは判定できないので4列とも「—」にする。
+    const pipe = data.pipes.find((candidate) => candidate.id === r.pipeId);
+    const allowable = pipe?.allowablePressureMpa;
+    const initialHead = cas?.initialHead;
+    const hammerHead = r.deltaH_joukowsky
+      ?? (r.hmax_allievi_close !== undefined && initialHead !== undefined
+        ? r.hmax_allievi_close - initialHead
+        : undefined);
+    const judgement = allowable !== undefined && allowable > 0
+      && hammerHead !== undefined && initialHead !== undefined
+      ? judgeDesignPressure(headToMpa(initialHead + hammerHead), allowable)
+      : undefined;
 
     return [
       r.caseId,
@@ -140,7 +164,11 @@ function addResultSheet(wb: ExcelJS.Workbook, input: ReportInput): void {
       waterhammerMpa !== undefined ? n(waterhammerMpa, 4) : "—",
       n(cas?.initialVelocity, 2),
       n(cas?.initialHead, 2),
-      r.warnings.join(" / "),
+      n(judgement?.designPressureMpa, 3),
+      n(judgement?.allowablePressureMpa, 3),
+      judgement !== undefined ? n(judgement.margin * 100, 1) : "—",
+      judgementLabel(judgement?.status ?? ""),
+      [judgement?.message, ...r.warnings].filter((w): w is string => Boolean(w)).join(" / "),
     ];
   });
 
@@ -205,6 +233,7 @@ function addHydraulicSheet(
   points: MeasurementPoint[],
   result: LongitudinalHydraulicResult,
   projectName: string,
+  allowablePressureMpa: number | undefined,
 ): void {
   const ws = wb.addWorksheet(sheetName);
 
@@ -219,24 +248,28 @@ function addHydraulicSheet(
     "", "", "",
     "その他損失水頭(m)", "", "", "", "",
     "", "", "", "", "", "", "",
+    "", "",
   ];
   const header2 = [
     "測点", "単距離", "地盤高", "管中心高", "管長", "流量", "管径", "流速係数", "動水勾配",
     "流速", "速度水頭", "摩擦損失水頭",
     "湾曲損失係数", "バルブ損失係数", "直角分流損失係数", "損失係数計", "その他損失水頭計",
     "全損失水頭", "ｴﾈﾙｷﾞｰ標高", "動水位", "動水頭", "静水圧", "水撃圧", "設計内圧",
+    "許容圧力", "判定",
   ];
   const header3 = [
     "", "Lh", "GL", "FH", "SL", "Q", "D", "CI", "",
     "V", "hv", "hf",
     "fb", "fv", "fβ", "Σf", "Σhc",
     "h", "EL", "WLm", "hm", "Ps", "Pi", "Pp",
+    "", "",
   ];
   const unitRow = [
     "", "(m)", "(m)", "(m)", "(m)", "(m³/s)", "(mm)", "", "(‰)",
     "(m/s)", "(m)", "(m)",
     "", "", "", "", "(m)",
     "(m)", "(m)", "(m)", "(m)", "(MPa)", "(MPa)", "(MPa)",
+    "(MPa)", "",
   ];
 
   const dataRows: unknown[][] = [];
@@ -270,6 +303,11 @@ function addHydraulicSheet(
       n(r.staticPressure, 2),
       n(r.waterhammerPressure, 2),
       n(r.designPressure, 2),
+      n(allowablePressureMpa, 3),
+      // 設計内圧が未算定（負圧区間）の測点、許容圧力が未入力の案件は判定しない。
+      allowablePressureMpa !== undefined && allowablePressureMpa > 0 && r.designPressure !== undefined
+        ? judgementLabel(judgeDesignPressure(r.designPressure, allowablePressureMpa).status)
+        : "—",
     ]);
   }
 
@@ -279,13 +317,13 @@ function addHydraulicSheet(
   // ヘッダー行スタイル（1-indexed: title.length + 1〜+ 4）
   const headerRowStart = title.length + 1;
   for (let r = headerRowStart; r < headerRowStart + 4; r++) {
-    styleHeader(ws, r, 24);
+    styleHeader(ws, r, header2.length);
   }
   autoCols(ws, allRows);
 
   // タイトル行結合
-  ws.mergeCells(1, 1, 1, 24);
-  ws.mergeCells(2, 1, 2, 24);
+  ws.mergeCells(1, 1, 1, header2.length);
+  ws.mergeCells(2, 1, 2, header2.length);
 }
 
 // ─── メイン ───────────────────────────────────────────────────────────────────
@@ -304,7 +342,11 @@ export async function generateReport(input: ReportInput): Promise<Buffer> {
   if (input.hydraulicResults && input.data.measurementPoints.length > 0) {
     for (const hr of input.hydraulicResults) {
       const sheetName = `水理計算書_${hr.caseName}`.slice(0, 31); // Excel sheet name limit
-      addHydraulicSheet(wb, sheetName, input.data.measurementPoints, hr, input.meta.projectName);
+      // 許容圧力は管路が持つ。測点列が属する管路が特定できないときは判定列を空にする。
+      const allowable = input.data.pipes.length === 1
+        ? input.data.pipes[0]!.allowablePressureMpa
+        : input.data.pipes.find((p) => p.id === input.data.measurementPoints[0]?.pipeId)?.allowablePressureMpa;
+      addHydraulicSheet(wb, sheetName, input.data.measurementPoints, hr, input.meta.projectName, allowable);
     }
   }
 

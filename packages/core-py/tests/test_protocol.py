@@ -209,8 +209,11 @@ def test_executes_each_python_run_kind_with_a_structured_result(kind):
     assert len(response["inputHash"]) == 64
     assert response["result"]["method"]
     assert isinstance(response["result"]["summary"], dict)
+    # 過渡解析は負圧の判定を持つため、許容圧力が未入力でも needs_review にはならない
+    # （負圧なしなら pass）。他の方式は判定材料が無いので needs_review のまま。
+    expected_status = "pass" if kind.startswith("transient_") else "needs_review"
     assert response["result"]["assessment"] == {
-        "status": "needs_review",
+        "status": expected_status,
         "findings": [],
     }
 
@@ -607,3 +610,29 @@ def test_longitudinal_hydraulics_assessment_surfaces_a_warning_when_the_allowabl
 
     assert result["assessment"] == {"status": "needs_review", "findings": []}
     assert any("許容圧力が指定されていますが判定できませんでした" in warning for warning in result["warnings"])
+
+
+# ─── 過渡解析の負圧判定 (#32) ────────────────────────────────────────────────
+
+
+def test_transient_negative_pressure_is_reported_as_a_finding():
+    """Hmin が負になる管路は warning + finding で指摘する（従来は指摘0件だった）."""
+    calculation_request = requests_by_kind()["transient_single_pipe"]
+    # 下流初期水頭を下げ、流速を上げ、反射が戻るまで解析時間を伸ばして負圧を出す。
+    events = calculation_request["scenario"]["eventSettings"]
+    events["initialVelocity"] = 1.0
+    events["initialDownstreamHead"] = 5.0
+    events["closeTime"] = 0.02
+    events["nReaches"] = 10
+    events["tMax"] = 1.0
+    response = execute_request(calculation_request)
+
+    assessment = response["result"]["assessment"]
+    assert assessment["status"] == "warning"
+    assert len(assessment["findings"]) >= 1
+    finding = assessment["findings"][0]
+    assert finding["ruleId"] == "negative_pressure/8.4"
+    assert finding["threshold"] == 0
+    assert finding["unit"] == "m"
+    assert finding["observedValue"] < 0
+    assert any("負圧" in warning for warning in response["result"]["warnings"])

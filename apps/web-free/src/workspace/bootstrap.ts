@@ -6,6 +6,7 @@ import {
   scenarioFixture,
 } from '@open-waterhammer/contracts'
 import type { WorkbookData } from '@open-waterhammer/excel-io'
+import { TEMPLATE_SAMPLE_PROJECT_NAME } from '@open-waterhammer/sample-data'
 import {
   exportProjectBundle,
   IndexedDBWorkspaceRepository,
@@ -94,12 +95,19 @@ export async function createProjectFromExcel(
   workbook: WorkbookData,
 ): Promise<{ data: WorkspaceData; warnings: string[] }> {
   const projectName = workbook.meta.projectName.trim()
-  if (!projectName || projectName === '（案件名を入力）') {
-    throw new Error('Excelの「案件情報」にプロジェクト名を入力してください。')
+  if (!projectName) {
+    throw new Error('Excelの「案件情報」B2セル（project_name）に案件名を入力してください。')
   }
   const hasAnyData = workbook.pipes.length > 0 || workbook.nodes.length > 0
     || workbook.cases.length > 0 || workbook.measurementPoints.length > 0
   if (!hasAnyData) throw new Error('Excelに取り込める管路・節点・ケース・測点データがありません。')
+
+  // 配布テンプレートの既定名のまま読み込むのは動作確認としては正しい使い方なので拒否しない。
+  // 実案件で書き換え忘れたときだけ気づけるよう、警告として残す。
+  // （かつてはここで例外を投げていたため、配布したテンプレートを取込側が受け付けなかった）
+  const nameWarnings = projectName === TEMPLATE_SAMPLE_PROJECT_NAME
+    ? ['案件名がテンプレートの既定値のままです。実案件では「案件情報」シートの案件名を書き換えてください。']
+    : []
 
   // Parse/validation is completed by the caller before this function. Build the complete
   // workspace in memory first, then commit it as one validated bundle so a failed import never
@@ -136,7 +144,7 @@ export async function createProjectFromExcel(
     data.scenarios[0]!.eventSettings = mapped.eventSettings as JsonValue
   }
 
-  return { data: await importIntoEmptyWorkspace(repository, data), warnings: mapped.warnings }
+  return { data: await importIntoEmptyWorkspace(repository, data), warnings: [...nameWarnings, ...mapped.warnings] }
 }
 
 export async function initializeBrowserWorkspace(options: OpenIndexedDBWorkspaceOptions = {}): Promise<{

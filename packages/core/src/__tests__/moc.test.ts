@@ -494,6 +494,42 @@ describe("harmonizeTimeStep — Δt 統一化", () => {
   });
 });
 
+describe("差分距離の実務目安（技術書 §8.4.2(2)）", () => {
+  test("200 mを超える差分距離を拒否する", () => {
+    assert.throws(() => runMocSinglePipe({
+      pipe: PIPE_DI_300,
+      waveSpeed: a,
+      initialVelocity: V0,
+      initialDownstreamHead: H0,
+      closeTime: 0,
+      nReaches: 2,
+    }), /差分距離 Δx=250\.0 m.*計算区間数を 3 以上/);
+  });
+
+  test("50 m未満は計算を継続して注意を返す", () => {
+    const r = runMocSinglePipe({
+      pipe: PIPE_DI_300,
+      waveSpeed: a,
+      initialVelocity: V0,
+      initialDownstreamHead: H0,
+      closeTime: 0,
+      nReaches: 20,
+    });
+    assert.ok(r.warnings?.some((warning) => warning.includes("Δx=25.0 m") && warning.includes("より細かい設定")));
+  });
+
+  test("計算区間数は整数に限る", () => {
+    assert.throws(() => runMocSinglePipe({
+      pipe: PIPE_DI_300,
+      waveSpeed: a,
+      initialVelocity: V0,
+      initialDownstreamHead: H0,
+      closeTime: 0,
+      nReaches: 2.5,
+    }), /1以上の整数/);
+  });
+});
+
 describe("クーラン条件 Δt ≤ Δx/(V+a) チェック (式8.4.8)", () => {
   test("通常流速 (V/a < 0.01) では警告を出さない", () => {
     // V0 = 1 m/s, a ≈ 1100 m/s → V/a ≈ 0.001
@@ -676,5 +712,28 @@ describe("runMoc は dt 整合化を適用する", () => {
     const dtB = dxB_eff / aB;
     assert.ok(Math.abs(dtA - r.dt) / r.dt < 0.06);
     assert.ok(Math.abs(dtB - r.dt) / r.dt < 0.06);
+  });
+
+  test("異なる格子間隔では特性線を補間し、定常節点水頭を初期値に使う", () => {
+    const network: MocNetwork = {
+      pipes: [
+        { id: "pA", pipe: PIPE_A, waveSpeed: 1000, nReaches: 10, upstreamNodeId: "res", downstreamNodeId: "j", initialFlow: 0.03 },
+        { id: "pB", pipe: PIPE_B, waveSpeed: 800, nReaches: 10, upstreamNodeId: "j", downstreamNodeId: "valve", initialFlow: 0.03 },
+      ],
+      nodes: {
+        res: { type: "reservoir", head: 80 },
+        valve: { type: "valve", Q0: 0.03, H0v: 75, closeTime: 2 },
+      },
+    };
+    const result = runMoc(network, {
+      tMax: 1,
+      initialNodeHeads: { res: 80, j: 78, valve: 75 },
+    });
+    assert.equal(result.pipes.pA!.H_steady[0], 80);
+    assert.equal(result.pipes.pA!.H_steady.at(-1), 78);
+    assert.equal(result.pipes.pB!.H_steady[0], 78);
+    assert.equal(result.pipes.pB!.H_steady.at(-1), 75);
+    assert.ok(result.pipes.pA!.Hmax.every(Number.isFinite));
+    assert.ok(result.pipes.pB!.Hmax.every(Number.isFinite));
   });
 });

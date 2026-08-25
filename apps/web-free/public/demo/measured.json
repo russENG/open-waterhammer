@@ -1,0 +1,31 @@
+{
+  "templateFileName": "waterhammer-template.xlsx",
+  "importReportHeading": "取り込みました（注意 2件）",
+  "importWarnings": [
+    "案件名がテンプレートの既定値のままです。実案件では「案件情報」シートの案件名を書き換えてください。",
+    "節点 N2: 節点種別「valve_node」は定常管路網で junction として扱います。"
+  ],
+  "a02Summary": [
+    "計算状態\n計算完了",
+    "自動評価\n不適合",
+    "水撃圧水頭 ΔH [m]\n178.49",
+    "閉そく区分\n急閉そく",
+    "波速 a [m/s]\n1095.3"
+  ],
+  "l01Summary": [
+    "計算状態\n計算完了",
+    "自動評価\n適合",
+    "最大設計内圧 Pp [MPa]\n1.438",
+    "最大流速 V [m/s]\n1.597",
+    "静水位 [m]\n580.600"
+  ],
+  "reportNote": "プロジェクト内の成功した計算結果 2 件（縦断水理計算 / Joukowsky / Allievi）を1冊にまとめます。",
+  "deliverableFileName": "waterhammer-report-サンプル：幹線用水路 水撃圧検討.xlsx",
+  "t01Summary": [
+    "計算状態\n計算完了",
+    "自動評価\n適合",
+    "最大水頭 Hmax [m]\n43.5",
+    "最小水頭 Hmin [m]\n30.0",
+    "計算時間刻み Δt [s]\n0.0455"
+  ]
+}

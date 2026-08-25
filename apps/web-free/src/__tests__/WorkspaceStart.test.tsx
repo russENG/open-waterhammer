@@ -69,6 +69,10 @@ describe('WorkspaceStart', () => {
       new File(['xlsx'], 'project.xlsx', { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' }),
     )
 
+    // 取込は IndexedDB への書き込みを挟むので、並列実行時は既定の1秒に収まらないことがある。
+    expect(await screen.findByRole('heading', { name: /取り込みました/ }, { timeout: 10_000 })).toBeVisible()
+    expect(onReady).not.toHaveBeenCalled()
+    await user.click(screen.getByRole('button', { name: '確認した · 作業画面へ進む' }))
     await waitFor(() => expect(onReady).toHaveBeenCalledOnce())
     expect(onReady.mock.calls[0]![0].projects[0].name).toBe('Excel案件')
     expect(onReady.mock.calls[0]![0].cases[0].state).toBe('draft')

@@ -31,6 +31,13 @@ from typing import Literal, Union
 from .formulas import GRAVITY
 from .types import Pipe
 
+
+# 土地改良事業計画設計基準・設計「パイプライン」技術書 §8.4.2(2)
+# 設計用水撃圧解析で一般に用いられる差分距離。50 m 未満は計算可能だが、
+# 200 m 超は設計用途として粗すぎるため、本ソルバーでは入力エラーとする。
+MOC_GRID_SPACING_RECOMMENDED_MIN = 50.0
+MOC_GRID_SPACING_MAX = 200.0
+
 # ═══════════════════════════════════════════════════════════════════════════════
 # 境界条件型（Discriminated Union）
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -194,6 +201,7 @@ class MocNetwork:
 class MocOptions:
     t_max: float | None = None  # シミュレーション時間 [s]
     initial_flow: float | None = None  # 全管路共通の初期流量 [m³/s]
+    initial_node_heads: dict[str, float] | None = None  # 定常計算由来の節点水頭 [m]
 
 
 @dataclass(frozen=True)
@@ -271,8 +279,8 @@ def harmonize_time_step(segs: list[MocPipeSegment]) -> tuple[list[MocPipeSegment
         if rel_err > 0.05:
             warnings.append(
                 f"{s.id}: dt整合化で n_reaches={s.n_reaches}→{n_new}、"
-                f"Δx の理想値からの誤差 {rel_err * 100:.1f}%（CFL≠1）。"
-                "n_reaches を増やすか管路長/波速の比を見直してください。"
+                f"Δx の理想値からの誤差 {rel_err * 100:.1f}%（CFL<1）。"
+                "特性線の足を格子間で補間します。"
             )
         elif n_new != s.n_reaches:
             warnings.append(
@@ -292,6 +300,29 @@ def harmonize_time_step(segs: list[MocPipeSegment]) -> tuple[list[MocPipeSegment
             )
         )
     return (harmonized, dt, warnings)
+
+
+def _validate_grid_spacing(segs: list[MocPipeSegment]) -> list[str]:
+    """設計用水撃圧解析の差分距離を技術書 §8.4.2(2) の実務目安で検証する."""
+    warnings: list[str] = []
+    for seg in segs:
+        if isinstance(seg.n_reaches, bool) or not isinstance(seg.n_reaches, int) or seg.n_reaches < 1:
+            raise ValueError(f"{seg.id}: 計算区間数は1以上の整数で指定してください。")
+        dx = seg.pipe.length / seg.n_reaches
+        if dx > MOC_GRID_SPACING_MAX:
+            n_min = math.ceil(seg.pipe.length / MOC_GRID_SPACING_MAX)
+            raise ValueError(
+                f"{seg.id}: 差分距離 Δx={dx:.1f} m は設計用水撃圧解析の上限 "
+                f"{MOC_GRID_SPACING_MAX:.0f} m を超えています。"
+                f"計算区間数を {n_min} 以上にしてください（技術書 §8.4.2(2)）。"
+            )
+        if dx < MOC_GRID_SPACING_RECOMMENDED_MIN:
+            warnings.append(
+                f"{seg.id}: 差分距離 Δx={dx:.1f} m は一般的な実務目安 "
+                f"{MOC_GRID_SPACING_RECOMMENDED_MIN:.0f}～{MOC_GRID_SPACING_MAX:.0f} m より細かい設定です。"
+                "精度上の問題はありませんが、計算負荷を確認してください（技術書 §8.4.2(2)）。"
+            )
+    return warnings
 
 
 def _local_darcy_f(velocity: float, diameter: float, c_hw: float) -> float:
@@ -575,6 +606,15 @@ def _steady_head_profile(h_upstream: float, hf_total: float, n: int) -> list[flo
     return [h_upstream - hf_total * (i / n) for i in range(n + 1)]
 
 
+def _interpolate_grid(values: list[float], position: float) -> float:
+    """格子番号で表した位置の値を線形補間する（範囲端では端値を使用）."""
+    position = min(max(position, 0.0), len(values) - 1)
+    lower = math.floor(position)
+    upper = min(lower + 1, len(values) - 1)
+    fraction = position - lower
+    return values[lower] + (values[upper] - values[lower]) * fraction
+
+
 # ═══════════════════════════════════════════════════════════════════════════════
 # メイン MOC ソルバー
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -594,9 +634,14 @@ def run_moc(
     if len(raw_segs) == 0:
         raise ValueError("管路が 0 本です")
 
+    # 整合化処理へ渡す前に、計算区間数が格子として成立することを保証する。
+    _validate_grid_spacing(raw_segs)
+
     # dt 整合化（技術書 §8.4.2(2)）
     segs, _dt_unused, harmonize_warnings = harmonize_time_step(raw_segs)
     warnings: list[str] = list(harmonize_warnings)
+    # 管路網では整合化により分割数が変わるため、実際に使用する差分距離を再検証する。
+    warnings.extend(_validate_grid_spacing(segs))
 
     # ノード接続グラフ構築
     # node_flow_in[node_id]  = 管路インデックス（この node が下流端である管路）
@@ -652,7 +697,7 @@ def run_moc(
     n_steps = math.ceil(t_max / dt_global)
 
     # 初期水頭プロファイル（BFS で各管路上流端 H を伝播）
-    node_h0: dict[str, float] = {}
+    node_h0: dict[str, float] = dict(options.initial_node_heads or {})
     for node_id, bc in nodes.items():
         if isinstance(bc, ReservoirBC):
             node_h0[node_id] = bc.head
@@ -689,7 +734,14 @@ def run_moc(
     q_state: list[list[float]] = []
     for pi, seg in enumerate(segs):
         h_up = node_h0.get(seg.upstream_node_id, 0.0)
-        h_state.append(_steady_head_profile(h_up, physics[pi].hf_total, seg.n_reaches))
+        h_down = node_h0.get(seg.downstream_node_id)
+        if h_down is None:
+            h_state.append(_steady_head_profile(h_up, physics[pi].hf_total, seg.n_reaches))
+        else:
+            h_state.append([
+                h_up + (h_down - h_up) * (i / seg.n_reaches)
+                for i in range(seg.n_reaches + 1)
+            ])
         q_state.append([q0_arr[pi]] * (seg.n_reaches + 1))
 
     h_maxes = [list(h) for h in h_state]
@@ -754,15 +806,19 @@ def run_moc(
             ph = physics[pi]
             h_new = h_news[pi]
             q_new = q_news[pi]
+            courant = seg.wave_speed * dt_global / ph.dx
+            travel_dx = seg.wave_speed * dt_global
 
             for i in range(1, n):
-                qa = q[i - 1]
-                qb = q[i + 1]
+                qa = _interpolate_grid(q, i - courant)
+                qb = _interpolate_grid(q, i + courant)
+                ha = _interpolate_grid(h, i - courant)
+                hb = _interpolate_grid(h, i + courant)
                 # 局所可変摩擦係数
-                ra = _local_darcy_f(qa / ph.A, ph.D, ph.C_hw) * ph.dx / (2 * GRAVITY * ph.D * ph.A * ph.A)
-                rb = _local_darcy_f(qb / ph.A, ph.D, ph.C_hw) * ph.dx / (2 * GRAVITY * ph.D * ph.A * ph.A)
-                cp = h[i - 1] + ph.B * qa - ra * qa * abs(qa)
-                cm = h[i + 1] - ph.B * qb + rb * qb * abs(qb)
+                ra = _local_darcy_f(qa / ph.A, ph.D, ph.C_hw) * travel_dx / (2 * GRAVITY * ph.D * ph.A * ph.A)
+                rb = _local_darcy_f(qb / ph.A, ph.D, ph.C_hw) * travel_dx / (2 * GRAVITY * ph.D * ph.A * ph.A)
+                cp = ha + ph.B * qa - ra * qa * abs(qa)
+                cm = hb - ph.B * qb + rb * qb * abs(qb)
                 h_new[i] = (cp + cm) / 2
                 q_new[i] = (cp - cm) / (2 * ph.B)
 
@@ -774,14 +830,18 @@ def run_moc(
             h = h_state[pi]
             q = q_state[pi]
             ph = physics[pi]
+            courant = seg.wave_speed * dt_global / ph.dx
+            travel_dx = seg.wave_speed * dt_global
 
-            q_n1 = q[n - 1]
-            r_dn = _local_darcy_f(q_n1 / ph.A, ph.D, ph.C_hw) * ph.dx / (2 * GRAVITY * ph.D * ph.A * ph.A)
-            cp_arr[pi] = h[n - 1] + ph.B * q_n1 - r_dn * q_n1 * abs(q_n1)
+            q_n1 = _interpolate_grid(q, n - courant)
+            h_n1 = _interpolate_grid(h, n - courant)
+            r_dn = _local_darcy_f(q_n1 / ph.A, ph.D, ph.C_hw) * travel_dx / (2 * GRAVITY * ph.D * ph.A * ph.A)
+            cp_arr[pi] = h_n1 + ph.B * q_n1 - r_dn * q_n1 * abs(q_n1)
 
-            q_1 = q[1]
-            r_up = _local_darcy_f(q_1 / ph.A, ph.D, ph.C_hw) * ph.dx / (2 * GRAVITY * ph.D * ph.A * ph.A)
-            cm_arr[pi] = h[1] - ph.B * q_1 + r_up * q_1 * abs(q_1)
+            q_1 = _interpolate_grid(q, courant)
+            h_1 = _interpolate_grid(h, courant)
+            r_up = _local_darcy_f(q_1 / ph.A, ph.D, ph.C_hw) * travel_dx / (2 * GRAVITY * ph.D * ph.A * ph.A)
+            cm_arr[pi] = h_1 - ph.B * q_1 + r_up * q_1 * abs(q_1)
 
         # 3. 全ノードを一括処理
         node_h_new: dict[str, float] = {}

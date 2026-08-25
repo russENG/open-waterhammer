@@ -17,6 +17,17 @@ afterEach(() => {
 const FIND_HEADING_TIMEOUT = { timeout: 8000 }
 const TEST_TIMEOUT = 10000
 
+describe('site title', () => {
+  test('uses the service name in the site header', () => {
+    window.location.hash = '#/docs/about'
+
+    render(<App />)
+
+    expect(screen.getByText('Open Waterhammer')).toBeVisible()
+    expect(screen.queryByText('設計実務を対象とした農業用パイプライン水撃圧計算機能の公開実装と適用性の考察')).not.toBeInTheDocument()
+  })
+})
+
 describe('legacy formula-anchor URLs stay reachable under the HashRouter', () => {
   test('a bare "#joukowsky" fragment redirects into the library docs page', async () => {
     window.location.hash = '#joukowsky'

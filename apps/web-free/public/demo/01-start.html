@@ -1,0 +1,36 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>作業を始める — Open Waterhammer デモ手順</title>
+<meta name="description" content="Open Waterhammer のデモ手順（画面写真つき）。Excel入力からブラウザ内計算、農水省 成果品様式の書き出しまで。">
+<link rel="stylesheet" href="./style.css">
+</head>
+<body>
+<header class="site">
+  <strong>Open Waterhammer</strong>
+  <nav aria-label="デモ手順">
+    <a href="../">作業画面</a>
+    <a href="./">デモ手順 目次</a>
+    <a href="./01-start.html" aria-current="page">作業を始める</a><a href="./02-template.html">入力テンプレートを取得す</a><a href="./03-import.html">Excelを取り込む</a><a href="./04-scenario.html">シナリオを確認する</a><a href="./05-joukowsky.html">A02 Joukowsk</a><a href="./06-longitudinal.html">L01 縦断水理計算で設</a><a href="./07-reports.html">成果品様式を書き出す</a><a href="./08-transient.html">T01 単一管路の過渡解</a><a href="./09-compare.html">比較案を並べる</a>
+  </nav>
+</header>
+<main>
+<span class="eyebrow">手順 01 / 09</span>
+<h1>作業を始める</h1>
+<p class="lead">ブラウザの中だけで完結することを最初に示す。</p>
+<figure>
+  <img src="./img/s0-start.png" alt="作業を始めるの画面">
+  <figcaption>開始画面。Excelから開始／空から始める／サンプルを開く の3導線。</figcaption>
+</figure>
+
+      <p>計算はすべて利用者の手元のブラウザで走る。入力条件と作業状態は IndexedDB に保存され、GitHub Pages のサーバーへは送信されない。共有や作業再開には <code>.owhproj</code> を書き出す。</p>
+      <p class="talk">話す一言：「計算はすべて手元のブラウザの中です。施設情報がサーバーに出ません」</p>
+<nav class="pager">
+  <span><a href="./">← 目次</a></span>
+  <span><a href="./02-template.html">入力テンプレートを取得する →</a></span>
+</nav>
+</main>
+</body>
+</html>

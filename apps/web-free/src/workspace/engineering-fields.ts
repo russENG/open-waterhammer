@@ -1,4 +1,5 @@
 import { RUN_KINDS, type JsonValue, type RunKind } from '@open-waterhammer/contracts'
+import { MOC_GRID_SPACING_MAX } from '@open-waterhammer/core'
 
 import { SAMPLE_RUN_INPUTS } from './sample-workspace'
 
@@ -101,6 +102,9 @@ const FIELD_OVERRIDES: Record<RunKind, EngineeringField[]> = {
     numeric('model', 'staticWaterLevel', '静水位', 'm', { required: true }),
     numeric('model', 'points.0.flowRate', '始点流量', 'm³/s'),
     numeric('model', 'points.0.diameter', '始点管径', 'm'),
+    // 水撃圧は「MPaで直接指定」を第一の入力にする。A02 / T01 で求めた水撃圧をここへ入れると、
+    // 成果品様式の Pi・Pp 列が設計値になる。空欄なら水撃圧比、それも空欄なら静水圧×40%の仮算定。
+    numeric('model', 'waterhammerPressureMpa', '水撃圧', 'MPa', { required: false, minimum: 0 }),
     numeric('model', 'waterhammerRatio', '水撃圧比', '—', { required: false, minimum: 0 }),
     numeric('model', 'allowablePressureMpa', '許容圧力', 'MPa', { required: false, exclusiveMinimum: 0 }),
   ],
@@ -206,6 +210,10 @@ const LABELS: Record<string, string> = {
   H0: '定格水頭', H0v: '初期水頭', Hs: '締切水頭', GD2: 'GD²', N0: '定格回転速度', eta0: '定格効率',
   startupTime: '起動時間', staticHead: '静水頭', V_air0: '初期空気容積', H_air0: '初期空気水頭', polytropicIndex: 'ポリトロープ指数',
   atmosphericHead: '大気圧水頭', setHead: '設定水頭', tankArea: 'タンク面積', initialLevel: '初期水位', datum: '基準標高', enabled: '有効',
+  // Excel取込が付ける参照キー。内部識別子をそのまま画面に出さない（docs/ui-terminology.md）。
+  calculationCaseId: '計算ケース ID', calculationCaseName: '計算ケース名', sourceExcelCaseId: 'Excel上のケース ID',
+  description: '説明', pipeId: '所属管路 ID', nodeId: '同一位置の節点 ID', distanceAlongPipe: '管路始点からの実延長',
+  pointId: '測点 ID',
 }
 
 const UNITS: Record<string, string> = {
@@ -218,6 +226,7 @@ const UNITS: Record<string, string> = {
   youngsModulus: 'kN/m²', c1Coeff: '—', waterhammerPressureMpa: 'MPa', otherLoss: 'm',
   GD2: 'N·m²', N0: 'min⁻¹', eta0: '—', polytropicIndex: '—',
   roughnessCoeff: '—', roughnessC: '—', frictionFactor: '—', minorLossCoeff: '—', bendLossCoeff: '—', valveLossCoeff: '—', branchLossCoeff: '—', waterhammerRatio: '—', nReaches: '区間',
+  distanceAlongPipe: 'm',
 }
 
 const OPTIONAL_PATHS: Record<RunKind, Set<string>> = {
@@ -227,7 +236,13 @@ const OPTIONAL_PATHS: Record<RunKind, Set<string>> = {
   steady_single_pipe: new Set(['model.method']),
   steady_network_python: new Set(['model.caseName', 'model.pipes.0.minorLossCoeff', 'model.nodes.0.head', 'model.nodes.0.demand']),
   steady_network_epanet: new Set(['model.caseName', 'model.pipes.0.minorLossCoeff', 'model.nodes.0.head', 'model.nodes.0.demand']),
-  longitudinal_hydraulics: new Set(['model.caseName', 'model.waterhammerRatio', 'model.waterhammerPressureMpa', 'model.points.0.name', 'model.points.0.otherLoss', 'model.allowablePressureMpa']),
+  longitudinal_hydraulics: new Set([
+    'model.caseName', 'model.waterhammerRatio', 'model.waterhammerPressureMpa',
+    'model.points.0.name', 'model.points.0.otherLoss', 'model.allowablePressureMpa',
+    // Excel テンプレートで「○任意」としている測点の参照列。ここを必須扱いにすると、
+    // 取込データ（node_id 空欄）が31測点すべて必須エラーになり L01 が実行できない。
+    'model.points.0.pipeId', 'model.points.0.nodeId', 'model.points.0.distanceAlongPipe',
+  ]),
   transient_single_pipe: new Set([
     'model.pipe.name', 'model.pipe.startNodeId', 'model.pipe.endNodeId',
     'event.nReaches', 'event.tMax', 'event.operation',
@@ -310,6 +325,21 @@ const NONNEGATIVE_KEYS = new Set(['minorLossCoeff', 'bendLossCoeff', 'valveLossC
 const NUMERIC_PROTOCOL_KEYS = new Set([
   ...Object.keys(UNITS), 'youngsModulus', 'c1Coeff', 'waterhammerPressureMpa', 'otherLoss',
 ])
+
+/**
+ * 計算結果や差分表で JSON パスを日本語に直すための、キー1つ分の辞書引き。
+ * 入力フォームと同じ辞書を使うことで、画面ごとに用語がぶれない
+ * （docs/ui-terminology.md）。未登録のキーはそのまま返す。
+ */
+export function engineeringKeyLabel(key: string): string {
+  return LABELS[key] ?? key
+}
+
+/** キーに対応する単位。未登録なら undefined。 */
+export function engineeringKeyUnit(key: string): string | undefined {
+  const unit = UNITS[key]
+  return unit === undefined || unit === '—' ? undefined : unit
+}
 
 function normalizeArrayPath(path: string): string {
   return path.replace(/\.\d+(?=\.|$)/g, '.0')
@@ -801,6 +831,44 @@ function endpointReferenceErrors(kind: RunKind, state: EngineeringState): Array<
   })
 }
 
+function mocGridSpacingErrors(kind: RunKind, state: EngineeringState): Array<{ path: string; message: string }> {
+  if (!['transient_single_pipe', 'transient_network', 'transient_pump', 'transient_protection_device'].includes(kind)) return []
+  const errors: Array<{ path: string; message: string }> = []
+  const check = (length: unknown, nReaches: unknown, path: string, pipeLabel: string, defaultN?: number) => {
+    const reaches = nReaches === undefined ? defaultN : nReaches
+    if (typeof length !== 'number' || !Number.isFinite(length) || length <= 0) return
+    if (typeof reaches !== 'number' || !Number.isFinite(reaches)) return
+    if (!Number.isInteger(reaches)) {
+      errors.push({ path, message: `${pipeLabel}の計算区間数は整数で入力してください。` })
+      return
+    }
+    if (reaches < 1) return
+    const dx = length / reaches
+    if (dx > MOC_GRID_SPACING_MAX) {
+      const minimumReaches = Math.ceil(length / MOC_GRID_SPACING_MAX)
+      errors.push({
+        path,
+        message: `${pipeLabel}の差分距離は${dx.toFixed(1)} mです。設計用水撃圧解析の上限${MOC_GRID_SPACING_MAX} mを満たすよう、計算区間数を${minimumReaches}以上にしてください（技術書 §8.4.2(2)）。`,
+      })
+    }
+  }
+  const model = state.model && typeof state.model === 'object' && !Array.isArray(state.model) ? state.model : undefined
+  if (kind === 'transient_single_pipe' || kind === 'transient_pump') {
+    const pipe = model?.pipe && typeof model.pipe === 'object' && !Array.isArray(model.pipe) ? model.pipe : undefined
+    const event = state.event && typeof state.event === 'object' && !Array.isArray(state.event) ? state.event : undefined
+    check(pipe?.length, event?.nReaches, 'nReaches', '管路', 10)
+    return errors
+  }
+  const network = model?.network && typeof model.network === 'object' && !Array.isArray(model.network) ? model.network : undefined
+  if (!Array.isArray(network?.pipes)) return errors
+  network.pipes.forEach((segment, index) => {
+    if (!segment || typeof segment !== 'object' || Array.isArray(segment)) return
+    const pipe = segment.pipe && typeof segment.pipe === 'object' && !Array.isArray(segment.pipe) ? segment.pipe : undefined
+    check(pipe?.length, segment.nReaches, `network.pipes.${index}.nReaches`, `第${index + 1}管路`)
+  })
+  return errors
+}
+
 export function validateEngineeringState(kind: RunKind, state: EngineeringState): Array<{ path: string; message: string }> {
   const fieldErrors = engineeringFieldsFor(kind, state).flatMap((field) => {
     const value = readEngineeringValue(state, field)
@@ -847,5 +915,5 @@ export function validateEngineeringState(kind: RunKind, state: EngineeringState)
       ...duplicateIdErrors(collection, value),
     ]
   })
-  return [...fieldErrors, ...collectionErrors, ...nestedPipeIdErrors(kind, state), ...endpointReferenceErrors(kind, state)]
+  return [...fieldErrors, ...collectionErrors, ...nestedPipeIdErrors(kind, state), ...endpointReferenceErrors(kind, state), ...mocGridSpacingErrors(kind, state)]
 }

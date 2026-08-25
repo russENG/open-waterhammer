@@ -1,0 +1,46 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>T01 単一管路の過渡解析（補足） — Open Waterhammer デモ手順</title>
+<meta name="description" content="Open Waterhammer のデモ手順（画面写真つき）。Excel入力からブラウザ内計算、農水省 成果品様式の書き出しまで。">
+<link rel="stylesheet" href="./style.css">
+</head>
+<body>
+<header class="site">
+  <strong>Open Waterhammer</strong>
+  <nav aria-label="デモ手順">
+    <a href="../">作業画面</a>
+    <a href="./">デモ手順 目次</a>
+    <a href="./01-start.html">作業を始める</a><a href="./02-template.html">入力テンプレートを取得す</a><a href="./03-import.html">Excelを取り込む</a><a href="./04-scenario.html">シナリオを確認する</a><a href="./05-joukowsky.html">A02 Joukowsk</a><a href="./06-longitudinal.html">L01 縦断水理計算で設</a><a href="./07-reports.html">成果品様式を書き出す</a><a href="./08-transient.html" aria-current="page">T01 単一管路の過渡解</a><a href="./09-compare.html">比較案を並べる</a>
+  </nav>
+</header>
+<main>
+<span class="eyebrow">手順 08 / 09</span>
+<h1>T01 単一管路の過渡解析（補足）</h1>
+<p class="lead">時刻歴と圧力包絡を図で見せる。</p>
+<figure>
+  <img src="./img/s8-transient-results.png" alt="T01 単一管路の過渡解析（補足）の画面">
+  <figcaption>時系列・圧力包絡・縦断の3図。CSV / SVG / PNG で書き出せる。</figcaption>
+</figure>
+
+      <div class="table-scroll"><table>
+        <thead><tr><th>項目</th><th>値</th></tr></thead>
+        <tbody>
+        <tr><td>計算状態</td><td>計算完了</td></tr>
+        <tr><td>自動評価</td><td>適合</td></tr>
+        <tr><td>最大水頭 Hmax [m]</td><td>43.5</td></tr>
+        <tr><td>最小水頭 Hmin [m]</td><td>30.0</td></tr>
+        <tr><td>計算時間刻み Δt [s]</td><td>0.0455</td></tr>
+        </tbody>
+      </table></div>
+      <p>ジューコフスキー式は最大値だけを与えるが、特性曲線法は時刻歴を出す。最小水頭が負圧域に入る管路は自動判定で指摘され、水柱分離の検討が要ることが分かる。</p>
+      <p>成果品様式には直接載らないため、時間があるときだけ見せる。</p>
+<nav class="pager">
+  <span><a href="./07-reports.html">← 成果品様式を書き出す</a></span>
+  <span><a href="./09-compare.html">比較案を並べる →</a></span>
+</nav>
+</main>
+</body>
+</html>

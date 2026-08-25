@@ -41,6 +41,13 @@ export interface Pipe {
   youngsModulus?: number;
   /** 埋設状況係数 C₁ — デフォルト 1.0 */
   c1Coeff?: number;
+  /**
+   * 許容圧力（呼び圧力）[MPa]
+   *
+   * 設計水圧の判定 (`judgeDesignPressure`) の閾値。管種・管厚と対で決まるため管路が持つ。
+   * 未指定なら判定を行わない。
+   */
+  allowablePressureMpa?: number;
 }
 
 // ─── 節点 ─────────────────────────────────────────────────────────────────────
@@ -188,10 +195,16 @@ export interface MeasurementPointResult {
   pressureHead: number;
   /** 静水圧 Ps [MPa] */
   staticPressure: number;
-  /** 水撃圧 Pi [MPa] */
-  waterhammerPressure: number;
-  /** 設計内圧 Pp [MPa] = Ps + Pi */
-  designPressure: number;
+  /**
+   * 水撃圧 Pi [MPa]
+   *
+   * 静水圧に比例させて求める指定（`waterhammerRatio` および既定の 40%）は正圧を前提とした
+   * 経験則なので、`staticPressure <= 0` の測点では算定せず `undefined` を返す。
+   * `waterhammerPressureMpa` で絶対値を指定した場合は静水圧の符号によらずその値を使う。
+   */
+  waterhammerPressure?: number | undefined;
+  /** 設計内圧 Pp [MPa] = Ps + Pi。`waterhammerPressure` が未算定の測点では `undefined`。 */
+  designPressure?: number | undefined;
 }
 
 /**

@@ -1,0 +1,45 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>入力テンプレートを取得する — Open Waterhammer デモ手順</title>
+<meta name="description" content="Open Waterhammer のデモ手順（画面写真つき）。Excel入力からブラウザ内計算、農水省 成果品様式の書き出しまで。">
+<link rel="stylesheet" href="./style.css">
+</head>
+<body>
+<header class="site">
+  <strong>Open Waterhammer</strong>
+  <nav aria-label="デモ手順">
+    <a href="../">作業画面</a>
+    <a href="./">デモ手順 目次</a>
+    <a href="./01-start.html">作業を始める</a><a href="./02-template.html" aria-current="page">入力テンプレートを取得す</a><a href="./03-import.html">Excelを取り込む</a><a href="./04-scenario.html">シナリオを確認する</a><a href="./05-joukowsky.html">A02 Joukowsk</a><a href="./06-longitudinal.html">L01 縦断水理計算で設</a><a href="./07-reports.html">成果品様式を書き出す</a><a href="./08-transient.html">T01 単一管路の過渡解</a><a href="./09-compare.html">比較案を並べる</a>
+  </nav>
+</header>
+<main>
+<span class="eyebrow">手順 02 / 09</span>
+<h1>入力テンプレートを取得する</h1>
+<p class="lead">Excelの5シートが、そのまま成果品様式の入力側になる。</p>
+<figure>
+  <img src="./img/s0-start.png" alt="入力テンプレートを取得するの画面">
+  <figcaption>「入力テンプレートをダウンロード」で waterhammer-template.xlsx が保存される。</figcaption>
+</figure>
+
+      <div class="table-scroll"><table>
+        <thead><tr><th>シート</th><th>内容</th></tr></thead>
+        <tbody>
+        <tr><td>使い方</td><td>Excelは初期一括入力。読込後はWeb画面が正本</td></tr>
+        <tr><td>案件情報</td><td>案件名・設計者・適用基準・静水位 → 成果品様式③ 案件情報</td></tr>
+        <tr><td>管路・節点</td><td>管種・内径・管厚・延長・粗度係数・許容圧力 → 成果品様式② 管路データ</td></tr>
+        <tr><td>シナリオ設定</td><td>急閉そく tν=0.5 s と緩閉そく tν=10 s の2ケース → 成果品様式① 計算結果</td></tr>
+        <tr><td>測点データ</td><td>31測点（農水省 成果品様式 記載例 Ⅱ-170〜171）→ 成果品様式④ 水理計算書</td></tr>
+        </tbody>
+      </table></div>
+      <p>同梱値は φ600 ダクタイル鋳鉄管の1路線として全シートが整合している。落としたファイルをそのまま読み込めば、この先の手順がすべて通る。</p>
+<nav class="pager">
+  <span><a href="./01-start.html">← 作業を始める</a></span>
+  <span><a href="./03-import.html">Excelを取り込む →</a></span>
+</nav>
+</main>
+</body>
+</html>

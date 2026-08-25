@@ -43,6 +43,12 @@ const NOTEBOOKS = [
     title: "エアチャンバの防護効果",
     description: "MOC でポンプ急停止時の包絡線をエアチャンバありなしで比較（技術書 §8.4）",
   },
+  {
+    file: "04_verification_benchmarks.py",
+    slug: "verification-benchmarks",
+    title: "検証ベンチマーク",
+    description: "定常・非定常の計算が解析解（H-W 閉形式／ジューコフスキー／アリエビ連鎖式）と一致することを確認し、適用限界を示す",
+  },
 ];
 
 // ─── ビルド本体 ─────────────────────────────────────────────────────────────

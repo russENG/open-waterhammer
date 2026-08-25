@@ -99,6 +99,12 @@ export function calcLongitudinalHydraulic(
 
   let maxVelocity = 0;
   let maxDesignPressure = 0;
+  // 同じ内容の警告を測点ごとに積まないためのフラグ（31測点なら31行出てしまう）。
+  let provisionalWaterhammerReported = false;
+  let negativeStaticPressureReported = false;
+  const slowPoints: string[] = [];
+  const fastPoints: string[] = [];
+  const negativeHeadPoints: Array<{ id: string; head: number }> = [];
   // 初期エネルギー標高 = 静水位
   let prevEL = staticWaterLevel;
 
@@ -136,34 +142,40 @@ export function calcLongitudinalHydraulic(
     const Ps = headToMpa(hm);
 
     // 水撃圧 [MPa]
-    let Pi: number;
+    //
+    // 静水圧に比例させる指定（waterhammerRatio・既定の 40%）は正圧を前提にした経験則なので、
+    // Ps <= 0 の測点に適用すると水撃圧・設計内圧まで負値になる。そこでは算定せず undefined を
+    // 返し、帳票では「—」として空欄にする。waterhammerPressureMpa で絶対値を与えた場合は
+    // 設計者が明示した値なので、静水圧の符号によらずそのまま使う。
+    let Pi: number | undefined;
     if (waterhammerPressureMpa !== undefined) {
       Pi = waterhammerPressureMpa;
+    } else if (Ps <= 0) {
+      Pi = undefined;
+      if (!negativeStaticPressureReported) {
+        negativeStaticPressureReported = true;
+        warnings.push("静水圧が0以下の測点があるため、その区間の水撃圧・設計内圧は算定していません。水撃圧をMPaで直接指定するか、管路計画を見直してください。");
+      }
     } else if (waterhammerRatio !== undefined) {
       Pi = Ps * waterhammerRatio;
     } else {
       Pi = Ps * 0.4; // デフォルト: 静水圧×40%（経験則の一般的な目安）
-      if (i === 0) {
+      if (!provisionalWaterhammerReported) {
+        provisionalWaterhammerReported = true;
         warnings.push("水撃圧が未指定のため、静水圧×40%で仮算定しています。別途水撃圧計算（Step 2〜4）の結果を適用してください。");
       }
     }
 
     // 設計内圧 [MPa]
-    const Pp = Ps + Pi;
+    const Pp = Pi === undefined ? undefined : Ps + Pi;
 
-    // 警告
-    if (V < 0.5) {
-      warnings.push(`${pt.id}: 流速 ${V.toFixed(2)} m/s は推奨下限 0.5 m/s を下回っています`);
-    }
-    if (V > 2.5) {
-      warnings.push(`${pt.id}: 流速 ${V.toFixed(2)} m/s は推奨上限 2.5 m/s を超えています`);
-    }
-    if (hm < 0) {
-      warnings.push(`${pt.id}: 動水頭 ${hm.toFixed(2)} m が負圧です。管路が動水位を超えています`);
-    }
+    // 警告は測点ごとに積まず、ループ後にまとめて1行にする（31測点で31行出ると読めない）。
+    if (V < 0.5) slowPoints.push(pt.id);
+    if (V > 2.5) fastPoints.push(pt.id);
+    if (hm < 0) negativeHeadPoints.push({ id: pt.id, head: hm });
 
     maxVelocity = Math.max(maxVelocity, V);
-    maxDesignPressure = Math.max(maxDesignPressure, Pp);
+    if (Pp !== undefined) maxDesignPressure = Math.max(maxDesignPressure, Pp);
 
     pointResults.push({
       pointId: pt.id,
@@ -185,6 +197,17 @@ export function calcLongitudinalHydraulic(
     prevEL = EL;
   }
 
+  if (slowPoints.length > 0) {
+    warnings.push(`流速が推奨下限 0.5 m/s を下回る測点が ${slowPoints.length} 件あります（${summarizeIds(slowPoints)}）。`);
+  }
+  if (fastPoints.length > 0) {
+    warnings.push(`流速が推奨上限 2.5 m/s を超える測点が ${fastPoints.length} 件あります（${summarizeIds(fastPoints)}）。管径の拡大を検討してください。`);
+  }
+  if (negativeHeadPoints.length > 0) {
+    const worst = negativeHeadPoints.reduce((a, b) => (b.head < a.head ? b : a));
+    warnings.push(`動水頭が負圧の測点が ${negativeHeadPoints.length} 件あります（最小 ${worst.id} で ${worst.head.toFixed(2)} m）。管路が動水位を超えています。水柱分離の検討が必要です。`);
+  }
+
   return {
     caseName,
     staticWaterLevel,
@@ -193,4 +216,9 @@ export function calcLongitudinalHydraulic(
     maxDesignPressure,
     warnings,
   };
+}
+
+/** 警告文に測点IDを並べる。件数が多いときは先頭3件＋「ほかN件」に丸める。 */
+function summarizeIds(ids: string[]): string {
+  return ids.length <= 3 ? ids.join(", ") : `${ids.slice(0, 3).join(", ")} ほか${ids.length - 3}件`;
 }

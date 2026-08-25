@@ -149,6 +149,8 @@ function parseMeta(wb: ExcelJS.Workbook, errors: ParseError[]): ProjectMeta {
   if (kv["date"]) meta.date = kv["date"];
   if (kv["version"]) meta.version = kv["version"];
   if (kv["method_id"]) meta.methodId = kv["method_id"];
+  const staticWaterLevel = num(kv["static_water_level"]);
+  if (staticWaterLevel !== undefined) meta.staticWaterLevel = staticWaterLevel;
   if (kv["notes"]) meta.notes = kv["notes"];
   return meta;
 }
@@ -196,6 +198,8 @@ function parsePipes(rows: Record<string, unknown>[], errors: ParseError[]): Pipe
     if (Es !== undefined) pipe.youngsModulus = Es;
     const c1 = num(row["pipe_restraint_coeff"] ?? row["c1_coeff"] ?? row["埋設状況係数 C₁"]);
     if (c1 !== undefined) pipe.c1Coeff = c1;
+    const allowable = num(row["allowable_pressure"] ?? row["許容圧力"]);
+    if (allowable !== undefined) pipe.allowablePressureMpa = allowable;
     pipes.push(pipe);
   }
   return pipes;

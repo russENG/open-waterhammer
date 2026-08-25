@@ -641,6 +641,50 @@ class TestHarmonizeTimeStep:
         assert all(s.n_reaches >= 1 for s in new_segs)
 
 
+# ── 差分距離の実務目安 ──────────────────────────────────────────────────────
+
+
+class TestGridSpacingPolicy:
+    def test_rejects_grid_spacing_over_200m(self):
+        with pytest.raises(ValueError, match=r"差分距離 Δx=250\.0 m.*計算区間数を 3 以上"):
+            run_moc_single_pipe(
+                SinglePipeMocInput(
+                    pipe=PIPE_DI_300,
+                    wave_speed=WAVE_SPEED,
+                    initial_velocity=V0,
+                    initial_downstream_head=H0,
+                    close_time=0,
+                    n_reaches=2,
+                )
+            )
+
+    def test_warns_but_runs_below_50m(self):
+        result = run_moc_single_pipe(
+            SinglePipeMocInput(
+                pipe=PIPE_DI_300,
+                wave_speed=WAVE_SPEED,
+                initial_velocity=V0,
+                initial_downstream_head=H0,
+                close_time=0,
+                n_reaches=20,
+            )
+        )
+        assert any("Δx=25.0 m" in warning and "より細かい設定" in warning for warning in result.warnings)
+
+    def test_rejects_non_integer_reach_count(self):
+        with pytest.raises(ValueError, match="1以上の整数"):
+            run_moc_single_pipe(
+                SinglePipeMocInput(
+                    pipe=PIPE_DI_300,
+                    wave_speed=WAVE_SPEED,
+                    initial_velocity=V0,
+                    initial_downstream_head=H0,
+                    close_time=0,
+                    n_reaches=2.5,  # type: ignore[arg-type]
+                )
+            )
+
+
 # ── クーラン条件 ──────────────────────────────────────────────────────────────
 
 
@@ -776,3 +820,33 @@ class TestRunMocAppliesHarmonize:
         dt_b = dx_b_eff / a_b
         assert abs(dt_a - r.dt) / r.dt < 0.06
         assert abs(dt_b - r.dt) / r.dt < 0.06
+
+    def test_initial_node_heads_are_interpolated_and_cfl_mismatch_stays_finite(self):
+        pipe_a = replace(PIPE_DI_300, id="pA", length=500)
+        pipe_b = replace(PIPE_DI_300, id="pB", length=173)
+        network = MocNetwork(
+            pipes=[
+                MocPipeSegment(
+                    id="pA", pipe=pipe_a, wave_speed=1000, n_reaches=10,
+                    upstream_node_id="res", downstream_node_id="j", initial_flow=0.03,
+                ),
+                MocPipeSegment(
+                    id="pB", pipe=pipe_b, wave_speed=800, n_reaches=10,
+                    upstream_node_id="j", downstream_node_id="valve", initial_flow=0.03,
+                ),
+            ],
+            nodes={
+                "res": ReservoirBC(head=80),
+                "valve": ValveBC(Q0=0.03, H0v=75, close_time=2),
+            },
+        )
+        result = run_moc(
+            network,
+            MocOptions(t_max=1, initial_node_heads={"res": 80, "j": 78, "valve": 75}),
+        )
+        assert result.pipes["pA"].H_steady[0] == pytest.approx(80)
+        assert result.pipes["pA"].H_steady[-1] == pytest.approx(78)
+        assert result.pipes["pB"].H_steady[0] == pytest.approx(78)
+        assert result.pipes["pB"].H_steady[-1] == pytest.approx(75)
+        assert all(math.isfinite(value) for value in result.pipes["pA"].Hmax)
+        assert all(math.isfinite(value) for value in result.pipes["pB"].Hmax)

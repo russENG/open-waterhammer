@@ -1,0 +1,55 @@
+:root {
+  --bg: #ffffff; --fg: #1b1d21; --muted: #5f646d; --line: #d8dce3;
+  --accent: #1a3d6d; --card: #f6f7f9;
+  color-scheme: light dark;
+}
+@media (prefers-color-scheme: dark) {
+  :root { --bg: #14161a; --fg: #e8eaee; --muted: #a2a8b3; --line: #333941; --accent: #8fb6ea; --card: #1b1e24; }
+}
+* { box-sizing: border-box; }
+body {
+  margin: 0; background: var(--bg); color: var(--fg);
+  font-family: system-ui, -apple-system, "Segoe UI", "Hiragino Kaku Gothic ProN", "Noto Sans JP", sans-serif;
+  line-height: 1.75;
+}
+header.site {
+  display: flex; flex-wrap: wrap; gap: 8px 18px; align-items: center;
+  padding: 12px 24px; border-bottom: 1px solid var(--line);
+  position: sticky; top: 0; background: var(--bg); z-index: 2;
+}
+header.site strong { font-size: 14px; letter-spacing: .02em; }
+header.site nav { display: flex; flex-wrap: wrap; gap: 14px; font-size: 13px; }
+header.site a { color: var(--muted); text-decoration: none; }
+header.site a:hover, header.site a[aria-current] { color: var(--accent); text-decoration: underline; }
+main { max-width: 980px; margin: 0 auto; padding: 28px 24px 72px; }
+h1 { font-size: 24px; line-height: 1.4; margin: 0 0 6px; }
+h2 { font-size: 16px; margin: 32px 0 8px; }
+.eyebrow { font-size: 12px; letter-spacing: .14em; color: var(--muted); text-transform: uppercase; }
+.lead { color: var(--muted); margin: 0 0 24px; }
+figure { margin: 0 0 20px; }
+figure img {
+  width: 100%; height: auto; display: block;
+  border: 1px solid var(--line); border-radius: 8px; background: var(--card);
+}
+figcaption { font-size: 12px; color: var(--muted); margin-top: 8px; }
+.table-scroll { overflow-x: auto; }
+table { border-collapse: collapse; width: 100%; font-size: 13px; margin: 0 0 16px; }
+th, td { border: 1px solid var(--line); padding: 6px 10px; text-align: left; vertical-align: top; }
+th { background: var(--card); font-weight: 600; white-space: nowrap; }
+ul { padding-left: 22px; }
+li { font-size: 13px; margin: 3px 0; }
+code { background: var(--card); padding: 1px 5px; border-radius: 4px; font-size: .92em; }
+.talk { border-left: 3px solid var(--accent); padding: 4px 0 4px 14px; margin: 16px 0; color: var(--muted); }
+.muted { color: var(--muted); font-size: 13px; }
+.pager { display: flex; justify-content: space-between; gap: 16px; margin-top: 48px; padding-top: 20px; border-top: 1px solid var(--line); font-size: 13px; }
+.pager a { color: var(--accent); text-decoration: none; }
+.pager a:hover { text-decoration: underline; }
+ol.toc { padding-left: 0; list-style: none; counter-reset: step; display: grid; gap: 10px; }
+ol.toc li { counter-increment: step; margin: 0; }
+ol.toc a {
+  display: block; padding: 12px 16px; border: 1px solid var(--line); border-radius: 8px;
+  text-decoration: none; color: inherit; font-size: 14px;
+}
+ol.toc a:hover { border-color: var(--accent); }
+ol.toc a::before { content: counter(step, decimal-leading-zero) " · "; color: var(--muted); }
+ol.toc small { display: block; color: var(--muted); font-size: 12px; }

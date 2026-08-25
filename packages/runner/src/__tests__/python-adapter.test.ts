@@ -146,6 +146,7 @@ describe("CPython calculation adapter", () => {
   test("default registry routes Python-owned kinds to Python and EPANET to its JavaScript adapter", async () => {
     const pythonKinds: string[] = [];
     const epanetKinds: string[] = [];
+    let epanetInitialRuns = 0;
     const output = {
       engine: "test",
       runtime: "test",
@@ -163,12 +164,48 @@ describe("CPython calculation adapter", () => {
         epanetKinds.push(kind);
         return output;
       },
+      epanetInitialSolver: async () => {
+        epanetInitialRuns += 1;
+        return {
+          caseName: "initial",
+          pipeResults: [{
+            pipeId: "P-1", flow: 0.03, velocity: 0.42, velocityHead: 0.01,
+            frictionLoss: 1, minorLoss: 0, totalLoss: 1, hydraulicGradient: 0.01,
+          }],
+          nodeResults: [
+            { nodeId: "R", head: 80, hydraulicGradeLine: 80, pressureHead: 80, pressureMpa: 0.78 },
+            { nodeId: "V", head: 79, hydraulicGradeLine: 79, pressureHead: 79, pressureMpa: 0.77 },
+          ],
+          maxVelocity: 0.42,
+          maxPressureHead: 80,
+          warnings: [],
+        };
+      },
     });
+
+    const transientModel = {
+      network: {
+        pipes: [{
+          id: "P-1", pipe, waveSpeed: 1000, nReaches: 2,
+          upstreamNodeId: "R", downstreamNodeId: "V", initialFlow: 0.02,
+        }],
+        nodes: {
+          R: { type: "reservoir", head: 80 },
+          V: { type: "valve", Q0: 0.02, H0v: 70, closeTime: 2 },
+        },
+      },
+      options: { tMax: 2, initialFlow: 0.02 },
+    };
 
     for (const kind of RUN_KINDS) {
       await registry.get(kind)!({
         kind,
-        caseSnapshot: caseFixture,
+        caseSnapshot: {
+          ...caseFixture,
+          modelSnapshot: kind === "transient_network" || kind === "transient_protection_device"
+            ? transientModel
+            : caseFixture.modelSnapshot,
+        },
         scenarioSnapshot: scenarioFixture,
         calculationInputHash: "hash",
       });
@@ -176,6 +213,7 @@ describe("CPython calculation adapter", () => {
 
     assert.deepEqual(epanetKinds, ["steady_network_epanet"]);
     assert.deepEqual(pythonKinds, RUN_KINDS.filter((kind) => kind !== "steady_network_epanet"));
+    assert.equal(epanetInitialRuns, 2);
   });
 
   test("turns an EPANET solver error result into an engine error instead of a succeeded calculation", async () => {

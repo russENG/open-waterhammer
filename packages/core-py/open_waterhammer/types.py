@@ -156,8 +156,11 @@ class MeasurementPointResult:
     hydraulic_grade_line: float  # 動水位 WLm [m]
     pressure_head: float  # 動水頭 hm [m]
     static_pressure: float  # 静水圧 Ps [MPa]
-    waterhammer_pressure: float  # 水撃圧 Pi [MPa]
-    design_pressure: float  # 設計内圧 Pp [MPa]
+    # 水撃圧 Pi [MPa]。静水圧に比例させる指定（waterhammer_ratio・既定の40%）は正圧を前提と
+    # した経験則なので、static_pressure <= 0 の測点では算定せず None を返す。
+    # waterhammer_pressure_mpa で絶対値を指定した場合は静水圧の符号によらずその値を使う。
+    waterhammer_pressure: float | None
+    design_pressure: float | None  # 設計内圧 Pp [MPa] = Ps + Pi。Pi 未算定なら None
 
 
 @dataclass(frozen=True)

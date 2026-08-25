@@ -1,0 +1,48 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>デモ手順 — Open Waterhammer デモ手順</title>
+<meta name="description" content="Open Waterhammer のデモ手順（画面写真つき）。Excel入力からブラウザ内計算、農水省 成果品様式の書き出しまで。">
+<link rel="stylesheet" href="./style.css">
+</head>
+<body>
+<header class="site">
+  <strong>Open Waterhammer</strong>
+  <nav aria-label="デモ手順">
+    <a href="../">作業画面</a>
+    <a href="./">デモ手順 目次</a>
+    <a href="./01-start.html">作業を始める</a><a href="./02-template.html">入力テンプレートを取得す</a><a href="./03-import.html">Excelを取り込む</a><a href="./04-scenario.html">シナリオを確認する</a><a href="./05-joukowsky.html">A02 Joukowsk</a><a href="./06-longitudinal.html">L01 縦断水理計算で設</a><a href="./07-reports.html">成果品様式を書き出す</a><a href="./08-transient.html">T01 単一管路の過渡解</a><a href="./09-compare.html">比較案を並べる</a>
+  </nav>
+</header>
+<main>
+<span class="eyebrow">静的版</span>
+<h1>デモ手順（画面写真つき）</h1>
+<p class="lead">Excelの入力テンプレートを落とし、そのまま取り込み、ブラウザ内で計算し、農水省の成果品様式で書き出すまで。実際にアプリを操作して撮った画面です。</p>
+<h2>手順</h2>
+<ol class="toc">
+      <li><a href="./01-start.html">作業を始める<small>ブラウザの中だけで完結することを最初に示す。</small></a></li>
+      <li><a href="./02-template.html">入力テンプレートを取得する<small>Excelの5シートが、そのまま成果品様式の入力側になる。</small></a></li>
+      <li><a href="./03-import.html">Excelを取り込む<small>既定値で補完した項目を、作業画面へ進む前に見せる。</small></a></li>
+      <li><a href="./04-scenario.html">シナリオを確認する<small>比較案とシナリオの切り分けを説明する。</small></a></li>
+      <li><a href="./05-joukowsky.html">A02 Joukowsky / Allievi で水撃圧を求める<small>成果品様式①「計算結果」シートの中核。</small></a></li>
+      <li><a href="./06-longitudinal.html">L01 縦断水理計算で設計内圧を出す<small>成果品様式④「水理計算書」24列そのもの。</small></a></li>
+      <li><a href="./07-reports.html">成果品様式を書き出す<small>再計算せず、保存済みの計算結果から1冊にまとめる。</small></a></li>
+      <li><a href="./08-transient.html">T01 単一管路の過渡解析（補足）<small>時刻歴と圧力包絡を図で見せる。</small></a></li>
+      <li><a href="./09-compare.html">比較案を並べる<small>条件と結果の差分を、採否ではなく比較材料として出す。</small></a></li>
+</ol>
+<h2>この手順でカバーする成果品様式</h2>
+<div class="table-scroll"><table>
+        <thead><tr><th>シート</th><th>項目</th><th>手順</th></tr></thead>
+        <tbody>
+        <tr><td>① 計算結果</td><td>ケース諸元・波速 a・振動周期 T₀・α・閉そく区分・ΔH・水撃圧・設計水圧・許容圧力・余裕度・判定</td><td>05</td></tr>
+        <tr><td>② 管路データ</td><td>管路ID・管路名・管種・内径 D・管厚 t・延長 L・粗度係数・始終点節点</td><td>02</td></tr>
+        <tr><td>③ 案件情報</td><td>案件名・設計者・作成日付・適用基準・バージョン・計算方法</td><td>03</td></tr>
+        <tr><td>④ 水理計算書</td><td>測点ごとの Lh/GL/FH/SL/Q/D/CI・動水勾配・V/hv/hf・fb/fv/fβ/Σf/Σhc・h/EL/WLm/hm・Ps/Pi/Pp・許容圧力・判定</td><td>06</td></tr>
+        </tbody>
+      </table></div>
+<p class="muted">この一連のページは <code>scripts/build-demo-pages.mjs</code> が生成し、画面写真は Playwright の <code>demo-capture.spec.ts</code> が実機から撮っています。実装を変えたら再生成してください。</p>
+</main>
+</body>
+</html>

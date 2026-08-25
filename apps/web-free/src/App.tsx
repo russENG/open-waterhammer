@@ -2,6 +2,7 @@ import { lazy, Suspense, useEffect, useState, type FormEvent } from 'react'
 import type { ParseError } from '@open-waterhammer/excel-io'
 import type { WorkspaceData } from '@open-waterhammer/workspace'
 
+import { SITE_TITLE } from './branding'
 import { onNavigate, type AppPage } from './lib/navigation'
 import { resolveLegacyHash } from './lib/legacy-hash'
 import { ensureBrowserBuffer } from './reports/browser-buffer'
@@ -77,7 +78,7 @@ export default function App() {
 
   if (docsPage) return <DocumentationShell page={docsPage} />
   if (bootError) return <div className="boot-screen boot-screen--error" role="alert"><span>作業画面エラー</span><h1>ローカル作業画面を開けませんでした</h1><p>{bootError}</p><button onClick={() => window.location.reload()}>再読み込み</button></div>
-  if (!workspace) return <div className="boot-screen" role="status"><div className="boot-mark"><i /><i /><i /></div><span>OPEN WATERHAMMER / alpha</span><h1>ローカル作業画面</h1><p>IndexedDB と設計証跡を確認しています…</p></div>
+  if (!workspace) return <div className="boot-screen" role="status"><div className="boot-mark"><i /><i /><i /></div><span>{SITE_TITLE}</span><h1>ローカル作業画面</h1><p>IndexedDB と設計証跡を確認しています…</p></div>
   if (workspace.data.projects.length === 0) return <WorkspaceStart workspace={workspace} onReady={(data) => setWorkspace({ ...workspace, data })} />
   return <WorkspaceApp repository={workspace.repository} initialData={workspace.data} />
 }
@@ -87,6 +88,9 @@ export function WorkspaceStart({ workspace, onReady }: { workspace: BrowserWorks
   const [busy, setBusy] = useState<'excel' | 'project' | 'template' | 'blank' | 'sample' | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [parseErrors, setParseErrors] = useState<ParseError[]>([])
+  // 取込は成功したが注意事項があるとき、作業画面へ進む前に一度見せる。
+  // 既定値で補完した項目（静水位など）は計算結果を左右するため、黙って通さない。
+  const [importReport, setImportReport] = useState<{ data: WorkspaceData; warnings: string[] } | null>(null)
 
   async function run(kind: 'blank' | 'sample') {
     setBusy(kind)
@@ -121,7 +125,9 @@ export function WorkspaceStart({ workspace, onReady }: { workspace: BrowserWorks
         return
       }
       const created = await createProjectFromExcel(workspace.repository, result.data)
-      onReady(created.data)
+      const warnings = [...result.warnings, ...created.warnings]
+      if (warnings.length > 0) setImportReport({ data: created.data, warnings })
+      else onReady(created.data)
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : String(caught))
     } finally {
@@ -155,8 +161,15 @@ export function WorkspaceStart({ workspace, onReady }: { workspace: BrowserWorks
     }
   }
 
+  if (importReport) return <main className="workspace-start import-report">
+    <header className="workspace-start__brand"><span className="mark-lines" aria-hidden="true"><i /><i /><i /></span><strong>{SITE_TITLE}</strong></header>
+    <section className="workspace-start__intro"><span>Excel取込</span><h1>取り込みました（注意 {importReport.warnings.length}件）</h1><p>既定値で補完した項目や、正本の値で読み替えた項目があります。作業画面へ進む前に確認してください。</p></section>
+    <ol className="import-report__list">{importReport.warnings.map((warning, index) => <li key={index}>{warning}</li>)}</ol>
+    <button className="start-card__button" type="button" onClick={() => onReady(importReport.data)}>確認した · 作業画面へ進む</button>
+  </main>
+
   return <main className="workspace-start">
-    <header className="workspace-start__brand"><span className="mark-lines" aria-hidden="true"><i /><i /><i /></span><div><strong>OPEN WATERHAMMER</strong><small>水撃圧の設計比較ワークスペース</small></div><b>alpha</b></header>
+    <header className="workspace-start__brand"><span className="mark-lines" aria-hidden="true"><i /><i /><i /></span><strong>{SITE_TITLE}</strong></header>
     <section className="workspace-start__intro"><span>ブラウザ内に保存する作業画面</span><h1>作業を始める</h1><p>実案件はExcelから開始するのが推奨です。読込後はWeb画面のプロジェクトデータを正本として確認・修正します。</p></section>
     <div className="workspace-start__choices">
       <article className="start-card start-card--sample" style={{ gridColumn: '1 / -1', minHeight: 270 }}>
@@ -188,7 +201,7 @@ export function WorkspaceStart({ workspace, onReady }: { workspace: BrowserWorks
 function DocumentationShell({ page }: { page: AppPage }) {
   const topic = new URLSearchParams(window.location.hash.split('?')[1] ?? '').get('topic') ?? undefined
   return <div className="docs-app">
-    <header className="docs-header"><a className="docs-brand" href="#/"><span>OWH</span><div><strong>OPEN WATERHAMMER</strong><small>設計資料・技術情報</small></div></a><div className="product-context"><span className="alpha-label">alpha</span><span className="support-label">設計比較支援</span></div><nav aria-label="サービス内メニュー"><a href="#/">作業画面</a><a className={page === 'reference' ? 'active' : ''} href="#/docs/reference">設計基準</a><a className={page === 'library' ? 'active' : ''} href="#/docs/library">計算ライブラリ</a><a className={page === 'design-flow' ? 'active' : ''} href="#/docs/design-flow">設計フロー</a><a className={page === 'hydraulic' ? 'active' : ''} href="#/docs/hydraulic">水理設計の視点</a><a className={page === 'about' ? 'active' : ''} href="#/docs/about">このサイトについて</a></nav></header>
+    <header className="docs-header"><a className="docs-brand" href="#/"><span className="mark-lines" aria-hidden="true"><i /><i /><i /></span><strong>{SITE_TITLE}</strong></a><nav aria-label="サービス内メニュー"><a href="#/">作業画面</a><a className={page === 'reference' ? 'active' : ''} href="#/docs/reference">設計基準</a><a className={page === 'library' ? 'active' : ''} href="#/docs/library">計算ライブラリ</a><a className={page === 'design-flow' ? 'active' : ''} href="#/docs/design-flow">設計フロー</a><a className={page === 'hydraulic' ? 'active' : ''} href="#/docs/hydraulic">水理設計の視点</a><a className={page === 'about' ? 'active' : ''} href="#/docs/about">このサイトについて</a><a href="demo/">デモ手順</a></nav></header>
     <main className="docs-main"><Suspense fallback={<div className="panel-loading" role="status"><span /><p>設計資料を読み込んでいます…</p></div>}>
       {page === 'reference' && <ReferencePage initialTopicId={topic} />}
       {page === 'library' && <LibraryPage initialAnchor={topic} />}
@@ -196,6 +209,5 @@ function DocumentationShell({ page }: { page: AppPage }) {
       {page === 'hydraulic' && <HydraulicOverviewPage />}
       {page === 'about' && <AboutPage />}
     </Suspense></main>
-    <footer className="product-footer"><div><strong>alpha · 設計比較支援</strong><span>設計資料を記録</span></div><p><b>適用限界：</b>自動評価は設計比較支援のための参考情報です。入力条件、適用基準、数値解法の妥当性は設計者が個別に確認してください。</p></footer>
   </div>
 }

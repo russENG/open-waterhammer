@@ -1,0 +1,40 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Excelを取り込む — Open Waterhammer デモ手順</title>
+<meta name="description" content="Open Waterhammer のデモ手順（画面写真つき）。Excel入力からブラウザ内計算、農水省 成果品様式の書き出しまで。">
+<link rel="stylesheet" href="./style.css">
+</head>
+<body>
+<header class="site">
+  <strong>Open Waterhammer</strong>
+  <nav aria-label="デモ手順">
+    <a href="../">作業画面</a>
+    <a href="./">デモ手順 目次</a>
+    <a href="./01-start.html">作業を始める</a><a href="./02-template.html">入力テンプレートを取得す</a><a href="./03-import.html" aria-current="page">Excelを取り込む</a><a href="./04-scenario.html">シナリオを確認する</a><a href="./05-joukowsky.html">A02 Joukowsk</a><a href="./06-longitudinal.html">L01 縦断水理計算で設</a><a href="./07-reports.html">成果品様式を書き出す</a><a href="./08-transient.html">T01 単一管路の過渡解</a><a href="./09-compare.html">比較案を並べる</a>
+  </nav>
+</header>
+<main>
+<span class="eyebrow">手順 03 / 09</span>
+<h1>Excelを取り込む</h1>
+<p class="lead">既定値で補完した項目を、作業画面へ進む前に見せる。</p>
+<figure>
+  <img src="./img/s2-import-report.png" alt="Excelを取り込むの画面">
+  <figcaption>取り込みました（注意 2件）</figcaption>
+</figure>
+
+      <p>取込に成功しても、既定値で補完した項目や正本の値で読み替えた項目があれば、その一覧を出してから作業画面へ進む。計算結果を左右する補完を黙って通さないため。</p>
+      <ul>
+        <li>案件名がテンプレートの既定値のままです。実案件では「案件情報」シートの案件名を書き換えてください。</li>
+        <li>節点 N2: 節点種別「valve_node」は定常管路網で junction として扱います。</li>
+      </ul>
+      <p class="talk">話す一言：「Excelの検証に通った場合だけプロジェクトを作ります。入力エラーなら空のプロジェクトは残しません」</p>
+<nav class="pager">
+  <span><a href="./02-template.html">← 入力テンプレートを取得する</a></span>
+  <span><a href="./04-scenario.html">シナリオを確認する →</a></span>
+</nav>
+</main>
+</body>
+</html>

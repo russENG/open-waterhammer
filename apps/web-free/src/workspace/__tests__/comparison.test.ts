@@ -30,8 +30,11 @@ describe('deterministic nested Case comparison', () => {
 
     const rows = buildComparisonRows(cases, scenarios, runs)
     expect(rows.conditionRows.find(({ path }) => path === 'scenario.eventSettings.closeTime')?.values).toEqual([2, 8])
-    expect(rows.resultRows.find(({ path }) => path === 'summary.pipes.P-01.Hmax[1]')).toEqual({
-      path: 'summary.pipes.P-01.Hmax[1]', values: [110, 115], deltas: [0, 5],
+    // 包絡線・時系列は格子点ごとに行が立つと1計算で数百行になるため、差分表からは除く。
+    // 比較できるのはスカラーの要約値だけ。
+    expect(rows.resultRows.some(({ path }) => path.includes('Hmax['))).toBe(false)
+    expect(rows.resultRows.find(({ path }) => path === 'summary.peakPressureMpa')).toEqual({
+      path: 'summary.peakPressureMpa', values: [1.2, 1.5], deltas: [0, 0.30000000000000004],
     })
     expect(rows.resultRows.map(({ path }) => path)).toEqual([...rows.resultRows.map(({ path }) => path)].sort())
   })
