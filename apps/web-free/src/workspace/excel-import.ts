@@ -24,6 +24,12 @@ type PipeRow = WorkbookData['pipes'][number]
 type NodeRow = WorkbookData['nodes'][number]
 type NetworkNodeType = 'reservoir' | 'demand' | 'junction'
 
+export interface ExcelScenarioInput {
+  sourceCaseId: string
+  name: string
+  eventSettings: Record<string, unknown>
+}
+
 /**
  * Excel の節点種別 → 管路網ノード種別。
  * `reservoir` と `junction` のみ直接対応する。`tank` / `pump_node` /
@@ -70,6 +76,7 @@ function toNetworkNode(node: NodeRow, warnings: string[]): Record<string, unknow
 export function mapWorkbookToRunInputs(data: WorkbookData): {
   runInputs: Partial<Record<RunKind, unknown>>
   eventSettings: Record<string, unknown>
+  scenarios: ExcelScenarioInput[]
   warnings: string[]
 } {
   const warnings: string[] = []
@@ -77,6 +84,20 @@ export function mapWorkbookToRunInputs(data: WorkbookData): {
   // 操作条件はモデル側ではなくシナリオの eventSettings に入る
   // （core-py の protocol.py は closeTime をここから読む）。
   const eventSettings: Record<string, unknown> = {}
+  const scenarios = data.cases.map((item) => ({
+    sourceCaseId: item.id,
+    name: item.name,
+    eventSettings: {
+      sourceExcelCaseId: item.id,
+      calculationCaseId: item.id,
+      calculationCaseName: item.name,
+      operationType: item.operationType,
+      targetFacilityId: item.targetFacilityId,
+      initialVelocity: item.initialVelocity,
+      initialHead: item.initialHead,
+      ...(item.closeTime !== undefined ? { closeTime: item.closeTime } : {}),
+    },
+  }))
 
   const pipe = data.pipes[0]
   const calculationCase = data.cases[0]
@@ -92,7 +113,7 @@ export function mapWorkbookToRunInputs(data: WorkbookData): {
     if (calculationCase) {
       runInputs.joukowsky_allievi = { pipe, calculationCase }
     } else {
-      warnings.push('ケース設定シートに計算ケースが1件もないため、joukowsky_allievi の入力は作成しませんでした。')
+      warnings.push('シナリオ設定シートにシナリオが1件もないため、簡易水撃圧計算の入力は作成しませんでした。')
     }
   } else {
     warnings.push('管路・節点シートに管路データがないため、wave_speed / joukowsky_allievi の入力は作成しませんでした。')
@@ -114,5 +135,5 @@ export function mapWorkbookToRunInputs(data: WorkbookData): {
     warnings.push('管路・節点シートに管路と節点の両方が揃っていないため、steady_network_python / steady_network_epanet の入力は作成しませんでした。')
   }
 
-  return { runInputs, eventSettings, warnings }
+  return { runInputs, eventSettings, scenarios, warnings }
 }

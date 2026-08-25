@@ -70,8 +70,8 @@ const FIELD_OVERRIDES: Record<RunKind, EngineeringField[]> = {
     select('model', 'pipe.pipeType', '管種', PIPE_TYPE_OPTIONS),
   ],
   joukowsky_allievi: [
-    numeric('model', 'calculationCase.initialVelocity', '初期流速', 'm/s'),
-    numeric('model', 'calculationCase.initialHead', '初期水頭', 'm'),
+    numeric('event', 'initialVelocity', '初期流速', 'm/s'),
+    numeric('event', 'initialHead', '初期水頭', 'm'),
     numeric('event', 'closeTime', '閉鎖時間', 's'),
     numeric('model', 'pipe.innerDiameter', '管内径', 'm'),
     numeric('model', 'allowablePressureMpa', '許容圧力', 'MPa', { required: false, exclusiveMinimum: 0 }),
@@ -120,7 +120,7 @@ const FIELD_OVERRIDES: Record<RunKind, EngineeringField[]> = {
 
 const EVENT_TEMPLATES: Record<RunKind, JsonValue> = {
   wave_speed: { closeTime: 2 },
-  joukowsky_allievi: { closeTime: 2 },
+  joukowsky_allievi: { initialVelocity: 1, initialHead: 30, closeTime: 2 },
   empirical_pressure: {},
   steady_single_pipe: {},
   steady_network_python: {},
@@ -525,9 +525,20 @@ export function createEngineeringState(kind: RunKind, model: JsonValue | undefin
   protectionSettings: JsonValue
 }): EngineeringState {
   const template = ENGINEERING_TEMPLATES[kind]
+  let eventSettings = scenario?.eventSettings
+  if (kind === 'joukowsky_allievi' && model && typeof model === 'object' && !Array.isArray(model)) {
+    const calculationCase = model.calculationCase
+    if (calculationCase && typeof calculationCase === 'object' && !Array.isArray(calculationCase)) {
+      eventSettings = {
+        initialVelocity: calculationCase.initialVelocity ?? null,
+        initialHead: calculationCase.initialHead ?? null,
+        ...((eventSettings && typeof eventSettings === 'object' && !Array.isArray(eventSettings)) ? eventSettings : {}),
+      }
+    }
+  }
   return {
     model: model === undefined ? structuredClone(template.model) : structuredClone(model),
-    event: mergeObject(template.event, scenario?.eventSettings),
+    event: mergeObject(template.event, eventSettings),
     boundary: mergeObject(template.boundary, scenario?.boundaryConditions),
     protection: mergeObject(template.protection, scenario?.protectionSettings),
   }

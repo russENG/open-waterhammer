@@ -47,6 +47,21 @@ describe('mapWorkbookToRunInputs', () => {
     expect(warnings.some((warning) => /joukowsky/i.test(warning))).toBe(false)
   })
 
+  test('maps every Excel scenario row instead of silently using only the first row', () => {
+    const fixture = baseFixture()
+    fixture.cases.push({
+      id: 'CALC-02', name: 'ポンプ停止', operationType: 'pump_stop',
+      targetFacilityId: 'PUMP-01', initialVelocity: 0.8, initialHead: 28,
+    })
+
+    const { scenarios } = mapWorkbookToRunInputs(fixture)
+
+    expect(scenarios).toHaveLength(2)
+    expect(scenarios.map(({ name }) => name)).toEqual(['末端弁閉鎖', 'ポンプ停止'])
+    expect(scenarios[0]?.eventSettings).toMatchObject({ sourceExcelCaseId: 'CALC-01', initialVelocity: 1 })
+    expect(scenarios[1]?.eventSettings).toMatchObject({ sourceExcelCaseId: 'CALC-02', operationType: 'pump_stop' })
+  })
+
   test('measurementPoints populate longitudinal_hydraulics.points 1:1 and staticWaterLevel defaults with a warning', () => {
     const fixture = baseFixture()
     const { runInputs, warnings } = mapWorkbookToRunInputs(fixture)

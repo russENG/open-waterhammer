@@ -117,7 +117,22 @@ export async function createProjectFromExcel(
     geoDrafts: [],
     geoSourceCrs: project.crs,
   }
-  data.scenarios[0]!.eventSettings = mapped.eventSettings as JsonValue
+  if (mapped.scenarios.length > 0) {
+    const caseId = data.cases[0]!.id
+    const timestamp = data.cases[0]!.createdAt
+    data.scenarios = mapped.scenarios.map((scenario) => ({
+      id: globalThis.crypto.randomUUID(),
+      caseId,
+      name: scenario.name,
+      boundaryConditions: {},
+      eventSettings: scenario.eventSettings as JsonValue,
+      protectionSettings: {},
+      createdAt: timestamp,
+      updatedAt: timestamp,
+    }))
+  } else {
+    data.scenarios[0]!.eventSettings = mapped.eventSettings as JsonValue
+  }
 
   return { data: await importIntoEmptyWorkspace(repository, data), warnings: mapped.warnings }
 }

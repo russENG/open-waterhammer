@@ -348,6 +348,8 @@ findings は契約スキーマのリテラルキー（`targetRef`/`observedValue
 
 ExcelとWeb入力の責任分界、項目対応、再読込時の上書き規則は
 [Excel入力とWeb入力の責任分界](./excel-web-input-policy.md)を正とする。
+比較案、シナリオ、Excelのシナリオ設定の役割は
+[比較案・シナリオ・Excel入力の役割](./comparison-scenario-model.md)に従う。
 
 - **入力**: テンプレートダウンロード（`@open-waterhammer/excel-io` の `generateTemplate`）と
   ワークブック取込（`parseWorkbook`）を Model＋GIS タブに提供する。取込結果は

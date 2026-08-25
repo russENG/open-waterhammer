@@ -3,7 +3,7 @@ import type { ParseError, WorkbookData } from '@open-waterhammer/excel-io'
 import { useRef, useState } from 'react'
 
 import { ensureBrowserBuffer } from '../../reports/browser-buffer'
-import { mapWorkbookToRunInputs } from '../excel-import'
+import { mapWorkbookToRunInputs, type ExcelScenarioInput } from '../excel-import'
 import { downloadInputTemplate } from '../excel-template-download'
 import { useWorkspace } from '../workspace-context'
 
@@ -21,6 +21,7 @@ interface PendingImport {
   mapped: Partial<Record<RunKind, JsonValue>>
   raw: WorkbookData
   eventSettings: JsonValue
+  scenarios: ExcelScenarioInput[]
   conflictingKinds: RunKind[]
 }
 
@@ -74,6 +75,7 @@ export function ExcelIoCard({ caseRecord }: { caseRecord: Case }) {
         pending.mapped,
         pending.raw as unknown as JsonValue,
         pending.eventSettings,
+        pending.scenarios,
       )
       setPendingImport(null)
       setStatus(pending.kinds.length > 0
@@ -122,6 +124,7 @@ export function ExcelIoCard({ caseRecord }: { caseRecord: Case }) {
         mapped: mapped.runInputs as Partial<Record<RunKind, JsonValue>>,
         raw: result.data,
         eventSettings: mapped.eventSettings as JsonValue,
+        scenarios: mapped.scenarios,
         conflictingKinds,
       }
       if (hasPreviousExcelImport(caseRecord) || conflictingKinds.length > 0) {

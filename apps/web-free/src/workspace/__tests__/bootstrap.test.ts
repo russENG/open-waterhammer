@@ -80,6 +80,9 @@ describe('browser workspace bootstrap', () => {
       cases: [{
         id: 'C-01', name: '末端弁閉鎖', operationType: 'valve_close' as const, targetFacilityId: 'V-01',
         initialVelocity: 1.2, initialHead: 35, closeTime: 3,
+      }, {
+        id: 'C-02', name: 'ポンプ停止', operationType: 'pump_stop' as const, targetFacilityId: 'PUMP-01',
+        initialVelocity: 1.0, initialHead: 32,
       }],
       measurementPoints: [],
     }
@@ -92,7 +95,11 @@ describe('browser workspace bootstrap', () => {
     const snapshot = created.data.cases[0]!.modelSnapshot as Record<string, unknown>
     expect(snapshot.excelImport).toEqual(workbook)
     expect((snapshot.runInputs as Record<string, unknown>).wave_speed).toBeDefined()
-    expect(created.data.scenarios[0]?.eventSettings).toEqual({ closeTime: 3 })
+    expect(created.data.scenarios).toHaveLength(2)
+    expect(created.data.scenarios.map(({ name }) => name).sort()).toEqual(['ポンプ停止', '末端弁閉鎖'].sort())
+    expect(created.data.scenarios.find(({ eventSettings }) => (
+      eventSettings as Record<string, unknown>
+    ).sourceExcelCaseId === 'C-01')?.eventSettings).toMatchObject({ sourceExcelCaseId: 'C-01', closeTime: 3 })
     opened.repository.close()
   })
 

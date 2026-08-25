@@ -1,4 +1,4 @@
-import { RUN_KINDS, type Case, type JsonValue, type Run, type RunKind } from '@open-waterhammer/contracts'
+import { RUN_KINDS, type Case, type JsonValue, type Run, type RunKind, type Scenario } from '@open-waterhammer/contracts'
 import { useMemo, useState } from 'react'
 
 import {
@@ -37,9 +37,20 @@ function root(caseRecord: Case): Record<string, JsonValue> {
   return model && typeof model === 'object' && !Array.isArray(model) ? model as Record<string, JsonValue> : {}
 }
 
-export function AnalysisPanel({ caseRecord, onRunSelected }: { caseRecord: Case; onRunSelected(run: Run): void }) {
-  const { data, run, saveModel, busy, lastError } = useWorkspace()
-  const scenario = data.scenarios.find(({ caseId }) => caseId === caseRecord.id)
+export function AnalysisPanel({
+  caseRecord,
+  scenarios,
+  scenario,
+  onScenarioSelect,
+  onRunSelected,
+}: {
+  caseRecord: Case
+  scenarios: Scenario[]
+  scenario?: Scenario
+  onScenarioSelect(scenarioId: string): void
+  onRunSelected(run: Run): void
+}) {
+  const { run, saveModel, busy, lastError } = useWorkspace()
   const [kind, setKind] = useState<RunKind>('wave_speed')
   const modelRoot = root(caseRecord)
   const inputs = modelRoot.runInputs && typeof modelRoot.runInputs === 'object' && !Array.isArray(modelRoot.runInputs)
@@ -143,7 +154,7 @@ export function AnalysisPanel({ caseRecord, onRunSelected }: { caseRecord: Case;
       return
     }
     try {
-      const result = await run(caseRecord.id, kind)
+      const result = await run(caseRecord.id, kind, scenario?.id)
       onRunSelected(result)
       setStatus(result.status === 'succeeded' ? '計算が完了しました' : `計算に失敗しました：${result.error?.message ?? result.status}`)
     } catch (error) {
@@ -152,7 +163,7 @@ export function AnalysisPanel({ caseRecord, onRunSelected }: { caseRecord: Case;
   }
 
   return <div className="panel-stack analysis-panel">
-    <div className="panel-title-row"><div><span className="eyebrow">ローカル計算 / 04</span><h1>解析</h1><p>11種類の計算は共通の計算処理を経由し、計算に成功した比較案は入力条件が固定されます。</p></div><span className="offline-ticket">ローカル / オフライン</span></div>
+    <div className="panel-title-row"><div><span className="eyebrow">ローカル計算 / 04</span><h1>解析</h1><p>選択した比較案とシナリオの組合せで計算し、成功時に入力条件を固定します。</p></div><label><span>計算するシナリオ</span><select aria-label="計算するシナリオ" value={scenario?.id ?? ''} onChange={(event) => onScenarioSelect(event.target.value)}>{scenarios.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}</select></label></div>
     <details className="method-selection-guide"><summary>計算方法の選び方（§8.3.2 参照）</summary><MethodSelectionGuide onRecommend={selectKind} /></details>
     <div className="analysis-layout">
       <div className="run-kind-list" role="radiogroup" aria-label="計算の種類">

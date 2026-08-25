@@ -17,6 +17,7 @@ import { createContext, useCallback, useContext, useMemo, useState, type ReactNo
 import type { LocalTransformDefinition } from '../gis/projections'
 import type { BrowserProtocolCaller } from '../runner/browser-runner'
 import { replaceWithBlankProject } from './bootstrap'
+import type { ExcelScenarioInput } from './excel-import'
 import { evaluateRunGate } from './run-policy'
 
 export interface WorkspaceRepositoryClient extends WorkspaceRepository {
@@ -31,7 +32,7 @@ export interface WorkspaceContextValue {
   busy: boolean
   lastError: string | null
   refresh(): Promise<WorkspaceData>
-  run(caseId: string, kind: RunKind): Promise<Run>
+  run(caseId: string, kind: RunKind, scenarioId?: string): Promise<Run>
   replaceProject(name: string): Promise<{ project: Project; caseRecord: Case }>
   createFrom(caseId: string): Promise<Case>
   fork(caseId: string, reason: string): Promise<Case>
@@ -39,7 +40,8 @@ export interface WorkspaceContextValue {
   saveModel(caseId: string, kind: RunKind, input: JsonValue, scenario?: Scenario): Promise<void>
   saveGeoDrafts(caseId: string, drafts: JsonValue, sourceCrs: string, localTransform?: LocalTransformDefinition): Promise<void>
   saveScenario(scenario: Scenario): Promise<void>
-  importExcelInputs(caseId: string, mapped: Partial<Record<RunKind, JsonValue>>, raw: JsonValue, eventSettings?: JsonValue): Promise<void>
+  createScenario(caseId: string, name?: string): Promise<Scenario>
+  importExcelInputs(caseId: string, mapped: Partial<Record<RunKind, JsonValue>>, raw: JsonValue, eventSettings?: JsonValue, excelScenarios?: ExcelScenarioInput[]): Promise<void>
 }
 
 const WorkspaceContext = createContext<WorkspaceContextValue | null>(null)
@@ -67,6 +69,28 @@ function modelsFrom(caseRecord: Case): Record<string, JsonValue> {
   return runInputs && typeof runInputs === 'object' && !Array.isArray(runInputs)
     ? runInputs as Record<string, JsonValue>
     : {}
+}
+
+function applyScenarioToModel(kind: RunKind, model: JsonValue, scenario: Scenario): JsonValue {
+  if (kind !== 'joukowsky_allievi') return model
+  const root = asObject(model)
+  const calculationCase = asObject(root.calculationCase)
+  const event = asObject(scenario.eventSettings)
+  const hasOperationInput = ['initialVelocity', 'initialHead', 'operationType', 'targetFacilityId']
+    .some((key) => event[key] !== undefined)
+  if (!hasOperationInput) return model
+  return {
+    ...root,
+    calculationCase: {
+      ...calculationCase,
+      ...(event.calculationCaseId !== undefined ? { id: event.calculationCaseId } : {}),
+      ...(event.calculationCaseName !== undefined ? { name: event.calculationCaseName } : {}),
+      ...(event.operationType !== undefined ? { operationType: event.operationType } : {}),
+      ...(event.targetFacilityId !== undefined ? { targetFacilityId: event.targetFacilityId } : {}),
+      ...(event.initialVelocity !== undefined ? { initialVelocity: event.initialVelocity } : {}),
+      ...(event.initialHead !== undefined ? { initialHead: event.initialHead } : {}),
+    },
+  }
 }
 
 async function defaultExecutors(callProtocol?: BrowserProtocolCaller) {
@@ -110,9 +134,9 @@ export function WorkspaceProvider({
     }
   }, [])
 
-  const run = useCallback((caseId: string, kind: RunKind) => guarded(async () => {
+  const run = useCallback((caseId: string, kind: RunKind, scenarioId?: string) => guarded(async () => {
     const caseRecord = data.cases.find(({ id }) => id === caseId)
-    const scenario = data.scenarios.find(({ caseId: owner }) => owner === caseId)
+    const scenario = data.scenarios.find(({ id, caseId: owner }) => owner === caseId && (!scenarioId || id === scenarioId))
     const alternative = data.alternatives.find(({ id }) => id === caseRecord?.alternativeId)
     const project = data.projects.find(({ id }) => id === alternative?.projectId)
     if (!caseRecord || !scenario || !project) throw new Error('計算に必要な比較案、シナリオ、またはプロジェクトが不足しています')
@@ -129,7 +153,7 @@ export function WorkspaceProvider({
     const calculated = await runCalculation({
       repository,
       project,
-      caseSnapshot: { ...caseRecord, modelSnapshot: structuredClone(model) },
+      caseSnapshot: { ...caseRecord, modelSnapshot: structuredClone(applyScenarioToModel(kind, model, scenario)) },
       scenarioSnapshot: scenario,
       kind,
       executors: registry,
@@ -208,7 +232,7 @@ export function WorkspaceProvider({
     await refresh()
   }), [data.cases, data.scenarios, guarded, refresh, repository])
 
-  const importExcelInputs = useCallback((caseId: string, mapped: Partial<Record<RunKind, JsonValue>>, raw: JsonValue, eventSettings?: JsonValue) => guarded(async () => {
+  const importExcelInputs = useCallback((caseId: string, mapped: Partial<Record<RunKind, JsonValue>>, raw: JsonValue, eventSettings?: JsonValue, excelScenarios: ExcelScenarioInput[] = []) => guarded(async () => {
     const current = data.cases.find(({ id }) => id === caseId)
     if (!current) throw new Error('比較案が見つかりません')
     const root = current.modelSnapshot && typeof current.modelSnapshot === 'object' && !Array.isArray(current.modelSnapshot)
@@ -227,7 +251,7 @@ export function WorkspaceProvider({
     // 同じ保存でシナリオの eventSettings にも重ねる。分けて保存すると、後から保存した
     // 側が直前の書き込みを古い値で上書きしてしまう。
     const scenarios = data.scenarios.filter(({ caseId: owner }) => owner === caseId)
-    const merged = isNonEmptyObject(eventSettings)
+    let merged = isNonEmptyObject(eventSettings)
       ? scenarios.map((scenario, index) => (index === 0
         ? {
           ...scenario,
@@ -236,6 +260,29 @@ export function WorkspaceProvider({
         }
         : scenario))
       : scenarios
+    if (excelScenarios.length > 0) {
+      const timestamp = now()
+      const canReuseDefault = merged.length === 1 && !asObject(merged[0]!.eventSettings).sourceExcelCaseId
+      for (const [index, source] of excelScenarios.entries()) {
+        let targetIndex = merged.findIndex((scenario) => asObject(scenario.eventSettings).sourceExcelCaseId === source.sourceCaseId)
+        if (targetIndex < 0 && index === 0 && canReuseDefault) targetIndex = 0
+        if (targetIndex >= 0) {
+          const currentScenario = merged[targetIndex]!
+          merged[targetIndex] = {
+            ...currentScenario,
+            name: source.name,
+            eventSettings: { ...asObject(currentScenario.eventSettings), ...source.eventSettings } as JsonValue,
+            updatedAt: timestamp,
+          }
+        } else {
+          merged.push({
+            id: uuid(), caseId, name: source.name,
+            boundaryConditions: {}, eventSettings: source.eventSettings as JsonValue, protectionSettings: {},
+            createdAt: timestamp, updatedAt: timestamp,
+          })
+        }
+      }
+    }
     await repository.saveDraftCase(edited, merged)
     await refresh()
   }), [data.cases, data.scenarios, guarded, refresh, repository])
@@ -261,9 +308,24 @@ export function WorkspaceProvider({
     await refresh()
   }), [data.cases, guarded, refresh, repository])
 
+  const createScenario = useCallback((caseId: string, name = '新規シナリオ') => guarded(async () => {
+    const current = data.cases.find(({ id }) => id === caseId)
+    if (!current) throw new Error('比較案が見つかりません')
+    if (current.state !== 'draft') throw new Error('計算済み・固定または保管済みの比較案にはシナリオを追加できません')
+    const timestamp = now()
+    const scenario: Scenario = {
+      id: uuid(), caseId, name,
+      boundaryConditions: {}, eventSettings: {}, protectionSettings: {},
+      createdAt: timestamp, updatedAt: timestamp,
+    }
+    await repository.saveDraftCase(current, [scenario])
+    await refresh()
+    return scenario
+  }), [data.cases, guarded, refresh, repository])
+
   const value = useMemo<WorkspaceContextValue>(() => ({
-    data, repository, busy, lastError, refresh, run, replaceProject, createFrom, fork, archive, saveModel, saveGeoDrafts, saveScenario, importExcelInputs,
-  }), [archive, busy, createFrom, data, fork, importExcelInputs, lastError, refresh, replaceProject, repository, run, saveGeoDrafts, saveModel, saveScenario])
+    data, repository, busy, lastError, refresh, run, replaceProject, createFrom, fork, archive, saveModel, saveGeoDrafts, saveScenario, createScenario, importExcelInputs,
+  }), [archive, busy, createFrom, createScenario, data, fork, importExcelInputs, lastError, refresh, replaceProject, repository, run, saveGeoDrafts, saveModel, saveScenario])
 
   return <WorkspaceContext value={value}>{children}</WorkspaceContext>
 }

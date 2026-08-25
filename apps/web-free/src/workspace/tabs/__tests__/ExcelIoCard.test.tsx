@@ -95,6 +95,7 @@ describe('ExcelIoCard', () => {
       const runInputs = modelSnapshot.runInputs as Record<string, unknown>
       expect((runInputs.wave_speed as { pipe: { id: string } }).pipe.id).toBe('P-99')
       expect((runInputs.joukowsky_allievi as { calculationCase: { id: string } }).calculationCase.id).toBe('CALC-99')
+      expect(snapshot.scenarios.find(({ caseId }) => caseId === caseRecord.id)?.name).toBe('アップロードケース')
     })
     expect(await screen.findByText(/波速計算/)).toBeVisible()
   })

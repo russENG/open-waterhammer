@@ -7,6 +7,7 @@ import { describe, test } from "node:test";
 import { PRODUCT_VERSION } from "@open-waterhammer/contracts";
 import { generateTemplate } from "../template.js";
 import { parseWorkbook } from "../reader.js";
+import { getSheetNames, loadWorkbook } from "./test-helpers.js";
 import type { Pipe, Node, CalculationCase } from "@open-waterhammer/core";
 
 // ─── テスト用フィクスチャ ─────────────────────────────────────────────────────
@@ -80,6 +81,22 @@ describe("Excel ラウンドトリップ（generateTemplate → parseWorkbook）
     assert.equal(result.errors.length, 0, JSON.stringify(result.errors));
   });
 
+  test("新しいテンプレートは「シナリオ設定」シートを使う", async () => {
+    const workbook = await loadWorkbook(buf);
+    assert.ok(getSheetNames(workbook).includes("シナリオ設定"));
+    assert.ok(!getSheetNames(workbook).includes("ケース設定"));
+  });
+
+  test("旧「ケース設定」シートも後方互換で読み込む", async () => {
+    const workbook = await loadWorkbook(buf);
+    const scenarioSheet = workbook.getWorksheet("シナリオ設定");
+    assert.ok(scenarioSheet);
+    scenarioSheet.name = "ケース設定";
+    const legacy = await parseWorkbook(await workbook.xlsx.writeBuffer());
+    assert.equal(legacy.errors.length, 0, JSON.stringify(legacy.errors));
+    assert.equal(legacy.data.cases.length, testCases.length);
+  });
+
   // ── meta ──────────────────────────────────────────────────────────────────
 
   describe("meta シート", () => {
@@ -146,8 +163,8 @@ describe("Excel ラウンドトリップ（generateTemplate → parseWorkbook）
 
   // ── cases ─────────────────────────────────────────────────────────────────
 
-  describe("ケース設定", () => {
-    test("ケース数が一致", () => {
+  describe("シナリオ設定", () => {
+    test("シナリオ数が一致", () => {
       assert.equal(result.data.cases.length, testCases.length);
     });
 

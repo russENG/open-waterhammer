@@ -12,9 +12,10 @@ function setupAnalysisPanel() {
   const data = buildSampleWorkspace('2026-08-23T01:02:03.000Z')
   const repository = new InMemoryWorkspaceRepository(data)
   const caseRecord = data.cases[0]!
+  const scenarios = data.scenarios.filter(({ caseId }) => caseId === caseRecord.id)
   render(
     <WorkspaceProvider repository={repository} initialData={data}>
-      <AnalysisPanel caseRecord={caseRecord} onRunSelected={() => {}} />
+      <AnalysisPanel caseRecord={caseRecord} scenarios={scenarios} scenario={scenarios[0]} onScenarioSelect={() => {}} onRunSelected={() => {}} />
     </WorkspaceProvider>,
   )
   return { data, caseRecord }

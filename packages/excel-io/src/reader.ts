@@ -293,9 +293,9 @@ const VALID_OPERATION_TYPES = new Set<string>([
 ]);
 
 function parseCases(wb: ExcelJS.Workbook, errors: ParseError[], warnings: string[]): CalculationCase[] {
-  const ws = wb.getWorksheet("ケース設定") ?? wb.getWorksheet("cases");
+  const ws = wb.getWorksheet("シナリオ設定") ?? wb.getWorksheet("ケース設定") ?? wb.getWorksheet("cases");
   if (!ws) {
-    errors.push({ sheet: "cases", message: "「ケース設定」シートが見つかりません" });
+    errors.push({ sheet: "cases", message: "「シナリオ設定」シートが見つかりません" });
     return [];
   }
 

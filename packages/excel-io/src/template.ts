@@ -360,7 +360,7 @@ function addNetworkSheet(wb: ExcelJS.Workbook, pipes: Pipe[], nodes: Node[]): Ex
 }
 
 function addCasesSheet(wb: ExcelJS.Workbook, cases: CalculationCase[]): ExcelJS.Worksheet {
-  const ws = wb.addWorksheet("ケース設定");
+  const ws = wb.addWorksheet("シナリオ設定");
   ws.addRow(CASE_COLS.map(headerText));
   const dataRows = cases.map((c) => [
     c.id, c.name, c.description ?? "",
@@ -481,7 +481,7 @@ function addInstructionSheet(wb: ExcelJS.Workbook): ExcelJS.Worksheet {
   push(["案件情報", "プロジェクト名・採用基準などのメタ情報", "Project metadata"]);
   push(["管路・節点", "管路区間と節点の諸元（Pipeテーブル・Nodeテーブル）", "Pipes and nodes"]);
   push(["測点データ", "水理計算書用の測点データ（成果品参照様式）", "Measurement points for the hydraulic calculation sheet"]);
-  push(["ケース設定", "計算ケースの一覧（操作種別・初期条件）", "Calculation cases"]);
+  push(["シナリオ設定", "境界条件・操作イベント・防護工条件の初期一覧", "Initial scenarios"]);
   push([]);
 
   head("■ 管種コード / Pipe material codes（pipe_material 欄）");
@@ -511,7 +511,7 @@ function addInstructionSheet(wb: ExcelJS.Workbook): ExcelJS.Worksheet {
   push(["", "旧IDの帳票もそのまま読み込めます。", "Workbooks using the old IDs are still accepted."]);
   push([]);
 
-  head("■ ケース設定の入力について / Notes on calculation cases");
+  head("■ シナリオ設定の入力について / Notes on scenarios");
   push(["等価閉そく時間 tν", "バルブ操作ケース（valve_close / valve_open）では必ず入力してください。"]);
   push(["", "急閉そく・緩閉そくの判定と、アリエビ式の適用可否（tν > L/300）に使います。"]);
   push(["", "ポンプ操作ケースでは不要です。"]);
