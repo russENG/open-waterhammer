@@ -60,7 +60,7 @@ primary_chapter: "8. 非定常的な水理現象の解析"
 | `design_pressure` | 設計水圧 | 静水圧 + 水撃圧 | MPa |
 | `static_head` | 静水圧水頭 (H₀) | バルブ位置における静水頭 | m |
 | `alpha_value` | α値 | t₀/T₀ による基礎式適用判定値 | — |
-| `c1_coeff` | 埋設状況係数 (C₁) | 管の埋設条件による係数 | — |
+| `pipe_restraint_coeff` | 埋設状況係数 (C₁) | 管の埋設条件による係数。旧ID `c1_coeff` | — |
 | `youngs_modulus_short` | 短期ヤング係数 (Eₛ) | 管材の短期弾性係数 | kN/m² |
 
 ---
