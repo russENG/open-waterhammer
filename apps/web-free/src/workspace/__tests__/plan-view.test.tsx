@@ -108,7 +108,7 @@ describe('PlanView', () => {
 
     expect(screen.getByText('模式図')).toBeVisible()
     expect(screen.getByText('位置・距離は実座標ではありません')).toBeVisible()
-    expect(screen.getByRole('img', { name: /管路網模式図、管路1件、節点2件/ })).toBeVisible()
+    expect(screen.getByRole('group', { name: /管路網模式図、管路1件、節点2件/ })).toBeVisible()
     expect(screen.getByRole('img', { name: 'V、バルブ、接続済み' })).toBeVisible()
     expect(screen.getByText('接続確認済み')).toBeVisible()
   })

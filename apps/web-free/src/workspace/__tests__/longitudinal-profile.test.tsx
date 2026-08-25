@@ -132,7 +132,7 @@ describe('LongitudinalProfile', () => {
     render(<LongitudinalProfile diagram={diagram} mode="input" onFocus={onFocus} />)
 
     expect(screen.getByText('入力確認図（計算前）')).toBeVisible()
-    expect(screen.getByRole('img', { name: '入力確認図（計算前）、測点2件' })).toBeVisible()
+    expect(screen.getByRole('group', { name: '入力確認図（計算前）、測点2件' })).toBeVisible()
     await user.click(screen.getByRole('button', { name: /測点 STA-100、管路 P1、節点 N1/ }))
     expect(onFocus).toHaveBeenCalledWith(expect.objectContaining({ profileCursor: 'STA-100', mapFeatureId: 'N1', envelopeSeriesId: 'P1', timeSeriesId: 'N1' }))
   })

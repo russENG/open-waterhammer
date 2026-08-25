@@ -47,7 +47,7 @@ export function PlanView({ diagram, focus, onFocus }: { diagram?: PlanDiagram; f
       <b className={errorCount ? 'plan-view-issues plan-view-issues--warning' : 'plan-view-issues'}>{errorCount ? `要確認 ${errorCount}件` : '接続確認済み'}</b>
     </div>
     <div className="plan-view-canvas">
-      <svg viewBox={`0 0 ${diagram.width} ${diagram.height}`} role="img" aria-label={`${diagram.mode === 'real-coordinates' ? '実座標平面図' : '管路網模式図'}、管路${diagram.pipes.length}件、節点${diagram.nodes.length}件`}>
+      <svg viewBox={`0 0 ${diagram.width} ${diagram.height}`} role="group" aria-label={`${diagram.mode === 'real-coordinates' ? '実座標平面図' : '管路網模式図'}、管路${diagram.pipes.length}件、節点${diagram.nodes.length}件`}>
         <g className="plan-pipes">
           {diagram.pipes.map((pipe) => {
             const selected = focus?.mapFeatureId === pipe.id

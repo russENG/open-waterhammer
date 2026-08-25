@@ -99,7 +99,7 @@ export function LongitudinalProfile({ diagram, mode, focus, onFocus }: {
       <b className={diagram.issues.length ? 'profile-status-warning' : ''}>{diagram.issues.length ? `要確認 ${diagram.issues.length}件` : '入力整合'}</b>
     </div>
     <div className="profile-chart-scroll">
-      <svg viewBox={`0 0 ${width} ${height}`} role="img" aria-label={`${statusLabel}、測点${diagram.points.length}件`}>
+      <svg viewBox={`0 0 ${width} ${height}`} role="group" aria-label={`${statusLabel}、測点${diagram.points.length}件`}>
         <defs>
           <pattern id={`profile-grid-${mode}`} width="55" height="40" patternUnits="userSpaceOnUse"><path d="M55 0H0V40" fill="none" stroke="currentColor" strokeOpacity=".10" /></pattern>
         </defs>
