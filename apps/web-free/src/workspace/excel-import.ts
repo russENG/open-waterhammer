@@ -67,12 +67,25 @@ function toNetworkNode(node: NodeRow, warnings: string[]): Record<string, unknow
  * 部分データでも例外を投げない — 揃っている項目だけをマッピングし、
  * 省略・既定値化した項目は必ず `warnings` に理由を積む。
  */
-export function mapWorkbookToRunInputs(data: WorkbookData): { runInputs: Partial<Record<RunKind, unknown>>; warnings: string[] } {
+export function mapWorkbookToRunInputs(data: WorkbookData): {
+  runInputs: Partial<Record<RunKind, unknown>>
+  eventSettings: Record<string, unknown>
+  warnings: string[]
+} {
   const warnings: string[] = []
   const runInputs: Partial<Record<RunKind, unknown>> = {}
+  // 操作条件はモデル側ではなくシナリオの eventSettings に入る
+  // （core-py の protocol.py は closeTime をここから読む）。
+  const eventSettings: Record<string, unknown> = {}
 
   const pipe = data.pipes[0]
   const calculationCase = data.cases[0]
+
+  if (calculationCase?.closeTime !== undefined) {
+    eventSettings.closeTime = calculationCase.closeTime
+  } else if (calculationCase && (calculationCase.operationType === 'valve_close' || calculationCase.operationType === 'valve_open')) {
+    warnings.push(`ケース ${calculationCase.id}: 等価閉そく時間（close_time）が未入力のため、閉鎖時間は既定値のままにしました。解析タブで確認・入力してください。`)
+  }
 
   if (pipe) {
     runInputs.wave_speed = { pipe }
@@ -101,5 +114,5 @@ export function mapWorkbookToRunInputs(data: WorkbookData): { runInputs: Partial
     warnings.push('管路・節点シートに管路と節点の両方が揃っていないため、steady_network_python / steady_network_epanet の入力は作成しませんでした。')
   }
 
-  return { runInputs, warnings }
+  return { runInputs, eventSettings, warnings }
 }

@@ -56,7 +56,7 @@
 |------------|------|----|------|------|------|
 | `node_id` | 節点ID | string | — | ○ | |
 | `node_name` | 節点名 | string | — | — | |
-| `elevation` | 地盤高 | float | m | ○ | T.P.基準推奨 |
+| `elevation` | 地盤高（標高） | float | m | ○ | T.P.基準推奨。帳票の表示名も「地盤高（標高）」で統一 |
 | `hydraulic_grade` | 動水位（初期値） | float | m | — | 定常計算で更新 |
 | `node_type` | 節点種別 | enum | — | ○ | `reservoir`, `junction`, `tank`, `pump_node`, `valve_node` |
 
@@ -78,18 +78,26 @@
 
 ##### 管種コード（参照: 表-8.2.1）
 
+コードと Eₛ の正本は `packages/core/src/pipe-materials.ts`（`PIPE_MATERIALS`）。
+
 | コード | 管種名 | Eₛ (×10⁶ kN/m²) |
 |--------|--------|-----------------|
 | `steel` | 鋼管 | 200 |
 | `ductile_iron` | ダクタイル鋳鉄管 | 160 |
 | `rcp` | 遠心力鉄筋コンクリート管 | 20 |
-| `cpcp` | コア式PCCP管 | 39 |
-| `upvc` | 硬質塩ビ管 | 3 |
-| `pe2` | 一般用PE管（2種） | 1 |
-| `pe3_pe100` | 一般用PE管（3種 PE100） | 1.3 |
-| `wdpe1`〜`wdpe5` | 水道配水用PE管 1〜5種 | 21.6/19.6/16.7/15.2/14.7 |
-| `grp_fw` | FW成形強化プラスチック複合管 | 51 |
-| `gfpe` | GF強化ポリエチレン管 | 2.5 |
+| `cpcp` | コア式プレストレストコンクリート管 | 39 |
+| `upvc` | 硬質ポリ塩化ビニル管 | 3 |
+| `pe2` | 一般用ポリエチレン管（2種） | 1 |
+| `pe3_pe100` | 一般用ポリエチレン管（3種 PE100） | 1.3 |
+| `wdpe` | 水道配水用ポリエチレン管 | 1.3 |
+| `grp_fw1` | 強化プラスチック複合管 FW（1種） | 14.7 |
+| `grp_fw2` | 強化プラスチック複合管 FW（2種） | 15.2 |
+| `grp_fw3` | 強化プラスチック複合管 FW（3種） | 16.7 |
+| `grp_fw4` | 強化プラスチック複合管 FW（4種） | 19.6 |
+| `grp_fw5` | 強化プラスチック複合管 FW（5種） | 21.6 |
+| `gfpe` | ガラス繊維強化ポリエチレン管 | 2.5 |
+
+樹脂系管材（`isResin: true`）の長期ヤング係数は短期値 × 0.8。
 
 ---
 
@@ -140,8 +148,9 @@
 | `description` | 説明 | string | — | |
 | `operation_type` | 操作種別 | enum | ○ | `valve_close`, `valve_open`, `pump_stop`, `pump_start`, `combined` |
 | `target_facility_id` | 対象施設ID | string | ○ | |
-| `initial_flow` | 初期流速 V₀ | float | ○ | m/s |
+| `initial_velocity` | 初期流速 V₀ | float | ○ | m/s。旧ID `initial_flow`（流速なのに flow という誤称）も読み取りのみ受け付ける |
 | `initial_head` | 初期圧力水頭 H₀ | float | ○ | m |
+| `close_time` | 等価閉そく時間 tν | float | — | s。`valve_close` / `valve_open` では必須。急緩判定とアリエビ式に使う |
 | `output_sheet` | 出力シートID | string | ○ | |
 
 ---
