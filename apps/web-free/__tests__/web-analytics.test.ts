@@ -13,11 +13,13 @@ describe('web analytics injection', () => {
     expect(applyWebAnalytics(INDEX_HTML, '   ')).toBe(INDEX_HTML)
   })
 
-  test('shipped index.html keeps a self-only policy so token-less builds contact no external host', () => {
+  test('shipped index.html limits scripts and connections while allowing only official and local PDF frames', () => {
     const csp = INDEX_HTML.match(/<meta http-equiv="Content-Security-Policy" content="([^"]*)"/)?.[1]
     expect(csp).toBeDefined()
     expect(csp).toContain("script-src 'self' 'wasm-unsafe-eval'")
     expect(csp).toContain("connect-src 'self'")
+    expect(csp).toContain("frame-src 'self' blob: https://www.maff.go.jp")
+    expect(csp).not.toContain('frame-src https:')
     expect(csp).not.toContain('cloudflareinsights.com')
   })
 
