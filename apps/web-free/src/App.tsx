@@ -1,10 +1,14 @@
 import { lazy, Suspense, useEffect, useState, type FormEvent } from 'react'
+import type { ParseError } from '@open-waterhammer/excel-io'
 import type { WorkspaceData } from '@open-waterhammer/workspace'
 
 import { onNavigate, type AppPage } from './lib/navigation'
 import { resolveLegacyHash } from './lib/legacy-hash'
+import { ensureBrowserBuffer } from './reports/browser-buffer'
 import { WorkspaceApp } from './workspace/WorkspaceApp'
-import { createBlankProject, initializeBrowserWorkspace, installSampleWorkspace } from './workspace/bootstrap'
+import { createBlankProject, createProjectFromExcel, initializeBrowserWorkspace, installSampleWorkspace } from './workspace/bootstrap'
+import { downloadInputTemplate } from './workspace/excel-template-download'
+import { replaceProjectFile } from './workspace/project-transfer'
 import type { WorkspaceRepositoryClient } from './workspace/workspace-context'
 import './App.css'
 
@@ -78,10 +82,11 @@ export default function App() {
   return <WorkspaceApp repository={workspace.repository} initialData={workspace.data} />
 }
 
-function WorkspaceStart({ workspace, onReady }: { workspace: BrowserWorkspace; onReady(data: WorkspaceData): void }) {
+export function WorkspaceStart({ workspace, onReady }: { workspace: BrowserWorkspace; onReady(data: WorkspaceData): void }) {
   const [projectName, setProjectName] = useState('')
-  const [busy, setBusy] = useState<'blank' | 'sample' | null>(null)
+  const [busy, setBusy] = useState<'excel' | 'project' | 'template' | 'blank' | 'sample' | null>(null)
   const [error, setError] = useState<string | null>(null)
+  const [parseErrors, setParseErrors] = useState<ParseError[]>([])
 
   async function run(kind: 'blank' | 'sample') {
     setBusy(kind)
@@ -102,22 +107,80 @@ function WorkspaceStart({ workspace, onReady }: { workspace: BrowserWorkspace; o
     void run('blank')
   }
 
+  async function openExcel(file: File) {
+    setBusy('excel')
+    setError(null)
+    setParseErrors([])
+    try {
+      await ensureBrowserBuffer()
+      const { parseWorkbook } = await import('@open-waterhammer/excel-io')
+      const result = await parseWorkbook(await file.arrayBuffer())
+      if (result.errors.length > 0) {
+        setParseErrors(result.errors)
+        setError('Excelに入力エラーがあるため、プロジェクトは作成していません。')
+        return
+      }
+      const created = await createProjectFromExcel(workspace.repository, result.data)
+      onReady(created.data)
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : String(caught))
+    } finally {
+      setBusy(null)
+    }
+  }
+
+  async function openProject(file: File) {
+    setBusy('project')
+    setError(null)
+    setParseErrors([])
+    try {
+      await replaceProjectFile(workspace.repository, file)
+      onReady(await workspace.repository.snapshot())
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : String(caught))
+    } finally {
+      setBusy(null)
+    }
+  }
+
+  async function downloadTemplate() {
+    setBusy('template')
+    setError(null)
+    try {
+      await downloadInputTemplate()
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : String(caught))
+    } finally {
+      setBusy(null)
+    }
+  }
+
   return <main className="workspace-start">
     <header className="workspace-start__brand"><span className="mark-lines" aria-hidden="true"><i /><i /><i /></span><div><strong>OPEN WATERHAMMER</strong><small>水撃圧の設計比較ワークスペース</small></div><b>alpha</b></header>
-    <section className="workspace-start__intro"><span>ブラウザ内に保存する作業画面</span><h1>作業を始める</h1><p>新しい検討を始めるか、架空データ入りのサンプルで操作を確認できます。</p></section>
+    <section className="workspace-start__intro"><span>ブラウザ内に保存する作業画面</span><h1>作業を始める</h1><p>実案件はExcelから開始するのが推奨です。読込後はWeb画面のプロジェクトデータを正本として確認・修正します。</p></section>
     <div className="workspace-start__choices">
+      <article className="start-card start-card--sample" style={{ gridColumn: '1 / -1', minHeight: 270 }}>
+        <span className="start-card__number">01</span><div><small>実案件の推奨導線</small><h2>Excelから開始</h2><p>入力を検証してから、案件情報のプロジェクト名と最初の「編集中」の比較案を自動作成します。入力エラー時は空のプロジェクトを残しません。</p></div>
+        <div className="sample-project"><span>入力データの扱い</span><strong>Excelは初期一括入力、読込後はWeb画面が正本</strong><small>保存・共有・作業再開には .owhproj を使用します</small></div>
+        <div>
+          <label><span>入力済みExcelを選択</span><input type="file" accept=".xlsx" aria-label="Excelから開始するファイルを選択" disabled={busy !== null} onChange={(event) => { const file = event.target.files?.[0]; if (file) void openExcel(file); event.currentTarget.value = '' }} /></label>
+          <button className="start-card__button" type="button" onClick={() => void downloadTemplate()} disabled={busy !== null}>{busy === 'template' ? '準備中…' : '入力テンプレートをダウンロード'}</button>
+          <label><span>保存済みプロジェクトから再開</span><input type="file" accept=".owhproj" aria-label="owhprojプロジェクトを開く" disabled={busy !== null} onChange={(event) => { const file = event.target.files?.[0]; if (file) void openProject(file); event.currentTarget.value = '' }} /></label>
+        </div>
+      </article>
       <form className="start-card" onSubmit={submit}>
-        <span className="start-card__number">01</span><div><small>空のプロジェクト</small><h2>新規プロジェクト作成</h2><p>空の入力条件と「編集中」の比較案を1件作成します。</p></div>
-        <label><span>プロジェクト名</span><input value={projectName} onChange={(event) => setProjectName(event.target.value)} placeholder="例：○○幹線 水撃圧検討" autoFocus /></label>
+        <span className="start-card__number">02</span><div><small>補助導線</small><h2>空から始める</h2><p>Excelを使わず、空の入力条件と「編集中」の比較案を1件作成します。</p></div>
+        <label><span>プロジェクト名</span><input value={projectName} onChange={(event) => setProjectName(event.target.value)} placeholder="例：○○幹線 水撃圧検討" /></label>
         <button className="start-card__button" disabled={busy !== null}>{busy === 'blank' ? '作成中…' : '作成する'}</button>
       </form>
       <article className="start-card start-card--sample">
-        <span className="start-card__number">02</span><div><small>サンプルプロジェクト</small><h2>サンプルを開く</h2><p>入力、シナリオ、比較案が入ったサンプルで画面を確認できます。</p></div>
+        <span className="start-card__number">03</span><div><small>補助導線</small><h2>サンプルを開く</h2><p>入力、シナリオ、比較案が入ったサンプルで画面を確認できます。</p></div>
         <div className="sample-project"><span>サンプルデータ</span><strong>サンプル：N地区東部幹線水路</strong><small>実在する路線・施設とは関係ありません</small></div>
         <button className="start-card__button" type="button" onClick={() => void run('sample')} disabled={busy !== null}>{busy === 'sample' ? '準備中…' : 'このサンプルを開く'}</button>
       </article>
     </div>
     {error && <p className="workspace-start__error" role="alert">{error}</p>}
+    {parseErrors.length > 0 && <div className="workspace-start__error">{parseErrors.map((item, index) => <p key={index}>[{item.sheet}{item.row != null ? ` 行${item.row}` : ''}{item.field ? ` / ${item.field}` : ''}] {item.message}</p>)}</div>}
     <aside className="local-storage-note"><strong>データの保存場所</strong><p>入力条件と作業状態は、このブラウザ内（IndexedDB）に保存されます。GitHub Pages のサーバーには送信されず、別の端末やブラウザとも自動同期されません。バックアップや共有には <code>.owhproj</code> の書き出しを利用してください。<br />ブラウザー内の保存は暗号化保管庫ではありません。機微な施設情報は、バージョン固定のオフライン版を組織内で利用してください。</p></aside>
   </main>
 }

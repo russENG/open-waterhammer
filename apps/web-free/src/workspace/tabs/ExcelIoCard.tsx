@@ -1,28 +1,11 @@
 import type { Case, JsonValue, RunKind } from '@open-waterhammer/contracts'
 import type { ParseError, WorkbookData } from '@open-waterhammer/excel-io'
-import {
-  DEMO_CASE_01_CASE,
-  DEMO_CASE_01_NODES,
-  DEMO_CASE_01_PIPE,
-  DEMO_CASE_02_CASE,
-  DEMO_MEASUREMENT_POINTS,
-} from '@open-waterhammer/sample-data'
 import { useRef, useState } from 'react'
 
 import { ensureBrowserBuffer } from '../../reports/browser-buffer'
 import { mapWorkbookToRunInputs } from '../excel-import'
+import { downloadInputTemplate } from '../excel-template-download'
 import { useWorkspace } from '../workspace-context'
-
-function download(bytes: ArrayBuffer, name: string, type: string) {
-  const url = URL.createObjectURL(new Blob([bytes], { type }))
-  const anchor = document.createElement('a')
-  anchor.href = url
-  anchor.download = name
-  anchor.click()
-  URL.revokeObjectURL(url)
-}
-
-const XLSX_MIME = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
 
 const RUN_KIND_LABELS: Partial<Record<RunKind, string>> = {
   wave_speed: '波速計算',
@@ -76,16 +59,7 @@ export function ExcelIoCard({ caseRecord }: { caseRecord: Case }) {
 
   async function downloadTemplate() {
     try {
-      await ensureBrowserBuffer()
-      const { generateTemplate } = await import('@open-waterhammer/excel-io')
-      const buf = await generateTemplate({
-        meta: { projectName: '（案件名を入力）', standardId: 'nochi_pipeline_2021', methodId: 'joukowsky_v1' },
-        pipes: [DEMO_CASE_01_PIPE],
-        nodes: DEMO_CASE_01_NODES,
-        cases: [DEMO_CASE_01_CASE, DEMO_CASE_02_CASE],
-        measurementPoints: DEMO_MEASUREMENT_POINTS,
-      })
-      download(buf, 'waterhammer-template.xlsx', XLSX_MIME)
+      await downloadInputTemplate()
     } catch (error) {
       setStatus(error instanceof Error ? error.message : String(error))
     }

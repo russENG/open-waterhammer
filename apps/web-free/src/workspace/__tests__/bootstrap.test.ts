@@ -1,7 +1,7 @@
 import { deleteDB } from 'idb'
 import { afterEach, describe, expect, test } from 'vitest'
 
-import { createBlankProject, initializeBrowserWorkspace, installSampleWorkspace, replaceWithBlankProject } from '../bootstrap'
+import { createBlankProject, createProjectFromExcel, initializeBrowserWorkspace, installSampleWorkspace, replaceWithBlankProject } from '../bootstrap'
 
 const names: string[] = []
 
@@ -63,6 +63,64 @@ describe('browser workspace bootstrap', () => {
     expect(added.projects.map(({ name }) => name)).toEqual(['西部支線'])
     expect(added.cases).toHaveLength(1)
     expect(added.scenarios).toHaveLength(1)
+    opened.repository.close()
+  })
+
+  test('creates one editable project from validated Excel data using the workbook project name', async () => {
+    const databaseName = `owh-ui-bootstrap-${crypto.randomUUID()}`
+    names.push(databaseName)
+    const opened = await initializeBrowserWorkspace({ databaseName })
+    const workbook = {
+      meta: { projectName: '  東部幹線水撃圧検討  ', standardId: 'nochi_pipeline_2021' },
+      pipes: [{
+        id: 'P-01', name: '幹線', startNodeId: 'N-01', endNodeId: 'N-02', pipeType: 'ductile_iron' as const,
+        innerDiameter: 0.5, wallThickness: 0.008, length: 800, roughnessCoeff: 130,
+      }],
+      nodes: [],
+      cases: [{
+        id: 'C-01', name: '末端弁閉鎖', operationType: 'valve_close' as const, targetFacilityId: 'V-01',
+        initialVelocity: 1.2, initialHead: 35, closeTime: 3,
+      }],
+      measurementPoints: [],
+    }
+
+    const created = await createProjectFromExcel(opened.repository, workbook)
+
+    expect(created.data.projects[0]?.name).toBe('東部幹線水撃圧検討')
+    expect(created.data.cases).toHaveLength(1)
+    expect(created.data.cases[0]?.state).toBe('draft')
+    const snapshot = created.data.cases[0]!.modelSnapshot as Record<string, unknown>
+    expect(snapshot.excelImport).toEqual(workbook)
+    expect((snapshot.runInputs as Record<string, unknown>).wave_speed).toBeDefined()
+    expect(created.data.scenarios[0]?.eventSettings).toEqual({ closeTime: 3 })
+    opened.repository.close()
+  })
+
+  test('does not create an empty project when required Excel project information is missing', async () => {
+    const databaseName = `owh-ui-bootstrap-${crypto.randomUUID()}`
+    names.push(databaseName)
+    const opened = await initializeBrowserWorkspace({ databaseName })
+    const workbook = {
+      meta: { projectName: ' ', standardId: 'nochi_pipeline_2021' },
+      pipes: [], nodes: [], cases: [], measurementPoints: [],
+    }
+
+    await expect(createProjectFromExcel(opened.repository, workbook)).rejects.toThrow(/プロジェクト名/)
+    expect((await opened.repository.snapshot()).projects).toHaveLength(0)
+    opened.repository.close()
+  })
+
+  test('does not accept the untouched template placeholder as a project name', async () => {
+    const databaseName = `owh-ui-bootstrap-${crypto.randomUUID()}`
+    names.push(databaseName)
+    const opened = await initializeBrowserWorkspace({ databaseName })
+    const workbook = {
+      meta: { projectName: '（案件名を入力）', standardId: 'nochi_pipeline_2021' },
+      pipes: [], nodes: [], cases: [], measurementPoints: [],
+    }
+
+    await expect(createProjectFromExcel(opened.repository, workbook)).rejects.toThrow(/プロジェクト名/)
+    expect((await opened.repository.snapshot()).projects).toHaveLength(0)
     opened.repository.close()
   })
 })

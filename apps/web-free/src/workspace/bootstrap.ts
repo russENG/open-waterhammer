@@ -1,9 +1,11 @@
 import {
   alternativeFixture,
   caseFixture,
+  type JsonValue,
   projectFixture,
   scenarioFixture,
 } from '@open-waterhammer/contracts'
+import type { WorkbookData } from '@open-waterhammer/excel-io'
 import {
   exportProjectBundle,
   IndexedDBWorkspaceRepository,
@@ -12,6 +14,7 @@ import {
 } from '@open-waterhammer/workspace'
 
 import { buildSampleWorkspace } from './sample-workspace'
+import { mapWorkbookToRunInputs } from './excel-import'
 
 function isEmpty(data: WorkspaceData): boolean {
   return data.projects.length === 0 && data.alternatives.length === 0 && data.cases.length === 0
@@ -84,6 +87,39 @@ export function replaceWithBlankProject(repository: InitializableWorkspaceReposi
 
 export function installSampleWorkspace(repository: InitializableWorkspaceRepository): Promise<WorkspaceData> {
   return importIntoEmptyWorkspace(repository, buildSampleWorkspace())
+}
+
+export async function createProjectFromExcel(
+  repository: InitializableWorkspaceRepository,
+  workbook: WorkbookData,
+): Promise<{ data: WorkspaceData; warnings: string[] }> {
+  const projectName = workbook.meta.projectName.trim()
+  if (!projectName || projectName === '（案件名を入力）') {
+    throw new Error('Excelの「案件情報」にプロジェクト名を入力してください。')
+  }
+  const hasAnyData = workbook.pipes.length > 0 || workbook.nodes.length > 0
+    || workbook.cases.length > 0 || workbook.measurementPoints.length > 0
+  if (!hasAnyData) throw new Error('Excelに取り込める管路・節点・ケース・測点データがありません。')
+
+  // Parse/validation is completed by the caller before this function. Build the complete
+  // workspace in memory first, then commit it as one validated bundle so a failed import never
+  // leaves an empty Project behind in IndexedDB.
+  const mapped = mapWorkbookToRunInputs(workbook)
+  const data = buildBlankWorkspace(projectName)
+  const project = data.projects[0]!
+  if (workbook.meta.standardId.trim()) {
+    project.standardSelection = { ...project.standardSelection, profileId: workbook.meta.standardId.trim() }
+  }
+  data.alternatives[0]!.description = 'Excelから開始'
+  data.cases[0]!.modelSnapshot = {
+    runInputs: mapped.runInputs as JsonValue,
+    excelImport: workbook as unknown as JsonValue,
+    geoDrafts: [],
+    geoSourceCrs: project.crs,
+  }
+  data.scenarios[0]!.eventSettings = mapped.eventSettings as JsonValue
+
+  return { data: await importIntoEmptyWorkspace(repository, data), warnings: mapped.warnings }
 }
 
 export async function initializeBrowserWorkspace(options: OpenIndexedDBWorkspaceOptions = {}): Promise<{

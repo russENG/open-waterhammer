@@ -63,6 +63,7 @@ Open Waterhammer の利用者向け画面で使う用語と表記を定める。
 | 避ける表記 | 画面で使う表記 |
 |---|---|
 | New Case | 新しい比較案 |
+| Start from Excel | Excelから開始（実案件の主操作） |
 | Save input | 入力条件を保存 |
 | Run calculation | 計算を実行 |
 | Import as drafts | 編集中データとして読み込む |
