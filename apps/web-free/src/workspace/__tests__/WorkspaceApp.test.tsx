@@ -122,6 +122,28 @@ describe('full workspace application', () => {
     expect(screen.getByText(/比較案 2件/)).toBeVisible()
   })
 
+  test('adds and opens another blank Project from the left menu', async () => {
+    const user = userEvent.setup()
+    const { repository } = setup()
+
+    await user.click(await screen.findByRole('button', { name: '新規プロジェクト' }))
+    await user.type(screen.getByLabelText('プロジェクト名'), '西部支線 水撃圧検討')
+    await user.click(screen.getByRole('button', { name: '作成して開く' }))
+
+    let createdProjectId = ''
+    await waitFor(async () => {
+      const snapshot = await repository.snapshot()
+      expect(snapshot.projects).toHaveLength(2)
+      const created = snapshot.projects.find(({ name }) => name === '西部支線 水撃圧検討')
+      expect(created).toBeDefined()
+      createdProjectId = created!.id
+      expect(window.location.hash).toContain(`/projects/${createdProjectId}/`)
+    })
+    expect(await screen.findByRole('heading', { name: '西部支線 水撃圧検討' })).toBeVisible()
+    expect(screen.getByLabelText('プロジェクト切替')).toHaveValue(createdProjectId)
+    expect(screen.getByRole('option', { name: /サンプル：N地区東部幹線水路/ })).toBeInTheDocument()
+  })
+
   test('marks the active workspace tab with aria-current for assistive technology', async () => {
     const user = userEvent.setup()
     setup()

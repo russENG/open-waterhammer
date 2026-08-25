@@ -1,6 +1,6 @@
 import { alternativeFixture, caseFixture, projectFixture } from '@open-waterhammer/contracts'
 import { InMemoryWorkspaceRepository, type WorkspaceData } from '@open-waterhammer/workspace'
-import { render, screen } from '@testing-library/react'
+import { render, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { describe, expect, test, vi } from 'vitest'
 
@@ -22,7 +22,7 @@ function twoProjectWorkspace(): WorkspaceData {
   }
 }
 
-function renderTree(data: WorkspaceData, onSelectProject = vi.fn()) {
+function renderTree(data: WorkspaceData, onSelectProject = vi.fn(), onCreateProject = vi.fn(), onImportProject = vi.fn(async () => '読み込みました。')) {
   const repository = new InMemoryWorkspaceRepository(data)
   render(
     <WorkspaceProvider repository={repository} initialData={data}>
@@ -35,10 +35,12 @@ function renderTree(data: WorkspaceData, onSelectProject = vi.fn()) {
         onCreate={() => {}}
         onFork={() => {}}
         onSelectProject={onSelectProject}
+        onCreateProject={onCreateProject}
+        onImportProject={onImportProject}
       />
     </WorkspaceProvider>,
   )
-  return { onSelectProject }
+  return { onSelectProject, onCreateProject, onImportProject }
 }
 
 describe('WorkspaceTree Project switcher', () => {
@@ -73,5 +75,31 @@ describe('WorkspaceTree Project switcher', () => {
     renderTree(singleProjectData)
 
     expect(screen.queryByLabelText('プロジェクト切替')).not.toBeInTheDocument()
+  })
+
+  test('creates another Project from the left menu', async () => {
+    const user = userEvent.setup()
+    const onCreateProject = vi.fn(async () => {})
+    renderTree(twoProjectWorkspace(), vi.fn(), onCreateProject)
+
+    await user.click(screen.getByRole('button', { name: '新規プロジェクト' }))
+    const dialog = screen.getByRole('dialog', { name: '新規プロジェクト' })
+    await user.type(screen.getByLabelText('プロジェクト名'), '西部支線')
+    await user.click(within(dialog).getByRole('button', { name: '作成して開く' }))
+
+    expect(onCreateProject).toHaveBeenCalledWith('西部支線')
+    expect(screen.queryByRole('dialog', { name: '新規プロジェクト' })).not.toBeInTheDocument()
+  })
+
+  test('imports a Project file from the left menu', async () => {
+    const user = userEvent.setup()
+    const onImportProject = vi.fn(async () => '西部支線を読み込みました。')
+    renderTree(twoProjectWorkspace(), vi.fn(), vi.fn(), onImportProject)
+    const file = new File([new Uint8Array([1, 2, 3])], 'west.owhproj', { type: 'application/octet-stream' })
+
+    await user.upload(screen.getByTestId('tree-project-file-input'), file)
+
+    expect(onImportProject).toHaveBeenCalledWith(file)
+    expect(await screen.findByRole('status')).toHaveTextContent('西部支線を読み込みました。')
   })
 })

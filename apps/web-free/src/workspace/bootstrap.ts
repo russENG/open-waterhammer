@@ -62,10 +62,23 @@ async function importIntoEmptyWorkspace(repository: InitializableWorkspaceReposi
   return repository.snapshot()
 }
 
+async function importBlankProject(repository: InitializableWorkspaceRepository, projectName: string): Promise<WorkspaceData> {
+  const name = projectName.trim()
+  if (!name) throw new Error('プロジェクト名を入力してください。')
+  const data = buildBlankWorkspace(name)
+  await repository.importBundle(await exportProjectBundle(data, data.projects[0]!.id))
+  return repository.snapshot()
+}
+
 export function createBlankProject(repository: InitializableWorkspaceRepository, projectName: string): Promise<WorkspaceData> {
   const name = projectName.trim()
   if (!name) return Promise.reject(new Error('プロジェクト名を入力してください。'))
   return importIntoEmptyWorkspace(repository, buildBlankWorkspace(name))
+}
+
+/** 既存プロジェクトを残したまま、編集可能な空のプロジェクトを追加する。 */
+export function addBlankProject(repository: InitializableWorkspaceRepository, projectName: string): Promise<WorkspaceData> {
+  return importBlankProject(repository, projectName)
 }
 
 export function installSampleWorkspace(repository: InitializableWorkspaceRepository): Promise<WorkspaceData> {

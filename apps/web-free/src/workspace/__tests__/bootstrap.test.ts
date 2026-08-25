@@ -1,7 +1,7 @@
 import { deleteDB } from 'idb'
 import { afterEach, describe, expect, test } from 'vitest'
 
-import { createBlankProject, initializeBrowserWorkspace, installSampleWorkspace } from '../bootstrap'
+import { addBlankProject, createBlankProject, initializeBrowserWorkspace, installSampleWorkspace } from '../bootstrap'
 
 const names: string[] = []
 
@@ -49,6 +49,23 @@ describe('browser workspace bootstrap', () => {
     expect(created.cases).toHaveLength(1)
     expect(created.cases[0]?.state).toBe('draft')
     expect(created.scenarios).toHaveLength(1)
+    opened.repository.close()
+  })
+
+  test('adds a named blank project without removing the existing project', async () => {
+    const databaseName = `owh-ui-bootstrap-${crypto.randomUUID()}`
+    names.push(databaseName)
+    const opened = await initializeBrowserWorkspace({ databaseName })
+    await installSampleWorkspace(opened.repository)
+
+    const added = await addBlankProject(opened.repository, '  西部支線  ')
+
+    expect(added.projects.map(({ name }) => name)).toEqual([
+      'サンプル：N地区東部幹線水路',
+      '西部支線',
+    ])
+    expect(added.cases).toHaveLength(5)
+    expect(added.scenarios).toHaveLength(5)
     opened.repository.close()
   })
 })

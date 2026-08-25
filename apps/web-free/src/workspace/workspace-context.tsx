@@ -2,6 +2,7 @@ import {
   createCase,
   type Case,
   type JsonValue,
+  type Project,
   type Run,
   type RunKind,
   type Scenario,
@@ -15,6 +16,7 @@ import { createContext, useCallback, useContext, useMemo, useState, type ReactNo
 
 import type { LocalTransformDefinition } from '../gis/projections'
 import type { BrowserProtocolCaller } from '../runner/browser-runner'
+import { addBlankProject } from './bootstrap'
 import { evaluateRunGate } from './run-policy'
 
 export interface WorkspaceRepositoryClient extends WorkspaceRepository {
@@ -30,6 +32,7 @@ export interface WorkspaceContextValue {
   lastError: string | null
   refresh(): Promise<WorkspaceData>
   run(caseId: string, kind: RunKind): Promise<Run>
+  addProject(name: string): Promise<{ project: Project; caseRecord: Case }>
   createFrom(caseId: string): Promise<Case>
   fork(caseId: string, reason: string): Promise<Case>
   archive(caseId: string): Promise<Case>
@@ -135,6 +138,17 @@ export function WorkspaceProvider({
     await refresh()
     return calculated
   }), [callProtocol, data, executors, guarded, refresh, repository])
+
+  const addProject = useCallback((name: string) => guarded(async () => {
+    const existingIds = new Set(data.projects.map(({ id }) => id))
+    const next = await addBlankProject(repository, name)
+    const project = next.projects.find(({ id }) => !existingIds.has(id))
+    const alternative = next.alternatives.find(({ projectId }) => projectId === project?.id)
+    const caseRecord = next.cases.find(({ alternativeId }) => alternativeId === alternative?.id)
+    if (!project || !caseRecord) throw new Error('新しいプロジェクトを開けませんでした。')
+    setData(next)
+    return { project, caseRecord }
+  }), [data.projects, guarded, repository])
 
   const createFrom = useCallback((caseId: string) => guarded(async () => {
     const source = data.cases.find(({ id }) => id === caseId)
@@ -249,8 +263,8 @@ export function WorkspaceProvider({
   }), [data.cases, guarded, refresh, repository])
 
   const value = useMemo<WorkspaceContextValue>(() => ({
-    data, repository, busy, lastError, refresh, run, createFrom, fork, archive, saveModel, saveGeoDrafts, saveScenario, importExcelInputs,
-  }), [archive, busy, createFrom, data, fork, importExcelInputs, lastError, refresh, repository, run, saveGeoDrafts, saveModel, saveScenario])
+    data, repository, busy, lastError, refresh, run, addProject, createFrom, fork, archive, saveModel, saveGeoDrafts, saveScenario, importExcelInputs,
+  }), [addProject, archive, busy, createFrom, data, fork, importExcelInputs, lastError, refresh, repository, run, saveGeoDrafts, saveModel, saveScenario])
 
   return <WorkspaceContext value={value}>{children}</WorkspaceContext>
 }
