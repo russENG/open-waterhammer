@@ -136,7 +136,7 @@ export function OverviewPanel({ project, caseRecord, scenario, runs, onImported 
         </dl>
       </section>
       <section className="notebook-card schematic-card">
-        <div className="card-heading"><span>02</span><div><h2>Hydraulic line</h2><p>{scenario?.name ?? 'Scenario not configured'}</p></div></div>
+        <div className="card-heading"><span>02</span><div><h2>水理縦断</h2><p>{scenario?.name ?? 'シナリオ未設定'}</p></div></div>
         {schematic ? <div className="pipe-schematic" aria-label="Hydraulic model schematic">
           <span className="reservoir-symbol" title={schematic.upstream.id}>R</span><i /><b>{schematic.pipe.id ?? '—'}</b><i /><span className="junction-symbol" title={schematic.downstream.id}>J</span>
           <small>{formatElevation(schematic.upstream.elevation)}</small><small>{formatPipeDimensions(schematic.pipe)}</small><small>{formatElevation(schematic.downstream.elevation)}</small>
@@ -144,7 +144,7 @@ export function OverviewPanel({ project, caseRecord, scenario, runs, onImported 
       </section>
       <section className="notebook-card activity-card">
         <div className="card-heading"><span>03</span><div><h2>Recent evidence</h2><p>ローカルに保存された Run</p></div></div>
-        {runs.length ? <ol className="run-ledger">{[...runs].reverse().slice(0, 4).map((run) => <li key={run.id}><time>{new Date(run.updatedAt).toLocaleString('ja-JP')}</time><strong>{run.kind}</strong><span className={`assessment assessment--${run.assessment.status}`}>{run.assessment.status}</span></li>)}</ol> : <div className="empty-ledger"><span>∅</span><p>Analysis から計算を実行すると、manifest と結果がここに記録されます。</p></div>}
+        {runs.length ? <ol className="run-ledger">{[...runs].reverse().slice(0, 4).map((run) => <li key={run.id}><time>{new Date(run.updatedAt).toLocaleString('ja-JP')}</time><strong>{run.kind}</strong><span className={`assessment assessment--${run.assessment.status}`}>{run.assessment.status}</span></li>)}</ol> : <div className="empty-ledger"><span>∅</span><p>解析から計算を実行すると、manifest と結果がここに記録されます。</p></div>}
       </section>
     </div>
     <ProjectTransferCard project={project} onImported={onImported} />

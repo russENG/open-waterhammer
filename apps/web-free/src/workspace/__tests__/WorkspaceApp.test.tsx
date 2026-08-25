@@ -97,7 +97,7 @@ describe('full workspace application', () => {
     setup()
 
     const tabs = screen.getByRole('navigation', { name: 'Workspace tabs' })
-    for (const label of ['Overview', 'Model＋GIS', 'Scenario', 'Analysis', 'Results', 'Compare', 'Reports']) {
+    for (const label of ['概要', 'モデル＋GIS', 'シナリオ', '解析', '結果', '比較', '帳票']) {
       expect(within(tabs).getByRole('link', { name: label })).toBeVisible()
     }
 
@@ -105,7 +105,7 @@ describe('full workspace application', () => {
     expect(selectors).toHaveLength(4)
     await user.click(selectors[0]!)
     await user.click(selectors[1]!)
-    await user.click(within(tabs).getByRole('link', { name: 'Compare' }))
+    await user.click(within(tabs).getByRole('link', { name: '比較' }))
     expect(await screen.findByRole('table', { name: 'Case comparison' })).toBeVisible()
     expect(screen.getByText('2 Cases')).toBeVisible()
   })
@@ -115,13 +115,13 @@ describe('full workspace application', () => {
     setup()
     const tabs = screen.getByRole('navigation', { name: 'Workspace tabs' })
 
-    expect(await within(tabs).findByRole('link', { name: 'Overview' })).toHaveAttribute('aria-current', 'page')
-    expect(within(tabs).getByRole('link', { name: 'Scenario' })).not.toHaveAttribute('aria-current')
+    expect(await within(tabs).findByRole('link', { name: '概要' })).toHaveAttribute('aria-current', 'page')
+    expect(within(tabs).getByRole('link', { name: 'シナリオ' })).not.toHaveAttribute('aria-current')
 
-    await user.click(within(tabs).getByRole('link', { name: 'Scenario' }))
+    await user.click(within(tabs).getByRole('link', { name: 'シナリオ' }))
 
-    expect(await within(tabs).findByRole('link', { name: 'Scenario' })).toHaveAttribute('aria-current', 'page')
-    expect(within(tabs).getByRole('link', { name: 'Overview' })).not.toHaveAttribute('aria-current')
+    expect(await within(tabs).findByRole('link', { name: 'シナリオ' })).toHaveAttribute('aria-current', 'page')
+    expect(within(tabs).getByRole('link', { name: '概要' })).not.toHaveAttribute('aria-current')
   })
 
   test('New Case creates an independent empty draft instead of cloning the selected snapshot', async () => {
@@ -141,7 +141,7 @@ describe('full workspace application', () => {
       name: '新規シナリオ', boundaryConditions: {}, eventSettings: {}, protectionSettings: {},
     })
 
-    await user.click(within(tabs).getByRole('link', { name: 'Analysis' }))
+    await user.click(within(tabs).getByRole('link', { name: '解析' }))
     expect(await screen.findByText('FORM INPUT ONLY', {}, { timeout: 5_000 })).toBeVisible()
     expect(screen.getByRole('button', { name: 'Run calculation' })).toBeDisabled()
 
@@ -155,7 +155,7 @@ describe('full workspace application', () => {
     const { repository } = setup()
     const tabs = screen.getByRole('navigation', { name: 'Workspace tabs' })
     await user.click(screen.getByRole('button', { name: 'New Case' }))
-    await user.click(within(tabs).getByRole('link', { name: 'Analysis' }))
+    await user.click(within(tabs).getByRole('link', { name: '解析' }))
 
     // Default kind (wave_speed) is a form-only calculation: no GIS topology needed at all.
     expect(await screen.findByText('FORM INPUT ONLY', {}, { timeout: 5_000 })).toBeVisible()
@@ -184,7 +184,7 @@ describe('full workspace application', () => {
     const { data, repository } = setup()
     const tabs = screen.getByRole('navigation', { name: 'Workspace tabs' })
     await user.click(screen.getByRole('button', { name: 'New Case' }))
-    await user.click(within(tabs).getByRole('link', { name: 'Analysis' }))
+    await user.click(within(tabs).getByRole('link', { name: '解析' }))
     await user.click(await screen.findByRole('radio', { name: /Steady network \/ Python/ }))
 
     const caseName = screen.getByLabelText('解析ケース名')
@@ -212,7 +212,7 @@ describe('full workspace application', () => {
     const user = userEvent.setup()
     const { data, repository } = setup()
     const tabs = screen.getByRole('navigation', { name: 'Workspace tabs' })
-    await user.click(within(tabs).getByRole('link', { name: 'Analysis' }))
+    await user.click(within(tabs).getByRole('link', { name: '解析' }))
     await user.click(await screen.findByRole('radio', { name: /Transient network/ }))
 
     const rename = screen.getByLabelText('New ID for 節点 V-01')
@@ -253,7 +253,7 @@ describe('full workspace application', () => {
     const { data, repository } = setup()
     const tabs = screen.getByRole('navigation', { name: 'Workspace tabs' })
     await user.click(screen.getByRole('button', { name: 'New Case' }))
-    await user.click(within(tabs).getByRole('link', { name: 'Analysis' }))
+    await user.click(within(tabs).getByRole('link', { name: '解析' }))
 
     for (const kind of RUN_KINDS) {
       await user.click(document.querySelector<HTMLInputElement>(`input[type="radio"][value="${kind}"]`)!)
@@ -277,7 +277,7 @@ describe('full workspace application', () => {
     const { data, repository } = setup()
     const tabs = screen.getByRole('navigation', { name: 'Workspace tabs' })
     await user.click(screen.getByRole('button', { name: 'New Case' }))
-    await user.click(within(tabs).getByRole('link', { name: 'Analysis' }))
+    await user.click(within(tabs).getByRole('link', { name: '解析' }))
 
     await user.click(await screen.findByRole('radio', { name: /Steady single pipe/ }))
     await user.selectOptions(screen.getByLabelText('計算方式'), 'darcy-weisbach')
@@ -310,7 +310,7 @@ describe('full workspace application', () => {
     const { repository } = setup()
     const tabs = screen.getByRole('navigation', { name: 'Workspace tabs' })
 
-    await user.click(within(tabs).getByRole('link', { name: 'Analysis' }))
+    await user.click(within(tabs).getByRole('link', { name: '解析' }))
     const diameter = await screen.findByLabelText(/管内径/)
     await user.clear(diameter)
     await user.type(diameter, '0.31')
@@ -337,7 +337,7 @@ describe('full workspace application', () => {
     const user = userEvent.setup()
     const { data, repository } = setup()
     const tabs = screen.getByRole('navigation', { name: 'Workspace tabs' })
-    await user.click(within(tabs).getByRole('link', { name: 'Analysis' }))
+    await user.click(within(tabs).getByRole('link', { name: '解析' }))
     await user.click(await screen.findByRole('radio', { name: /Empirical pressure/ }))
 
     const optional = screen.getByLabelText(/通水圧/)
@@ -363,7 +363,7 @@ describe('full workspace application', () => {
     const { repository } = setup()
     const tabs = screen.getByRole('navigation', { name: 'Workspace tabs' })
 
-    await user.click(within(tabs).getByRole('link', { name: 'Model＋GIS' }))
+    await user.click(within(tabs).getByRole('link', { name: 'モデル＋GIS' }))
     await user.click(await screen.findByRole('button', { name: 'Import GeoJSON' }, { timeout: 10_000 }))
     const dialog = await screen.findByRole('dialog', { name: 'GeoJSON import wizard' })
     await user.selectOptions(within(dialog).getByLabelText('Source CRS — never inferred'), 'LOCAL:XY')
@@ -392,7 +392,7 @@ describe('full workspace application', () => {
     const user = userEvent.setup()
     const { repository } = setup()
     const tabs = screen.getByRole('navigation', { name: 'Workspace tabs' })
-    await user.click(within(tabs).getByRole('link', { name: 'Model＋GIS' }))
+    await user.click(within(tabs).getByRole('link', { name: 'モデル＋GIS' }))
     await user.click(await screen.findByRole('button', { name: 'Import GeoJSON' }, { timeout: 10_000 }))
     const dialog = await screen.findByRole('dialog', { name: 'GeoJSON import wizard' })
     await user.selectOptions(within(dialog).getByLabelText('Source CRS — never inferred'), 'LOCAL:XY')

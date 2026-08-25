@@ -20,13 +20,13 @@ const ResultsPanel = lazy(() => import('../results/ResultsPanel').then((module) 
 const ReportsPanel = lazy(() => import('./tabs/ReportsPanel').then((module) => ({ default: module.ReportsPanel })))
 
 const TAB_LABELS: Record<WorkspaceTab, string> = {
-  overview: 'Overview',
-  'model-gis': 'Model＋GIS',
-  scenario: 'Scenario',
-  analysis: 'Analysis',
-  results: 'Results',
-  compare: 'Compare',
-  reports: 'Reports',
+  overview: '概要',
+  'model-gis': 'モデル＋GIS',
+  scenario: 'シナリオ',
+  analysis: '解析',
+  results: '結果',
+  compare: '比較',
+  reports: '帳票',
 }
 
 function canonicalPath(projectId: string, caseId: string, tab: WorkspaceTab) {

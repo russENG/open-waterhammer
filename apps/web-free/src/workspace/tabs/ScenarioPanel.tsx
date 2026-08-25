@@ -24,16 +24,16 @@ export function ScenarioPanel({ scenario, locked }: { scenario?: Scenario; locke
         eventSettings: JSON.parse(event),
         protectionSettings: JSON.parse(protection),
       })
-      setMessage('Scenario saved')
+      setMessage('シナリオを保存しました')
     } catch (error) {
       setMessage(error instanceof Error ? error.message : String(error))
     }
   }
 
   return <div className="panel-stack">
-    <div className="panel-title-row"><div><span className="eyebrow">BOUNDARY RECORD / 03</span><h1>Scenario</h1><p>境界条件、操作イベント、防護工条件を Run から独立したスナップショットとして記録します。</p></div>{locked && <span className="lock-note">LOCKED · FORK TO EDIT</span>}</div>
+    <div className="panel-title-row"><div><span className="eyebrow">BOUNDARY RECORD / 03</span><h1>シナリオ</h1><p>境界条件、操作イベント、防護工条件を Run から独立したスナップショットとして記録します。</p></div>{locked && <span className="lock-note">LOCKED · FORK TO EDIT</span>}</div>
     <fieldset disabled={locked || busy} className="scenario-fieldset">
-      <label className="field-wide"><span>Scenario name</span><input value={name} onChange={(eventObject) => setName(eventObject.target.value)} /></label>
+      <label className="field-wide"><span>シナリオ名</span><input value={name} onChange={(eventObject) => setName(eventObject.target.value)} /></label>
       <div className="json-editor-grid">
         <label><span>Boundary conditions</span><textarea value={boundary} onChange={(eventObject) => setBoundary(eventObject.target.value)} spellCheck={false} /></label>
         <label><span>Event settings</span><textarea value={event} onChange={(eventObject) => setEvent(eventObject.target.value)} spellCheck={false} /></label>

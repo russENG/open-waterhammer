@@ -49,14 +49,14 @@ function toNetworkPipe(pipe: PipeRow): Record<string, unknown> {
 function toNetworkNode(node: NodeRow, warnings: string[]): Record<string, unknown> {
   const mappedType = NETWORK_NODE_TYPE_BY_EXCEL_TYPE[node.nodeType]
   if (!mappedType) {
-    warnings.push(`節点 ${node.id}: 節点種別「${node.nodeType}」は管路網モデルに直接対応する種別がないため、junction として取り込みました。Analysis タブで確認してください。`)
+    warnings.push(`節点 ${node.id}: 節点種別「${node.nodeType}」は管路網モデルに直接対応する種別がないため、junction として取り込みました。解析タブで確認してください。`)
   }
   const type = mappedType ?? 'junction'
   const result: Record<string, unknown> = { id: node.id, elevation: node.elevation, type }
   if (node.hydraulicGrade !== undefined) {
     result.head = node.hydraulicGrade
   } else if (type === 'reservoir') {
-    warnings.push(`節点 ${node.id}: reservoir ですが動水位（hydraulic_grade）が未入力のため head を設定していません。Analysis タブで確認してください。`)
+    warnings.push(`節点 ${node.id}: reservoir ですが動水位（hydraulic_grade）が未入力のため head を設定していません。解析タブで確認してください。`)
   }
   return result
 }
@@ -87,7 +87,7 @@ export function mapWorkbookToRunInputs(data: WorkbookData): { runInputs: Partial
 
   if (data.measurementPoints.length > 0) {
     runInputs.longitudinal_hydraulics = { points: data.measurementPoints, staticWaterLevel: 0 }
-    warnings.push('longitudinal_hydraulics の静水位（staticWaterLevel）は既定値 0 で作成しました。Analysis タブで実際の値を確認・入力してください。')
+    warnings.push('longitudinal_hydraulics の静水位（staticWaterLevel）は既定値 0 で作成しました。解析タブで実際の値を確認・入力してください。')
   }
 
   if (data.pipes.length > 0 && data.nodes.length > 0) {

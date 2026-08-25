@@ -101,8 +101,8 @@ export function ResultsPanel({ runs, selectedRun, focus, onSelectRun, onFocus }:
   const envelopeYRange = envelope ? extent([...envelope.maximum, ...envelope.minimum, ...envelope.steady]) : undefined
   const profileYRange = envelope ? extent(envelope.steady) : undefined
   return <div className="panel-stack results-panel">
-    <div className="panel-title-row"><div><span className="eyebrow">RUN EVIDENCE / 05</span><h1>Results</h1><p>summary、圧力包絡、縦断、時系列を同じ永続化済み Run 証跡から描画します。</p></div>{run && <select className="run-selector" value={run.id} onChange={(event) => { const found = runs.find(({ id }) => id === event.target.value); if (found) onSelectRun(found) }}>{[...runs].reverse().map((item) => <option value={item.id} key={item.id}>{item.kind} · {item.status}</option>)}</select>}</div>
-    {!run ? <div className="comparison-empty"><span>R—00</span><p>Analysis で計算を実行してください。</p></div> : <>
+    <div className="panel-title-row"><div><span className="eyebrow">RUN EVIDENCE / 05</span><h1>結果</h1><p>summary、圧力包絡、縦断、時系列を同じ永続化済み Run 証跡から描画します。</p></div>{run && <select className="run-selector" value={run.id} onChange={(event) => { const found = runs.find(({ id }) => id === event.target.value); if (found) onSelectRun(found) }}>{[...runs].reverse().map((item) => <option value={item.id} key={item.id}>{item.kind} · {item.status}</option>)}</select>}</div>
+    {!run ? <div className="comparison-empty"><span>R—00</span><p>解析で計算を実行してください。</p></div> : <>
       <div className="result-summary-strip"><article><span>STATUS</span><strong>{run.status}</strong></article><article><span>ASSESSMENT</span><strong>{run.assessment.status}</strong></article>{visuals!.summaryMetrics.slice(0, 2).map((metric) => <article key={metric.path}><span>{metric.path}</span><strong>{metric.value.toPrecision(5)}</strong></article>)}</div>
       <div className="result-visual-grid">
         <section className="notebook-card chart-card chart-card--wide">

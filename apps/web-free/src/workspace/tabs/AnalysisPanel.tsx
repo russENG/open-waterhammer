@@ -152,7 +152,7 @@ export function AnalysisPanel({ caseRecord, onRunSelected }: { caseRecord: Case;
   }
 
   return <div className="panel-stack analysis-panel">
-    <div className="panel-title-row"><div><span className="eyebrow">LOCAL CALCULATION / 04</span><h1>Analysis</h1><p>11種類の計算は共通 CalculationRunner を経由し、完了した Run が Case を固定します。</p></div><span className="offline-ticket">LOCAL / OFFLINE</span></div>
+    <div className="panel-title-row"><div><span className="eyebrow">LOCAL CALCULATION / 04</span><h1>解析</h1><p>11種類の計算は共通 CalculationRunner を経由し、完了した Run が Case を固定します。</p></div><span className="offline-ticket">LOCAL / OFFLINE</span></div>
     <details className="method-selection-guide"><summary>計算方法の選び方（§8.3.2 参照）</summary><MethodSelectionGuide onRecommend={selectKind} /></details>
     <div className="analysis-layout">
       <div className="run-kind-list" role="radiogroup" aria-label="Run kind">
@@ -163,7 +163,7 @@ export function AnalysisPanel({ caseRecord, onRunSelected }: { caseRecord: Case;
       </div>
       <section className="analysis-editor notebook-card">
         <div className="analysis-editor-heading"><div><span className="eyebrow">{KIND_COPY[kind].code} INPUT</span><h2>{KIND_COPY[kind].title}</h2></div><span className={`validation-badge ${gate.canRun ? 'validation-badge--ok' : 'validation-badge--ng'}`}>{!isTopologyKind ? 'FORM INPUT ONLY' : gate.canRun ? 'MODEL READY' : gate.reason === 'topology_invalid' ? `${Object.keys(gate.errorsByFeature).length} INVALID` : 'GIS / TOPOLOGY REQUIRED'}</span></div>
-        <p className="field-help">方式別の主要設計値を単位付きで編集します。Scenario に属する操作条件も同じ保存操作で記録されます。</p>
+        <p className="field-help">方式別の主要設計値を単位付きで編集します。シナリオに属する操作条件も同じ保存操作で記録されます。</p>
         {draftsBrokenNonBlocking && <p className="inline-message">GIS drafts contain {Object.keys(gate.errorsByFeature).length} invalid feature(s) — this Run kind does not read them, so it is not blocked.</p>}
         {collections.length > 0 && <div className="engineering-collections">{collections.map((collection) => {
           const rows = readEngineeringValue(engineering, collection)

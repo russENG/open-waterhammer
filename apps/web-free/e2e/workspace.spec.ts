@@ -5,7 +5,7 @@ import { expect, test, type Page } from '@playwright/test'
 // can go straight to Analysis without importing any GIS topology first.
 async function createBlankCase(page: Page) {
   await page.getByRole('button', { name: 'New Case' }).click()
-  await page.getByRole('link', { name: 'Analysis' }).click()
+  await page.getByRole('link', { name: '解析' }).click()
 }
 
 test('global navigation moves between the workspace and documentation pages', async ({ page }) => {
@@ -35,7 +35,7 @@ test('create, edit, execute, lock, fork, compare, reload, export, and import', a
 
   await page.getByRole('button', { name: 'New Case' }).click()
   await expect.poll(() => page.locator('.case-row').count()).toBe(5)
-  await page.getByRole('link', { name: 'Analysis' }).click()
+  await page.getByRole('link', { name: '解析' }).click()
   await expect(page.getByText('FORM INPUT ONLY')).toBeVisible()
 
   // A topology-required kind on this untouched Case stays blocked: no GIS drafts and no
@@ -60,12 +60,12 @@ test('create, edit, execute, lock, fork, compare, reload, export, and import', a
 
   await page.locator('.case-row').filter({ hasText: '基準案' }).getByRole('button').click()
 
-  await page.getByRole('link', { name: 'Scenario' }).click()
-  await page.getByLabel('Scenario name').fill('E2E valve closure comparison')
+  await page.getByRole('link', { name: 'シナリオ' }).click()
+  await page.getByLabel('シナリオ名').fill('E2E valve closure comparison')
   await page.getByRole('button', { name: 'Save scenario' }).click()
-  await expect(page.getByRole('status')).toHaveText('Scenario saved')
+  await expect(page.getByRole('status')).toHaveText('シナリオを保存しました')
 
-  await page.getByRole('link', { name: 'Analysis' }).click()
+  await page.getByRole('link', { name: '解析' }).click()
   await page.getByRole('radio', { name: /Steady network \/ EPANET/ }).check()
   await page.getByRole('button', { name: 'Run calculation' }).click()
   await expect(page.getByRole('status')).toHaveText('Run succeeded', { timeout: 60_000 })
@@ -77,7 +77,7 @@ test('create, edit, execute, lock, fork, compare, reload, export, and import', a
   await fork.getByRole('button', { name: 'Create fork' }).click()
   await expect(page.locator('.workspace-breadcrumb').getByText('E2E 防護工比較', { exact: true })).toBeVisible()
 
-  await page.getByRole('link', { name: 'Compare' }).click()
+  await page.getByRole('link', { name: '比較' }).click()
   await expect(page.getByRole('table', { name: 'Case comparison' })).toBeVisible()
   await expect(page.getByText('2 Cases')).toBeVisible()
 
@@ -85,7 +85,7 @@ test('create, edit, execute, lock, fork, compare, reload, export, and import', a
   await expect(page.locator('.workspace-breadcrumb').getByText('E2E 防護工比較', { exact: true })).toBeVisible()
   await expect(page.locator('.state-pill')).toHaveText('draft')
 
-  await page.getByRole('link', { name: 'Model＋GIS' }).click()
+  await page.getByRole('link', { name: 'モデル＋GIS' }).click()
   await page.getByRole('button', { name: 'Import GeoJSON' }).click()
   const importDialog = page.getByRole('dialog', { name: 'GeoJSON import wizard' })
   await importDialog.getByLabel('GeoJSON').fill(JSON.stringify({
@@ -103,14 +103,14 @@ test('create, edit, execute, lock, fork, compare, reload, export, and import', a
   await expect((await geojsonDownload).suggestedFilename()).toMatch(/-wgs84\.geojson$/)
 
   await page.reload()
-  await page.getByRole('link', { name: 'Model＋GIS' }).click()
+  await page.getByRole('link', { name: 'モデル＋GIS' }).click()
   await expect(page.getByText('N-E2E')).toBeVisible()
 
   // Task 4b-4: this fork inherited 基準案's SAMPLE_RUN_INPUTS (fork preserves modelSnapshot
   // verbatim), so joukowsky_allievi's input — pipe/calculationCase/allowablePressureMpa — is
   // already saved; selecting the kind starts non-dirty and "Run calculation" is enabled
   // immediately, same as the untouched Steady network / EPANET run above needed no fresh Save.
-  await page.getByRole('link', { name: 'Analysis' }).click()
+  await page.getByRole('link', { name: '解析' }).click()
   await page.getByRole('radio', { name: /Joukowsky \/ Allievi/ }).check()
   await page.getByRole('button', { name: 'Run calculation' }).click()
   await expect(page.getByRole('status')).toHaveText('Run succeeded', { timeout: 60_000 })
@@ -118,7 +118,7 @@ test('create, edit, execute, lock, fork, compare, reload, export, and import', a
   // The deliverable 水理計算書・検討書 button (Part (b)) only enables once a succeeded
   // joukowsky_allievi or longitudinal_hydraulics Run exists for the Case; verify it end-to-end
   // (buildReportInput -> generateDeliverableExcel, no recalculation) with a real download.
-  await page.getByRole('link', { name: 'Reports' }).click()
+  await page.getByRole('link', { name: '帳票' }).click()
   const deliverableButton = page.getByRole('button', { name: /水理計算書・検討書/ })
   await expect(deliverableButton).toBeEnabled()
   const deliverableDownload = page.waitForEvent('download')
@@ -131,7 +131,7 @@ test('create, edit, execute, lock, fork, compare, reload, export, and import', a
   // alone would match three rows.
   await page.locator('.case-row').filter({ hasText: 'locked' }).filter({ hasText: '基準案' }).getByRole('button').click()
   await expect(page.locator('.state-pill')).toHaveText('locked')
-  await page.getByRole('link', { name: 'Reports' }).click()
+  await page.getByRole('link', { name: '帳票' }).click()
   const jsonDownload = page.waitForEvent('download')
   await page.getByRole('button', { name: /Run JSON/ }).click()
   await expect((await jsonDownload).suggestedFilename()).toMatch(/^run-.+\.json$/)
@@ -142,7 +142,7 @@ test('create, edit, execute, lock, fork, compare, reload, export, and import', a
 
   // Task 4b-10: project bundle export/import (.owhproj) — the browser workspace's counterpart
   // to the CLI's exportProjectBundle/importProjectBundle round trip (packages/workspace).
-  await page.getByRole('link', { name: 'Overview' }).click()
+  await page.getByRole('link', { name: '概要' }).click()
   const projectDownload = page.waitForEvent('download')
   await page.getByRole('button', { name: /プロジェクトを書き出し/ }).click()
   const download = await projectDownload
@@ -167,7 +167,7 @@ test('desktop and narrow workspace keep semantic landmarks without serious acces
   const desktop = await new AxeBuilder({ page }).analyze()
   expect(desktop.violations.filter(({ impact }) => impact === 'critical' || impact === 'serious')).toEqual([])
 
-  await page.getByRole('link', { name: 'Analysis' }).click()
+  await page.getByRole('link', { name: '解析' }).click()
   await page.getByRole('radio', { name: /Steady network \/ Python/ }).check()
   await expect(page.getByLabel('解析ケース名')).toBeVisible()
   await page.setViewportSize({ width: 390, height: 844 })
@@ -208,7 +208,7 @@ test('all exact RunKinds execute and persist through the production browser regi
   expect(csp).not.toContain('cdn.jsdelivr.net')
 
   await page.getByRole('button', { name: 'New Case' }).click()
-  await page.getByRole('link', { name: 'Model＋GIS' }).click()
+  await page.getByRole('link', { name: 'モデル＋GIS' }).click()
   await page.getByRole('button', { name: 'Import GeoJSON' }).click()
   const importDialog = page.getByRole('dialog', { name: 'GeoJSON import wizard' })
   await importDialog.getByLabel('GeoJSON').fill(JSON.stringify({
@@ -221,7 +221,7 @@ test('all exact RunKinds execute and persist through the production browser regi
   }))
   await importDialog.getByRole('button', { name: 'Import as drafts' }).click()
   await expect(page.getByText('HYDRAULICS VALID', { exact: true })).toBeVisible()
-  await page.getByRole('link', { name: 'Analysis' }).click()
+  await page.getByRole('link', { name: '解析' }).click()
   for (const [index, kind] of runKinds.entries()) {
     await page.locator(`input[type="radio"][value="${kind}"]`).check()
     await expect(page.getByRole('button', { name: 'Run calculation' })).toContainText('Save before Run')

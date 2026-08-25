@@ -79,7 +79,7 @@ export function ReportsPanel({ runs }: { runs: Run[] }) {
   }
 
   return <div className="panel-stack reports-panel">
-    <div className="panel-title-row"><div><span className="eyebrow">EVIDENCE EXPORT / 07</span><h1>Reports</h1><p>再計算せず、保存済み Run の manifest・summary・assessment をそのまま成果にします。</p></div></div>
+    <div className="panel-title-row"><div><span className="eyebrow">EVIDENCE EXPORT / 07</span><h1>帳票</h1><p>再計算せず、保存済み Run の manifest・summary・assessment をそのまま成果にします。</p></div></div>
     <div className="reports-grid">
       <section className="notebook-card report-selector"><div className="card-heading"><span>R</span><div><h2>Persisted Run</h2><p>エクスポート対象を選択</p></div></div>
         {runs.length ? <label><span>Run record</span><select value={selected?.id} onChange={(event) => setSelectedId(event.target.value)}>{[...runs].reverse().map((run) => <option key={run.id} value={run.id}>{run.kind} · {run.status} · {new Date(run.updatedAt).toLocaleString('ja-JP')}</option>)}</select></label> : <div className="empty-ledger"><span>∅</span><p>保存済み Run がありません。</p></div>}
