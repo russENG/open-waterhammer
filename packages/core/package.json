@@ -19,6 +19,6 @@
   "license": "AGPL-3.0-or-later",
   "devDependencies": {
     "@types/node": "^26.2.0",
-    "tsx": "^4.21.0"
+    "tsx": "^4.23.12"
   }
 }
