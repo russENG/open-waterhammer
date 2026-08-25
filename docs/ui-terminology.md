@@ -74,6 +74,9 @@ Open Waterhammer の利用者向け画面で使う用語と表記を定める。
 | Auto layout / schematic | 模式図（「位置・距離は実座標ではありません」を併記する） |
 | Input profile / result profile | 入力確認図（計算前） / 計算結果重ね合わせ図 |
 | Pressure-wave animation | 圧力波の伝播 / 圧力波アニメーション | 操作部では「再生」「一時停止」「時刻」「再生速度」「表示量」を使う |
+| Primary analysis | 主要解析 | MOCによる管路網・ポンプ・防護工・単一管路の過渡解析 |
+| Preparation calculation | 準備計算 | 波速・定常状態・縦断条件を確認する工程 |
+| Quick check | 簡易確認 | 概算・検算・教育・数値解析との比較用途。数値解析の代替とは表現しない |
 | Export | 書き出す |
 | Import | 読み込む |
 | Open Project | プロジェクトを開く |

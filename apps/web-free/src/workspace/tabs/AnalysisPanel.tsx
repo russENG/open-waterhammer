@@ -1,4 +1,4 @@
-import { RUN_KINDS, type Case, type JsonValue, type Run, type RunKind, type Scenario } from '@open-waterhammer/contracts'
+import type { Case, JsonValue, Run, RunKind, Scenario } from '@open-waterhammer/contracts'
 import { useMemo, useState } from 'react'
 
 import {
@@ -14,9 +14,13 @@ import {
   type EngineeringField,
   type EngineeringState,
 } from '../engineering-fields'
+import { engineeringFieldKey, isAdvancedEngineeringField } from '../analysis-methods'
 import { MethodSelectionGuide } from '../MethodSelectionGuide'
 import { evaluateRunGate, TOPOLOGY_REQUIRED_KINDS } from '../run-policy'
 import { useWorkspace } from '../workspace-context'
+import { AnalysisMethodSelector } from './AnalysisMethodSelector'
+import { EngineeringFieldControl } from './EngineeringFieldControl'
+import './AnalysisPanel.css'
 
 const KIND_COPY: Record<RunKind, { code: string; title: string; note: string }> = {
   wave_speed: { code: 'A01', title: '波速', note: '管材・管厚・拘束条件' },
@@ -66,6 +70,8 @@ export function AnalysisPanel({
   const isTopologyKind = TOPOLOGY_REQUIRED_KINDS.has(kind)
   const draftsBrokenNonBlocking = !isTopologyKind && hasHydraulicDrafts && Object.keys(gate.errorsByFeature).length > 0
   const fields = engineeringFieldsFor(kind, engineering)
+  const primaryFields = fields.filter((field) => !isAdvancedEngineeringField(kind, field))
+  const advancedFields = fields.filter((field) => isAdvancedEngineeringField(kind, field))
   const collections = ENGINEERING_COLLECTIONS[kind]
 
   function selectKind(next: RunKind) {
@@ -163,15 +169,16 @@ export function AnalysisPanel({
   }
 
   return <div className="panel-stack analysis-panel">
-    <div className="panel-title-row"><div><span className="eyebrow">ローカル計算 / 04</span><h1>解析</h1><p>選択した比較案とシナリオの組合せで計算し、成功時に入力条件を固定します。</p></div><label><span>計算するシナリオ</span><select aria-label="計算するシナリオ" value={scenario?.id ?? ''} onChange={(event) => onScenarioSelect(event.target.value)}>{scenarios.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}</select></label></div>
+    <div className="panel-title-row"><div><span className="eyebrow">ローカル計算 / 04</span><h1>解析</h1><p>主要解析は特性曲線法による数値解析です。準備計算で条件を確認し、簡易式は概算・検算に使います。</p></div><label><span>計算するシナリオ</span><select aria-label="計算するシナリオ" value={scenario?.id ?? ''} onChange={(event) => onScenarioSelect(event.target.value)}>{scenarios.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}</select></label></div>
+    <ol className="analysis-sequence" aria-label="推奨する解析順序">
+      <li><b>1</b><span><strong>入力確認</strong>管路・節点・測点とシナリオを確認</span></li>
+      <li><b>2</b><span><strong>準備計算</strong>波速・定常状態・縦断条件を確認</span></li>
+      <li className="analysis-sequence--primary"><b>3</b><span><strong>主要解析</strong>特性曲線法で上昇圧・下降圧と防護効果を評価</span></li>
+      <li><b>4</b><span><strong>簡易確認</strong>概算式と比較し採用値を検討</span></li>
+    </ol>
     <details className="method-selection-guide"><summary>計算方法の選び方（§8.3.2 参照）</summary><MethodSelectionGuide onRecommend={selectKind} /></details>
     <div className="analysis-layout">
-      <div className="run-kind-list" role="radiogroup" aria-label="計算の種類">
-        {RUN_KINDS.map((item) => <label key={item} className={item === kind ? 'run-kind-card run-kind-card--active' : 'run-kind-card'}>
-          <input type="radio" name="run-kind" value={item} checked={item === kind} onChange={() => selectKind(item)} />
-          <span>{KIND_COPY[item].code}</span><div><strong>{KIND_COPY[item].title}</strong><small>{KIND_COPY[item].note}</small></div>
-        </label>)}
-      </div>
+      <AnalysisMethodSelector selectedKind={kind} locked={caseRecord.state !== 'draft'} copy={KIND_COPY} onSelect={selectKind} />
       <section className="analysis-editor notebook-card">
         <div className="analysis-editor-heading"><div><span className="eyebrow">{KIND_COPY[kind].code} 入力</span><h2>{KIND_COPY[kind].title}</h2></div><span className={`validation-badge ${gate.canRun ? 'validation-badge--ok' : 'validation-badge--ng'}`}>{!isTopologyKind ? 'フォーム入力のみ' : gate.canRun ? 'モデル準備完了' : gate.reason === 'topology_invalid' ? `不正要素 ${Object.keys(gate.errorsByFeature).length}件` : 'GIS / 管路網データが必要'}</span></div>
         <p className="field-help">方式別の主要設計値を単位付きで編集します。シナリオに属する操作条件も同じ保存操作で記録されます。</p>
@@ -187,15 +194,8 @@ export function AnalysisPanel({
                 return <li key={key} className="engineering-record-row"><label className="engineering-record-id"><span>{collection.label} ID</span><input aria-label={`${collection.label} ${key}の新しいID`} value={recordKeyDrafts[draftKey] ?? key} onChange={(event) => setRecordKeyDrafts((current) => ({ ...current, [draftKey]: event.target.value }))} disabled={caseRecord.state !== 'draft'} /></label><button type="button" onClick={() => renameCollectionKey(collection, key)} disabled={caseRecord.state !== 'draft' || (recordKeyDrafts[draftKey] ?? key) === key} aria-label={`${collection.label} ${key}のIDを変更`}>変更</button><button type="button" onClick={() => removeCollection(collection, key)} disabled={caseRecord.state !== 'draft' || count <= collection.minimumItems} aria-label={`${collection.label} ${key}を削除`}>削除</button></li>
               })}</ol></section>
         })}</div>}
-        <div className="engineering-field-grid">{fields.map((field) => {
-          const value = readEngineeringValue(engineering, field)
-          const id = `engineering-${field.target}-${field.path.replace(/[^a-zA-Z0-9]/g, '-')}`
-          return <label key={`${field.target}.${field.path}`} htmlFor={id}><span>{field.label}{field.unit && <b>{field.unit}</b>}</span>{field.kind === 'select'
-            ? <select id={id} value={typeof value === 'string' ? value : ''} onChange={(event) => updateField(field, event.target.value)} disabled={caseRecord.state !== 'draft'}><option value="">選択してください</option>{field.options?.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}</select>
-            : field.kind === 'boolean'
-              ? <input id={id} type="checkbox" checked={value === true} onChange={(event) => updateField(field, event.target.checked)} disabled={caseRecord.state !== 'draft'} />
-              : <input id={id} type={field.kind === 'number' ? 'number' : 'text'} step={field.kind === 'number' ? 'any' : undefined} value={typeof value === 'string' || typeof value === 'number' ? value : ''} onChange={(event) => updateField(field, event.target.value)} disabled={caseRecord.state !== 'draft'} />}</label>
-        })}</div>
+        <div className="engineering-field-grid">{primaryFields.map((field) => <EngineeringFieldControl key={engineeringFieldKey(field)} field={field} value={readEngineeringValue(engineering, field)} locked={caseRecord.state !== 'draft'} onChange={(raw) => updateField(field, raw)} />)}</div>
+        {advancedFields.length > 0 && <details className="advanced-engineering-fields"><summary>詳細な計算条件（{advancedFields.length}項目）</summary><p>通常は初期値を使います。式固有の条件や許容値を確認するときに開いてください。</p><div className="engineering-field-grid">{advancedFields.map((field) => <EngineeringFieldControl key={engineeringFieldKey(field)} field={field} value={readEngineeringValue(engineering, field)} locked={caseRecord.state !== 'draft'} onChange={(raw) => updateField(field, raw)} />)}</div></details>}
         <details className="advanced-json"><summary>詳細設定 · 正準JSON</summary><label className="model-editor"><span>モデル入力</span><textarea value={modelText} onChange={(event) => { setModelText(event.target.value); setDirty(true); try { setEngineering({ ...engineering, model: JSON.parse(event.target.value) as JsonValue }) } catch { /* Retain invalid draft text until save. */ } }} disabled={caseRecord.state !== 'draft'} spellCheck={false} /></label></details>
         <div className="analysis-actions"><button onClick={() => void saveInput()} disabled={busy || caseRecord.state !== 'draft'}>入力条件を保存</button><button className="run-button" onClick={() => void execute()} disabled={busy || dirty || caseRecord.state !== 'draft' || !gate.canRun} aria-label="計算を実行"><span>▶</span>{busy ? '計算中…' : dirty ? '入力条件の保存が必要' : '計算を実行'}</button></div>
         {(status || lastError) && <p className="inline-message" role="status">{status ?? lastError}</p>}
