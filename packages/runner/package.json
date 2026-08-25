@@ -27,7 +27,7 @@
     "@open-waterhammer/workspace": "0.2.0-alpha.1"
   },
   "devDependencies": {
-    "@types/node": "^25.5.0",
+    "@types/node": "^26.2.0",
     "tsx": "^4.21.0"
   }
 }

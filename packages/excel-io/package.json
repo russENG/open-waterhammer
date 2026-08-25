@@ -18,7 +18,7 @@
   "dependencies": {
     "@open-waterhammer/contracts": "0.2.0-alpha.1",
     "@open-waterhammer/core": "*",
-    "@types/node": "^25.5.0",
+    "@types/node": "^26.2.0",
     "exceljs": "^4.4.0"
   },
   "license": "AGPL-3.0-or-later"
