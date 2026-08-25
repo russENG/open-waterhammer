@@ -16,7 +16,7 @@
     "acceptance": "node scripts/acceptance.mjs"
   },
   "engines": {
-    "node": ">=20"
+    "node": ">=22"
   },
   "license": "AGPL-3.0-or-later",
   "devDependencies": {
