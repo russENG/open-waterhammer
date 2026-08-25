@@ -106,6 +106,13 @@ export interface CalculationCase {
   initialVelocity: number;
   /** 初期圧力水頭 H₀ [m] */
   initialHead: number;
+  /**
+   * 等価閉そく時間 tν [s]
+   *
+   * バルブ操作ケースでアリエビ式・急緩判定に使う。
+   * ポンプ操作ケースでは不要なため任意。
+   */
+  closeTime?: number;
 }
 
 // ─── 測点（成果品様式 水理計算書） ──────────────────────────────────────────────

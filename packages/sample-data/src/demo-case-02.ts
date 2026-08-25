@@ -19,6 +19,9 @@ export const DEMO_CASE_02_PIPE: Pipe = {
   roughnessCoeff: 130,
 };
 
+/** バルブ等価閉そく時間 [s]（急閉そくより十分に長い） */
+export const DEMO_CASE_02_CLOSE_TIME = 10.0;
+
 export const DEMO_CASE_02_CASE: CalculationCase = {
   id: "case-02",
   name: "バルブ緩閉そく",
@@ -27,10 +30,8 @@ export const DEMO_CASE_02_CASE: CalculationCase = {
   targetFacilityId: "valve-01",
   initialVelocity: 1.0,
   initialHead: 30.0,
+  closeTime: DEMO_CASE_02_CLOSE_TIME,
 };
-
-/** バルブ等価閉そく時間 [s]（急閉そくより十分に長い） */
-export const DEMO_CASE_02_CLOSE_TIME = 10.0;
 
 export const DEMO_CASE_02_DESCRIPTION = `
 デモケース 02: バルブ緩閉そく（アリエビ式）

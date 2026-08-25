@@ -32,7 +32,19 @@ function requireNum(v: unknown, label: string, errors: ParseError[], sheet: stri
   return n;
 }
 
-/** 複合ヘッダー "field_id\n(日本語名)" → "field_id" に正規化 */
+/**
+ * 各行に埋め込む「実際のシート行番号」のキー。
+ * エラーメッセージの行番号を、空行を含む実際の位置に合わせるために使う。
+ * 列ヘッダーと衝突しないよう記号付きの名前にしている。
+ */
+const ROW_NUMBER = "__sheetRow__";
+
+function rowNumberOf(row: Record<string, unknown>, fallback: number): number {
+  const n = row[ROW_NUMBER];
+  return typeof n === "number" ? n : fallback;
+}
+
+/** 複合ヘッダー "field_id\n(日本語名)\n(入力区分)" → "field_id" に正規化 */
 function normalizeKey(key: string): string {
   const idx = key.indexOf("\n");
   return idx >= 0 ? key.substring(0, idx) : key;
@@ -83,7 +95,10 @@ function sheetToRows(ws: ExcelJS.Worksheet | undefined): Record<string, unknown>
       obj[h] = v;
       if (v !== null && v !== "") hasValue = true;
     }
-    if (hasValue) result.push(obj);
+    if (hasValue) {
+      obj[ROW_NUMBER] = r;
+      result.push(obj);
+    }
   }
   return result;
 }
@@ -154,7 +169,7 @@ function parsePipes(rows: Record<string, unknown>[], errors: ParseError[]): Pipe
   const pipes: Pipe[] = [];
   for (let i = 0; i < rows.length; i++) {
     const row = rows[i]!;
-    const rowNum = i + 2; // ヘッダー行を1とした場合
+    const rowNum = rowNumberOf(row, i + 2);
 
     const id = str(row["pipe_id"] ?? row["管路ID"]);
     if (!id) continue; // 空行はスキップ
@@ -189,7 +204,7 @@ function parseNodes(rows: Record<string, unknown>[], errors: ParseError[]): Node
   const nodes: Node[] = [];
   for (let i = 0; i < rows.length; i++) {
     const row = rows[i]!;
-    const rowNum = i + 2;
+    const rowNum = rowNumberOf(row, i + 2);
 
     const id = str(row["node_id"] ?? row["節点ID"]);
     if (!id) continue;
@@ -220,6 +235,7 @@ function parseNodes(rows: Record<string, unknown>[], errors: ParseError[]): Node
 function sectionToRows(
   raw: unknown[][],
   keyIndicators: string[],
+  rowOffset = 0,
 ): Record<string, unknown>[] {
   const headerIdx = raw.findIndex((row) =>
     keyIndicators.some((k) => str(row[0]).toLowerCase().includes(k)),
@@ -231,12 +247,16 @@ function sectionToRows(
 
   for (let i = headerIdx + 1; i < raw.length; i++) {
     const row = raw[i]!;
-    // コメント行・空行・次のセクション見出しはスキップ
     const first = str(row[0]);
-    if (first.startsWith("#") || headers.every((_, ci) => row[ci] == null || str(row[ci]) === "")) break;
+    // 次のセクション見出し（"# ..."）でこのセクションは終わり
+    if (first.startsWith("#")) break;
+    // 空行は飛ばす。ここで打ち切ると、表の途中に空行を挟んだときに
+    // それ以降の入力行が黙って読み捨てられてしまう。
+    if (headers.every((_, ci) => row[ci] == null || str(row[ci]) === "")) continue;
 
     const obj: Record<string, unknown> = {};
     headers.forEach((h, ci) => { if (h) obj[h] = row[ci] ?? null; });
+    obj[ROW_NUMBER] = rowOffset + i + 1;
     result.push(obj);
   }
 
@@ -257,7 +277,7 @@ function parseNetwork(wb: ExcelJS.Workbook, errors: ParseError[]): { pipes: Pipe
   const pipeRows = sectionToRows(raw, ["テーブル", "table", "pipe_id"]);
   const nodeStartIdx = raw.findIndex((r) => str(r[0]).includes("節点"));
   const nodeRaw = nodeStartIdx >= 0 ? raw.slice(nodeStartIdx + 1) : raw;
-  const nodeRows = sectionToRows(nodeRaw, ["テーブル", "table", "node_id"]);
+  const nodeRows = sectionToRows(nodeRaw, ["テーブル", "table", "node_id"], nodeStartIdx >= 0 ? nodeStartIdx + 1 : 0);
 
   return {
     pipes: parsePipes(pipeRows, errors),
@@ -271,7 +291,7 @@ const VALID_OPERATION_TYPES = new Set<string>([
   "valve_close", "valve_open", "pump_stop", "pump_start", "combined",
 ]);
 
-function parseCases(wb: ExcelJS.Workbook, errors: ParseError[]): CalculationCase[] {
+function parseCases(wb: ExcelJS.Workbook, errors: ParseError[], warnings: string[]): CalculationCase[] {
   const ws = wb.getWorksheet("ケース設定") ?? wb.getWorksheet("cases");
   if (!ws) {
     errors.push({ sheet: "cases", message: "「ケース設定」シートが見つかりません" });
@@ -283,7 +303,7 @@ function parseCases(wb: ExcelJS.Workbook, errors: ParseError[]): CalculationCase
 
   for (let i = 0; i < rows.length; i++) {
     const row = rows[i]!;
-    const rowNum = i + 2;
+    const rowNum = rowNumberOf(row, i + 2);
 
     const id = str(row["case_id"] ?? row["ケースID"]);
     if (!id) continue;
@@ -298,11 +318,17 @@ function parseCases(wb: ExcelJS.Workbook, errors: ParseError[]): CalculationCase
       name: str(row["case_name"] ?? row["ケース名"]) || id,
       operationType: (VALID_OPERATION_TYPES.has(opRaw) ? opRaw : "valve_close") as OperationType,
       targetFacilityId: str(row["target_facility_id"] ?? row["対象施設ID"]),
-      initialVelocity: requireNum(row["initial_flow"] ?? row["初期流速 V₀"], "初期流速 V₀", errors, "cases", rowNum),
+      // initial_flow は旧フィールドID（流速なのに flow という誤称）。既存ブックのため読み取りだけ残す。
+      initialVelocity: requireNum(row["initial_velocity"] ?? row["initial_flow"] ?? row["初期流速 V₀"], "初期流速 V₀", errors, "cases", rowNum),
       initialHead: requireNum(row["initial_head"] ?? row["初期圧力水頭 H₀"], "初期圧力水頭 H₀", errors, "cases", rowNum),
     };
     const desc = str(row["description"] ?? row["説明"]);
     if (desc) cas.description = desc;
+    const closeTime = num(row["close_time"] ?? row["等価閉そく時間 tν"]);
+    if (closeTime !== undefined) cas.closeTime = closeTime;
+    if (cas.closeTime === undefined && (cas.operationType === "valve_close" || cas.operationType === "valve_open")) {
+      warnings.push(`ケース ${cas.id}: 等価閉そく時間（close_time）が未入力です。急閉そく・緩閉そくの判定ができません。`);
+    }
     cases.push(cas);
   }
 
@@ -323,7 +349,7 @@ function parseMeasurementPoints(wb: ExcelJS.Workbook, errors: ParseError[]): Mea
 
   for (let i = 0; i < rows.length; i++) {
     const row = rows[i]!;
-    const rowNum = i + 2;
+    const rowNum = rowNumberOf(row, i + 2);
 
     const id = str(row["point_id"] ?? row["測点ID"]);
     if (!id) continue;
@@ -381,7 +407,7 @@ export async function parseWorkbook(buffer: ArrayBuffer | Buffer): Promise<Parse
 
   const meta = parseMeta(wb, errors);
   const { pipes, nodes } = parseNetwork(wb, errors);
-  const cases = parseCases(wb, errors);
+  const cases = parseCases(wb, errors, warnings);
   const measurementPoints = parseMeasurementPoints(wb, errors);
 
   if (pipes.length === 0) {

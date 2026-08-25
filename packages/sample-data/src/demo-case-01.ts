@@ -10,7 +10,7 @@
  * Excelテンプレート（demo-case-01.xlsx）としてもダウンロード可能。
  */
 
-import type { Pipe, CalculationCase } from "@open-waterhammer/core";
+import type { Pipe, Node, CalculationCase } from "@open-waterhammer/core";
 
 export const DEMO_CASE_01_PIPE: Pipe = {
   id: "pipe-01",
@@ -26,6 +26,18 @@ export const DEMO_CASE_01_PIPE: Pipe = {
   // c1Coeff: デフォルト 1.0
 };
 
+/**
+ * 節点。末端バルブ（N2）を標高 0 m の基準にとり、上流水槽（N1）の水面を
+ * 標高 30 m に置くことで、バルブ位置の静水頭が H₀ = 30 m と一致する。
+ */
+export const DEMO_CASE_01_NODES: Node[] = [
+  { id: "N1", name: "上流水槽", elevation: 30.0, nodeType: "reservoir", hydraulicGrade: 30.0 },
+  { id: "N2", name: "末端バルブ", elevation: 0.0, nodeType: "valve_node" },
+];
+
+/** バルブ等価閉そく時間 [s] */
+export const DEMO_CASE_01_CLOSE_TIME = 0.5;
+
 export const DEMO_CASE_01_CASE: CalculationCase = {
   id: "case-01",
   name: "バルブ急閉そく",
@@ -34,10 +46,8 @@ export const DEMO_CASE_01_CASE: CalculationCase = {
   targetFacilityId: "valve-01",
   initialVelocity: 1.0,   // V₀ = 1.0 m/s
   initialHead: 30.0,      // H₀ = 30.0 m（静水頭）
+  closeTime: DEMO_CASE_01_CLOSE_TIME,
 };
-
-/** バルブ等価閉そく時間 [s] */
-export const DEMO_CASE_01_CLOSE_TIME = 0.5;
 
 export const DEMO_CASE_01_DESCRIPTION = `
 デモケース 01: バルブ急閉そく（農業用パイプライン）

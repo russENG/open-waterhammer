@@ -2,6 +2,7 @@ import type { Case, JsonValue, RunKind } from '@open-waterhammer/contracts'
 import type { ParseError } from '@open-waterhammer/excel-io'
 import {
   DEMO_CASE_01_CASE,
+  DEMO_CASE_01_NODES,
   DEMO_CASE_01_PIPE,
   DEMO_CASE_02_CASE,
   DEMO_MEASUREMENT_POINTS,
@@ -44,7 +45,7 @@ export function ExcelIoCard({ caseRecord }: { caseRecord: Case }) {
       const buf = await generateTemplate({
         meta: { projectName: '（案件名を入力）', standardId: 'nochi_pipeline_2021', methodId: 'joukowsky_v1' },
         pipes: [DEMO_CASE_01_PIPE],
-        nodes: [],
+        nodes: DEMO_CASE_01_NODES,
         cases: [DEMO_CASE_01_CASE, DEMO_CASE_02_CASE],
         measurementPoints: DEMO_MEASUREMENT_POINTS,
       })
@@ -80,6 +81,7 @@ export function ExcelIoCard({ caseRecord }: { caseRecord: Case }) {
         caseRecord.id,
         mapped.runInputs as Partial<Record<RunKind, JsonValue>>,
         result.data as unknown as JsonValue,
+        mapped.eventSettings as JsonValue,
       )
       setStatus(kinds.length > 0
         ? `${file.name} を読み込み、${kinds.join(' / ')} の入力を更新しました。`
