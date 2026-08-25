@@ -237,7 +237,7 @@ test('all exact RunKinds execute and persist through the production browser regi
     ],
   }))
   await importDialog.getByRole('button', { name: '編集中データとして読み込む' }).click()
-  await expect(page.getByText('水理属性：有効', { exact: true })).toBeVisible()
+  await expect(page.getByText('GIS接続：有効', { exact: true })).toBeVisible()
   await page.getByRole('link', { name: '解析' }).click()
   for (const [index, kind] of runKinds.entries()) {
     await page.locator(`input[type="radio"][value="${kind}"]`).check()
