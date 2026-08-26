@@ -141,6 +141,7 @@ export function LongitudinalProfile({ diagram, mode, focus, onFocus }: {
         </g>
       </svg>
     </div>
+    {onFocus && <p className="profile-hint">測点や管路をクリックすると、その地点の時系列・平面図・圧力包絡が連動して切り替わります。</p>}
     <div className="profile-series-legend" aria-label="縦断図の凡例">
       {visibleSeries.map(({ key, label, className }) => <span key={key}><i className={className} />{label}</span>)}
       <span><i className="profile-legend-invalid" />欠損・不整合</span>
