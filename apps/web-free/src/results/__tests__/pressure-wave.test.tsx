@@ -4,7 +4,7 @@ import userEvent from '@testing-library/user-event'
 import { describe, expect, test, vi } from 'vitest'
 
 import { PressureWaveAnimator } from '../PressureWaveAnimator'
-import { derivePressureWaveAnimation, PRESSURE_WAVE_MAX_FRAMES, PRESSURE_WAVE_MAX_SPATIAL_SAMPLES, pressureWaveColor, valueAtRatio } from '../pressure-wave'
+import { deriveGoverningLocation, derivePressureWaveAnimation, PRESSURE_WAVE_MAX_FRAMES, PRESSURE_WAVE_MAX_SPATIAL_SAMPLES, pressureWaveColor, valueAtRatio } from '../pressure-wave'
 
 const transientRun: Run = {
   ...runFixture,
@@ -41,6 +41,39 @@ const caseRecord: Case = {
     },
   },
 }
+
+describe('設計を支配する地点', () => {
+  test('上昇側の振れ幅が最大の位置と向きを返す', () => {
+    // transientRun の P1: 上昇側 Hmax−H_steady = [1, 4, 7, 10]、下降側 H_steady−Hmin = [2, 2, 2, 2]。
+    // 最大は末端 (index 3) の上昇側 10 m。
+    expect(deriveGoverningLocation(transientRun)).toEqual({ pipeId: 'P1', ratio: 1, excursion: 10, direction: 'up' })
+  })
+
+  test('下降側のほうが大きければそちらを採る', () => {
+    const downSurge: Run = {
+      ...transientRun,
+      summary: { pipes: { P1: { H_steady: [30, 30, 30], Hmax: [31, 32, 33], Hmin: [30, 20, 29] } } },
+    }
+    // 上昇側は末端の 3 m、下降側は中央の 10 m。大きいほうの中央 (ratio 0.5) を採る。
+    expect(deriveGoverningLocation(downSurge)).toEqual({ pipeId: 'P1', ratio: 0.5, excursion: 10, direction: 'down' })
+  })
+
+  test('複数管路をまたいで最大の1点を選ぶ', () => {
+    const twoPipes: Run = {
+      ...transientRun,
+      summary: { pipes: {
+        P1: { H_steady: [30, 30], Hmax: [33, 34], Hmin: [30, 30] },
+        P2: { H_steady: [30, 30], Hmax: [31, 50], Hmin: [30, 30] },
+      } },
+    }
+    expect(deriveGoverningLocation(twoPipes)).toMatchObject({ pipeId: 'P2', ratio: 1, excursion: 20 })
+  })
+
+  test('包絡線が無い計算結果では地点を決めない', () => {
+    expect(deriveGoverningLocation({ ...transientRun, summary: {} })).toBeUndefined()
+    expect(deriveGoverningLocation({ ...transientRun, summary: { pipes: { P1: {} } } })).toBeUndefined()
+  })
+})
 
 describe('saved pressure-wave animation model', () => {
   test('limits frames and spatial samples while preserving saved first and last values and raw extrema', () => {

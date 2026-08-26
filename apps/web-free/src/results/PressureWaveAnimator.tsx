@@ -7,9 +7,11 @@ import type { LinkedFocus } from '../workspace/focus'
 import { deriveLongitudinalProfile, type ProfilePoint } from '../workspace/longitudinal-profile'
 import { derivePlanDiagram } from '../workspace/plan-view'
 import {
+  deriveGoverningLocation,
   derivePressureWaveAnimation,
   pressureWaveColor,
   valueAtRatio,
+  type GoverningLocation,
   type PressureWaveAnimationData,
   type PressureWaveFrame,
 } from './pressure-wave'
@@ -65,15 +67,74 @@ function locationDistance(location: string | undefined): number | undefined {
   return Number.isFinite(value) ? value : undefined
 }
 
-function selectedSeries(animation: PressureWaveAnimationData, focus: LinkedFocus | undefined, pipeLengths: Map<string, number>): { id: string; kind: 'pipe' | 'node'; values: Array<number | undefined> } {
+/**
+ * 時系列に出す地点を決める。
+ *
+ * 節点が選ばれていればその節点の水頭時系列。そうでなければ管路上の1点を取る。
+ * 管路上の位置は、測点を選んでいればその距離、選んでいなければ設計を支配する地点
+ * （`deriveGoverningLocation`: 定常水頭からの振れ幅が最大の位置）。以前の既定は
+ * 「最初の管路の中央」で、工学的な意味がなく、開いた直後に見る図としては
+ * 検討すべき地点を指していなかった。
+ */
+function selectedSeries(
+  animation: PressureWaveAnimationData,
+  focus: LinkedFocus | undefined,
+  pipeLengths: Map<string, number>,
+  governing: GoverningLocation | undefined,
+): { id: string; kind: 'pipe' | 'node'; values: Array<number | undefined>; fromGoverning: boolean } {
   const requested = focus?.timeSeriesId || focus?.mapFeatureId
   const nodeId = requested && animation.nodeIds.includes(requested) ? requested : undefined
-  if (nodeId) return { id: nodeId, kind: 'node', values: animation.frames.map((frame) => frame.nodes[nodeId]) }
-  const pipeId = requested && animation.pipeIds.includes(requested) ? requested : animation.pipeIds[0]!
+  if (nodeId) return { id: nodeId, kind: 'node', values: animation.frames.map((frame) => frame.nodes[nodeId]), fromGoverning: false }
+  const requestedPipeId = requested && animation.pipeIds.includes(requested) ? requested : undefined
+  const governingPipeId = governing && animation.pipeIds.includes(governing.pipeId) ? governing.pipeId : undefined
+  const pipeId = requestedPipeId ?? governingPipeId ?? animation.pipeIds[0]!
   const location = locationDistance(focus?.location)
   const length = pipeLengths.get(pipeId) ?? 1
-  const ratio = location !== undefined ? Math.max(0, Math.min(1, location / length)) : 0.5
-  return { id: pipeId, kind: 'pipe', values: animation.frames.map((frame) => valueAtRatio(frame.pipes[pipeId]?.heads ?? [], ratio)) }
+  // 管路は特定できても地点が分からない場合も、その管路の支配地点に寄せる。
+  const governingRatio = pipeId === governingPipeId ? governing!.ratio : undefined
+  const ratio = location !== undefined ? Math.max(0, Math.min(1, location / length)) : governingRatio ?? 0.5
+  return {
+    id: pipeId,
+    kind: 'pipe',
+    values: animation.frames.map((frame) => valueAtRatio(frame.pipes[pipeId]?.heads ?? [], ratio)),
+    fromGoverning: location === undefined && governingRatio !== undefined,
+  }
+}
+
+/**
+ * 軸と色スケールのレンジを、画面に出している値そのものから作る。
+ *
+ * 圧力表示の以前の下限は `最小水頭 − 管中心高の最大値` で、管路全体の最小水頭と、
+ * 別の地点の管中心高を組み合わせた保守的な包絡値だった。どの地点にも存在しない
+ * 負圧が軸に出るため、全測点で正圧でも「負圧が発生している」と読めてしまう。
+ * 平面図の管路平均・節点、縦断図の測点という、実際に描いている値だけを見る。
+ */
+function displayRange(
+  animation: PressureWaveAnimationData,
+  mode: DisplayMode,
+  points: ProfilePoint[],
+  pipeElevations: Map<string, number>,
+  pipeLengths: Map<string, number>,
+  nodeElevations: Map<string, number>,
+): { minimum: number; maximum: number } {
+  if (mode === 'head') return { minimum: animation.minimumHead, maximum: animation.maximumHead }
+  let minimum = Infinity
+  let maximum = -Infinity
+  const observe = (value: number | undefined) => {
+    if (value === undefined || !Number.isFinite(value)) return
+    if (value < minimum) minimum = value
+    if (value > maximum) maximum = value
+  }
+  for (const frame of animation.frames) {
+    for (const pipeId of animation.pipeIds) observe(displayedPipeValue(frame, pipeId, mode, pipeElevations))
+    for (const nodeId of animation.nodeIds) {
+      const head = frame.nodes[nodeId]
+      const elevation = nodeElevations.get(nodeId)
+      if (head !== undefined && elevation !== undefined) observe(headToMpa(head - elevation))
+    }
+    for (const point of points) observe(profileValue(point, frame, mode, pipeLengths))
+  }
+  return minimum <= maximum ? { minimum, maximum } : { minimum: 0, maximum: 0 }
 }
 
 function profileValue(point: ProfilePoint, frame: PressureWaveFrame, mode: DisplayMode, pipeLengths: Map<string, number>): number | undefined {
@@ -126,10 +187,17 @@ export function PressureWaveAnimator({ caseRecord, run, focus, onFocus }: {
   const model = useMemo(() => resolveCanonicalHydraulicModel(caseRecord), [caseRecord])
   const pipeElevations = useMemo(() => elevationByPipe(model), [model])
   const pipeLengths = useMemo(() => new Map((model?.pipes ?? []).map((pipe) => [pipe.id, pipe.length])), [model])
+  const nodeElevations = useMemo(() => new Map((model?.nodes ?? []).flatMap((node) => node.elevation === undefined ? [] : [[node.id, node.elevation] as const])), [model])
+  const governing = useMemo(() => deriveGoverningLocation(run), [run])
   const [frameIndex, setFrameIndex] = useState(0)
   const [playing, setPlaying] = useState(false)
   const [speed, setSpeed] = useState(1)
   const [mode, setMode] = useState<DisplayMode>('head')
+  // 全フレーム × 表示要素を走査するので、フレーム送りのたびに測り直さないよう memo 化する。
+  const range = useMemo(
+    () => animation ? displayRange(animation, mode, profile?.points ?? [], pipeElevations, pipeLengths, nodeElevations) : undefined,
+    [animation, mode, profile, pipeElevations, pipeLengths, nodeElevations],
+  )
 
   useEffect(() => {
     if (!playing || !animation || animation.frames.length < 2) return
@@ -143,21 +211,20 @@ export function PressureWaveAnimator({ caseRecord, run, focus, onFocus }: {
 
   if (!animation) return <div className="wave-empty"><span>∿</span><p>この保存済み計算結果には、再生できる管路内の時刻別水頭分布がありません。</p></div>
   const frame = animation.frames[Math.min(frameIndex, animation.frames.length - 1)]!
-  const selectedRaw = selectedSeries(animation, focus, pipeLengths)
+  const selectedRaw = selectedSeries(animation, focus, pipeLengths, governing)
   const nodeElevation = model?.nodes.find(({ id }) => id === selectedRaw.id)?.elevation
   const selectedDatum = selectedRaw.kind === 'pipe' ? pipeElevations.get(selectedRaw.id) : nodeElevation
   const selected = {
     ...selectedRaw,
+    direction: governing?.direction,
+    excursion: governing?.excursion ?? 0,
     values: selectedRaw.values.map((value) => value === undefined || mode === 'head' ? value : selectedDatum === undefined ? undefined : headToMpa(value - selectedDatum)),
   }
   const selectedValues = selected.values.filter((value): value is number => value !== undefined)
   const selectedCurrent = selected.values[frameIndex]
   const trace = sparkline(selected.values, frameIndex)
-  const profileElevations = profile?.points.map((point) => point.pipeCenterElevation).filter((value): value is number => value !== undefined) ?? []
-  const elevationMinimum = profileElevations.length ? Math.min(...profileElevations) : 0
-  const elevationMaximum = profileElevations.length ? Math.max(...profileElevations) : 0
-  const displayMinimum = mode === 'head' ? animation.minimumHead : headToMpa(animation.minimumHead - elevationMaximum)
-  const displayMaximum = mode === 'head' ? animation.maximumHead : headToMpa(animation.maximumHead - elevationMinimum)
+  // range が undefined になるのは animation が無いときだけで、そこは上で早期に返している。
+  const { minimum: displayMinimum, maximum: displayMaximum } = range ?? { minimum: 0, maximum: 0 }
   const unitLabel = mode === 'head' ? '水頭 H (m)' : '圧力 P (MPa)'
   const unit = mode === 'head' ? 'm' : 'MPa'
   const profileValues = profile?.points.map((point) => profileValue(point, frame, mode, pipeLengths)) ?? []
@@ -184,7 +251,9 @@ export function PressureWaveAnimator({ caseRecord, run, focus, onFocus }: {
     <div className="wave-metrics" aria-label="圧力波の数値">
       <article><span>全時刻の最小</span><strong>{displayMinimum.toFixed(2)} {unit}</strong></article>
       <article><span>全時刻の最大</span><strong>{displayMaximum.toFixed(2)} {unit}</strong></article>
-      <article><span>選択地点</span><strong>{selected.id} · {selectedCurrent?.toFixed(2) ?? '—'} {unit}</strong><small>最小 {selectedValues.length ? Math.min(...selectedValues).toFixed(2) : '—'} / 最大 {selectedValues.length ? Math.max(...selectedValues).toFixed(2) : '—'} {unit}</small><small>{focus ? '平面図・縦断図をクリックすると切り替わります' : '未選択のため既定の地点です。平面図・縦断図をクリックすると切り替わります'}</small></article>
+      <article><span>選択地点</span><strong>{selected.id} · {selectedCurrent?.toFixed(2) ?? '—'} {unit}</strong><small>最小 {selectedValues.length ? Math.min(...selectedValues).toFixed(2) : '—'} / 最大 {selectedValues.length ? Math.max(...selectedValues).toFixed(2) : '—'} {unit}</small><small>{selected.fromGoverning
+        ? `未選択のため、定常からの振れ幅が最大の地点（${selected.direction === 'up' ? '上昇側' : '下降側'} ${selected.excursion.toFixed(1)} m）を表示しています。平面図・縦断図をクリックすると切り替わります`
+        : '平面図・縦断図をクリックすると切り替わります'}</small></article>
     </div>
     <div className="wave-visual-grid">
       <article className="wave-plan-card">
