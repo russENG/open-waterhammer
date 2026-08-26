@@ -161,6 +161,11 @@ export function PressureWaveAnimator({ caseRecord, run, focus, onFocus }: {
   const unitLabel = mode === 'head' ? '水頭 H (m)' : '圧力 P (MPa)'
   const unit = mode === 'head' ? 'm' : 'MPa'
   const profileValues = profile?.points.map((point) => profileValue(point, frame, mode, pipeLengths)) ?? []
+  // 縦断図に重ねる静的な参照線の値。水頭表示では地盤高・管中心高の実標高、圧力表示では
+  // 管中心高が定義上 0 MPa になるので 0 だけを軸に含める。
+  const referenceValues = mode === 'head'
+    ? (profile?.points ?? []).flatMap((point) => [point.groundElevation, point.pipeCenterElevation]).filter((value): value is number => value !== undefined)
+    : [0]
 
   return <section className="pressure-wave" aria-label="圧力波アニメーション">
     <div className="wave-heading">
@@ -179,7 +184,7 @@ export function PressureWaveAnimator({ caseRecord, run, focus, onFocus }: {
     <div className="wave-metrics" aria-label="圧力波の数値">
       <article><span>全時刻の最小</span><strong>{displayMinimum.toFixed(2)} {unit}</strong></article>
       <article><span>全時刻の最大</span><strong>{displayMaximum.toFixed(2)} {unit}</strong></article>
-      <article><span>選択地点</span><strong>{selected.id} · {selectedCurrent?.toFixed(2) ?? '—'} {unit}</strong><small>最小 {selectedValues.length ? Math.min(...selectedValues).toFixed(2) : '—'} / 最大 {selectedValues.length ? Math.max(...selectedValues).toFixed(2) : '—'} {unit}</small></article>
+      <article><span>選択地点</span><strong>{selected.id} · {selectedCurrent?.toFixed(2) ?? '—'} {unit}</strong><small>最小 {selectedValues.length ? Math.min(...selectedValues).toFixed(2) : '—'} / 最大 {selectedValues.length ? Math.max(...selectedValues).toFixed(2) : '—'} {unit}</small><small>{focus ? '平面図・縦断図をクリックすると切り替わります' : '未選択のため既定の地点です。平面図・縦断図をクリックすると切り替わります'}</small></article>
     </div>
     <div className="wave-visual-grid">
       <article className="wave-plan-card">
@@ -216,17 +221,34 @@ export function PressureWaveAnimator({ caseRecord, run, focus, onFocus }: {
           const plotWidth = width - 62
           const plotHeight = height - 62
           const maximumDistance = Math.max(...profile.points.map((point) => point.distance), 1)
-          const range = Math.max(displayMaximum - displayMinimum, 1e-9)
+          // 縦軸は水頭のレンジだけでなく、地盤高・管中心高（水頭表示のとき）と圧力 0
+          // （圧力表示のとき）も含める。参照線がレンジ外に出て切れると、波が管中心高を
+          // 下回っているかどうかという、この図で一番読み取りたいことが分からなくなる。
+          const axisMinimum = Math.min(displayMinimum, ...referenceValues)
+          const axisMaximum = Math.max(displayMaximum, ...referenceValues)
+          const range = Math.max(axisMaximum - axisMinimum, 1e-9)
           const x = (distance: number) => left + distance / maximumDistance * plotWidth
-          const y = (value: number) => top + (displayMaximum - value) / range * plotHeight
+          const y = (value: number) => top + (axisMaximum - value) / range * plotHeight
+          const referencePath = (key: 'groundElevation' | 'pipeCenterElevation') => linePath(profile.points.map((point) => ({
+            x: x(point.distance), ...(point[key] === undefined ? {} : { y: y(point[key]!) }),
+          })))
           const dynamicPoints = profile.points.map((point, index) => ({ x: x(point.distance), ...(profileValues[index] === undefined ? {} : { y: y(profileValues[index]!) }) }))
-          return <svg viewBox={`0 0 ${width} ${height}`} role="img" aria-label={`圧力波の縦断図、時刻${frame.time.toFixed(3)}秒`}>
+          return <svg viewBox={`0 0 ${width} ${height}`} role="img" aria-label={`圧力波の縦断図、時刻${frame.time.toFixed(3)}秒、地盤高と管中心高を重ねて表示`}>
             <line x1={left} x2={left + plotWidth} y1={top + plotHeight} y2={top + plotHeight} className="wave-axis" />
+            {mode === 'head'
+              ? <><path d={referencePath('groundElevation')} className="wave-profile-ground" /><path d={referencePath('pipeCenterElevation')} className="wave-profile-pipe" /></>
+              : <line x1={left} x2={left + plotWidth} y1={y(0)} y2={y(0)} className="wave-profile-pipe" />}
             <path d={linePath(dynamicPoints)} className="wave-profile-line" />
             {dynamicPoints.map((point, index) => point.y === undefined ? null : <g key={profile.points[index]!.id}><circle cx={point.x} cy={point.y} r="4" /><text x={point.x} y={height - 16}>{profile.points[index]!.id}</text></g>)}
-            <text x={left} y={top - 8}>{displayMaximum.toFixed(1)} m</text><text x={left} y={top + plotHeight + 14}>{displayMinimum.toFixed(1)} m</text>
+            <text x={left} y={top - 8}>{axisMaximum.toFixed(1)} {unit}</text><text x={left} y={top + plotHeight + 14}>{axisMinimum.toFixed(1)} {unit}</text>
           </svg>
         })() : <p>縦断図に必要な測点データがありません。</p>}
+        <div className="wave-profile-legend" aria-label="縦断図の凡例">
+          <span><i className="wave-legend-head" />{mode === 'head' ? '水頭' : '圧力'}</span>
+          {mode === 'head'
+            ? <><span><i className="wave-legend-ground" />地盤高</span><span><i className="wave-legend-pipe" />管中心高</span></>
+            : <span><i className="wave-legend-pipe" />管中心高（圧力 0）</span>}
+        </div>
       </article>
     </div>
     <div className="wave-bottom-row">
