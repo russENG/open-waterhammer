@@ -141,6 +141,13 @@ export function installSampleWorkspace(repository: InitializableWorkspaceReposit
   return importIntoEmptyWorkspace(repository, buildSampleWorkspace())
 }
 
+/** 現在の保存内容を、明示的に選択されたサンプルプロジェクトで置き換える。 */
+export async function replaceWithSampleWorkspace(repository: InitializableWorkspaceRepository): Promise<WorkspaceData> {
+  const data = buildSampleWorkspace()
+  await repository.replaceBundle(await exportProjectBundle(data, data.projects[0]!.id))
+  return repository.snapshot()
+}
+
 export async function createProjectFromExcel(
   repository: InitializableWorkspaceRepository,
   workbook: WorkbookData,

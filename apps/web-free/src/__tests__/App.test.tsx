@@ -1,7 +1,9 @@
 import { render, screen, waitFor } from '@testing-library/react'
+import { deleteDB } from 'idb'
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest'
 
 import App from '../App'
+import { initializeBrowserWorkspace, installSampleWorkspace } from '../workspace/bootstrap'
 
 beforeEach(() => {
   window.location.hash = ''
@@ -71,5 +73,26 @@ describe('legacy formula-anchor URLs stay reachable under the HashRouter', () =>
     expect(window.history.length).toBe(lengthBeforeMount)
 
     replaceStateSpy.mockRestore()
+  }, TEST_TIMEOUT)
+})
+
+describe('startup never opens the workspace on its own', () => {
+  // App は既定の IndexedDB を開くので、保存済みの状態はその名前で作ってから描画する。
+  const DEFAULT_DATABASE = 'open-waterhammer-workspace'
+
+  test('a project saved in this browser is offered on the start screen, not loaded straight into the workspace', async () => {
+    // App が開いた接続は閉じられないので、後片付けではなく開く前に消しておく。
+    await deleteDB(DEFAULT_DATABASE)
+    const opened = await initializeBrowserWorkspace({ databaseName: DEFAULT_DATABASE })
+    await installSampleWorkspace(opened.repository)
+    opened.repository.close()
+
+    render(<App />)
+
+    expect(await screen.findByRole('heading', { name: 'このブラウザーの続きから再開' }, FIND_HEADING_TIMEOUT)).toBeVisible()
+    expect(screen.getByRole('heading', { name: '作業を始める' })).toBeVisible()
+    // 作業画面（左のツリーが目印）へは、利用者が選ぶまで入らない。
+    expect(screen.getByRole('button', { name: '続ける' })).toBeVisible()
+    expect(screen.queryByRole('complementary', { name: 'プロジェクト・代替案・比較案ツリー' })).not.toBeInTheDocument()
   }, TEST_TIMEOUT)
 })

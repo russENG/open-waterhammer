@@ -1,10 +1,10 @@
 import { deleteDB } from 'idb'
-import { render, screen, waitFor } from '@testing-library/react'
+import { render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest'
 
 import { WorkspaceStart } from '../App'
-import { initializeBrowserWorkspace } from '../workspace/bootstrap'
+import { initializeBrowserWorkspace, installSampleWorkspace } from '../workspace/bootstrap'
 
 vi.mock('@open-waterhammer/excel-io', () => ({
   parseWorkbook: vi.fn(),
@@ -43,6 +43,19 @@ async function setup() {
   databaseNames.push(databaseName)
   const workspace = await initializeBrowserWorkspace({ databaseName })
   repositories.push(workspace.repository)
+  const onReady = vi.fn()
+  render(<WorkspaceStart workspace={workspace} onReady={onReady} />)
+  return { workspace, onReady }
+}
+
+/** 既にこのブラウザーへ保存済みのプロジェクトがある状態の開始画面。 */
+async function setupWithSavedProject() {
+  const databaseName = `owh-workspace-start-${crypto.randomUUID()}`
+  databaseNames.push(databaseName)
+  const opened = await initializeBrowserWorkspace({ databaseName })
+  repositories.push(opened.repository)
+  const data = await installSampleWorkspace(opened.repository)
+  const workspace = { repository: opened.repository, data }
   const onReady = vi.fn()
   render(<WorkspaceStart workspace={workspace} onReady={onReady} />)
   return { workspace, onReady }
@@ -96,4 +109,86 @@ describe('WorkspaceStart', () => {
     expect(onReady).not.toHaveBeenCalled()
     expect((await workspace.repository.snapshot()).projects).toHaveLength(0)
   })
+})
+
+describe('WorkspaceStart with a project already saved in this browser', () => {
+  test('offers the saved project as an explicit resume, without opening the workspace on its own', async () => {
+    const user = userEvent.setup()
+    const { workspace, onReady } = await setupWithSavedProject()
+
+    // サンプルの案内カードにも同じ名前が出るので、再開カードの中だけを見る。
+    const resume = within(screen.getByRole('heading', { name: 'このブラウザーの続きから再開' }).closest('article')!)
+    expect(resume.getByText('サンプル：N地区東部幹線水路')).toBeVisible()
+    expect(resume.getByText(/最終更新 \d{4}\/\d{2}\/\d{2} \d{2}:\d{2}/)).toBeVisible()
+    expect(onReady).not.toHaveBeenCalled()
+
+    await user.click(screen.getByRole('button', { name: '続ける' }))
+
+    expect(onReady).toHaveBeenCalledOnce()
+    expect(onReady.mock.calls[0]![0].projects[0].name).toBe('サンプル：N地区東部幹線水路')
+    // 再開は読むだけなので、保存内容はそのまま残る。
+    expect((await workspace.repository.snapshot()).projects).toHaveLength(1)
+  })
+
+  test('asks before an action that would replace the saved project, and keeps it when cancelled', async () => {
+    const user = userEvent.setup()
+    const { workspace, onReady } = await setupWithSavedProject()
+
+    await user.type(screen.getByLabelText('プロジェクト名'), '西部支線 水撃圧検討')
+    await user.click(screen.getByRole('button', { name: '作成する' }))
+
+    expect(await screen.findByRole('heading', { name: '保存内容を置き換えます' })).toBeVisible()
+    await user.click(screen.getByRole('button', { name: 'やめる' }))
+
+    expect(onReady).not.toHaveBeenCalled()
+    const kept = await workspace.repository.snapshot()
+    expect(kept.projects).toHaveLength(1)
+    expect(kept.projects[0]!.name).toBe('サンプル：N地区東部幹線水路')
+    expect(screen.getByRole('heading', { name: 'このブラウザーの続きから再開' })).toBeVisible()
+  })
+
+  test('replaces the saved project only after the replacement is confirmed', async () => {
+    const user = userEvent.setup()
+    const { workspace, onReady } = await setupWithSavedProject()
+
+    await user.type(screen.getByLabelText('プロジェクト名'), '西部支線 水撃圧検討')
+    await user.click(screen.getByRole('button', { name: '作成する' }))
+    await user.click(await screen.findByRole('button', { name: '置き換えて実行' }))
+
+    await waitFor(() => expect(onReady).toHaveBeenCalledOnce())
+    const replaced = await workspace.repository.snapshot()
+    expect(replaced.projects).toHaveLength(1)
+    expect(replaced.projects[0]!.name).toBe('西部支線 水撃圧検討')
+  })
+
+  test('confirms before an Excel import replaces the saved project, and only for a valid workbook', async () => {
+    const user = userEvent.setup()
+    mockedParseWorkbook.mockResolvedValueOnce({
+      data: workbookData,
+      errors: [{ sheet: '管路・節点', row: 3, field: 'inner_diameter', message: '管内径が不正です' }],
+      warnings: [],
+    })
+    const { workspace, onReady } = await setupWithSavedProject()
+    const excelInput = () => screen.getByLabelText('Excelから開始するファイルを選択')
+
+    await user.upload(excelInput(), new File(['xlsx'], 'invalid.xlsx', { type: 'application/vnd.ms-excel' }))
+
+    // 検証で落ちたExcelでは確認すら出さない（保存内容は無傷のまま）。
+    expect(await screen.findByRole('alert')).toHaveTextContent(/プロジェクトは作成していません/)
+    expect(screen.queryByRole('heading', { name: '保存内容を置き換えます' })).not.toBeInTheDocument()
+    expect((await workspace.repository.snapshot()).projects[0]!.name).toBe('サンプル：N地区東部幹線水路')
+
+    mockedParseWorkbook.mockResolvedValueOnce({ data: workbookData, errors: [], warnings: [] })
+    await user.upload(excelInput(), new File(['xlsx'], 'project.xlsx', { type: 'application/vnd.ms-excel' }))
+
+    expect(await screen.findByRole('heading', { name: '保存内容を置き換えます' })).toBeVisible()
+    await user.click(screen.getByRole('button', { name: '置き換えて実行' }))
+
+    // このExcelは既定値で補完する項目があるので、置き換えたあとも注意事項の確認を挟む。
+    await user.click(await screen.findByRole('button', { name: '確認した · 作業画面へ進む' }, { timeout: 10_000 }))
+    await waitFor(() => expect(onReady).toHaveBeenCalledOnce())
+    const replaced = await workspace.repository.snapshot()
+    expect(replaced.projects).toHaveLength(1)
+    expect(replaced.projects[0]!.name).toBe('Excel案件')
+  }, 20_000)
 })

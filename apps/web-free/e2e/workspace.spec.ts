@@ -8,6 +8,15 @@ async function createBlankCase(page: Page) {
   await page.getByRole('link', { name: '解析' }).click()
 }
 
+/**
+ * 再読み込み後は、保存済みプロジェクトがあっても必ず開始画面に戻る（自動では作業画面へ入らない）。
+ * ハッシュのルートは残るので、「続ける」を押せば直前の比較案・タブがそのまま開く。
+ */
+async function reloadWorkspace(page: Page) {
+  await page.reload()
+  await page.getByRole('button', { name: '続ける' }).click()
+}
+
 async function openSample(page: Page) {
   await page.goto('/')
   await expect(page.getByRole('heading', { name: '作業を始める' })).toBeVisible()
@@ -122,7 +131,7 @@ test('create, edit, execute, lock, fork, compare, reload, export, and import', a
   await expect(page.getByRole('table', { name: '比較案の比較表' })).toBeVisible()
   await expect(page.getByText('2件')).toBeVisible()
 
-  await page.reload()
+  await reloadWorkspace(page)
   await expect(page.locator('.workspace-breadcrumb').getByText('E2E 防護工比較', { exact: true })).toBeVisible()
   await expect(page.locator('.state-pill')).toHaveText('編集中')
 
@@ -143,7 +152,7 @@ test('create, edit, execute, lock, fork, compare, reload, export, and import', a
   await page.getByRole('button', { name: 'WGS84で書き出す' }).click()
   await expect((await geojsonDownload).suggestedFilename()).toMatch(/-wgs84\.geojson$/)
 
-  await page.reload()
+  await reloadWorkspace(page)
   await page.getByRole('link', { name: 'モデル＋GIS' }).click()
   await expect(page.getByText('N-E2E')).toBeVisible()
 
@@ -315,7 +324,7 @@ test('all exact RunKinds execute and persist through the production browser regi
     '/pyodide/python_stdlib.zip',
   ]))
   expect([...externalRequests]).toEqual([])
-  await page.reload()
+  await reloadWorkspace(page)
   await expect(page.locator('.state-pill')).toHaveText('計算済み・固定')
   await expect(page.getByRole('complementary', { name: '計算記録の詳細' })).toContainText('水撃圧対策設備')
 })

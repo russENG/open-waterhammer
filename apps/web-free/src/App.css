@@ -3425,6 +3425,8 @@ select.input--narrow {
 .start-card input:focus { outline: 2px solid var(--orange); outline-offset: 2px; }
 .start-card__button { align-self: end; justify-self: start; min-width: 175px; padding: 11px 17px; color: white; background: var(--navy); border: 1px solid var(--navy); font: 700 .61rem var(--mono); cursor: pointer; }
 .start-card--sample .start-card__button { background: var(--orange); border-color: var(--orange); }
+.start-card--resume { border-color: var(--orange-soft); }
+.start-card--resume .start-card__button { background: var(--orange); border-color: var(--orange); }
 .start-card__button:hover:not(:disabled) { transform: translateY(-1px); filter: brightness(1.08); }
 .start-card__button:disabled { cursor: wait; opacity: .55; }
 .sample-project { align-self: start; display: grid; gap: 5px; padding: 14px 16px; background: #fffaf2; border: 1px solid #d7b99e; }
@@ -3436,6 +3438,13 @@ select.input--narrow {
 .local-storage-note p { color: #b5bfca; font-size: .63rem; line-height: 1.8; }
 .local-storage-note code { color: white; font: .62rem var(--mono); }
 .workspace-start__error { max-width: 1062px; margin-top: 18px; padding: 10px 13px; color: #ffd9d2; background: #6d2825; font-size: .65rem; }
+/* 保存内容を置き換える前の確認画面（開始画面と同じ地色で全面表示する） */
+.start-confirm__note { max-width: 900px; margin: 0 0 26px; color: #b5bfca; font-size: .68rem; line-height: 1.8; }
+.start-confirm__note code { color: white; font: .64rem var(--mono); }
+.start-confirm__actions { display: flex; flex-wrap: wrap; gap: 14px; align-items: center; }
+.start-confirm .start-card__button { align-self: center; padding: 12px 22px; background: var(--orange); border-color: var(--orange); }
+.start-confirm__cancel { padding: 12px 22px; color: #e9e1d5; background: transparent; border: 1px solid #6d7c92; font: 700 .61rem var(--mono); cursor: pointer; }
+.start-confirm__cancel:hover { border-color: #e9e1d5; }
 
 .docs-header { position: sticky; z-index: 20; top: 0; }
 .docs-main { max-width: 1180px; min-height: calc(100vh - 68px); margin: 0 auto; padding: 28px 24px 60px; background: rgba(248,245,236,.92); }
