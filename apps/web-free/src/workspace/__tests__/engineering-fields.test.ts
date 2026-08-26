@@ -95,7 +95,24 @@ describe('RunKind engineering field catalog', () => {
       const expectedTemplateModel = sample && typeof sample === 'object' && !Array.isArray(sample)
         ? Object.fromEntries(Object.entries(sample).filter(([key]) => key !== 'allowablePressureMpa'))
         : sample
-      expect(ENGINEERING_TEMPLATES[kind].model, kind).toEqual(expectedTemplateModel)
+      // longitudinal_hydraulics is the one kind whose fresh-draft template deliberately
+      // diverges from the sample: the sample carries the demo route's 11 survey stations so
+      // its 縦断図 reads like a real one, while a fresh draft gets a start/end skeleton
+      // instead of ~110 prefilled inputs belonging to another route. Every other key must
+      // still match, and the per-station keys must be the same shape.
+      if (kind === 'longitudinal_hydraulics') {
+        const { points: templatePoints, ...templateRest } = ENGINEERING_TEMPLATES[kind].model as Record<string, unknown>
+        const { points: samplePoints, ...sampleRest } = expectedTemplateModel as Record<string, unknown>
+        expect(Object.keys(templateRest).sort()).toEqual(Object.keys(sampleRest).sort())
+        expect(templatePoints).toHaveLength(2)
+        expect((samplePoints as unknown[]).length).toBeGreaterThan(2)
+        const sampleStationKeys = [...new Set((samplePoints as Array<Record<string, unknown>>).flatMap((station) => Object.keys(station)))]
+        for (const station of templatePoints as Array<Record<string, unknown>>) {
+          expect(sampleStationKeys).toEqual(expect.arrayContaining(Object.keys(station)))
+        }
+      } else {
+        expect(ENGINEERING_TEMPLATES[kind].model, kind).toEqual(expectedTemplateModel)
+      }
       const descriptors = engineeringFieldsFor(kind, ENGINEERING_TEMPLATES[kind])
       const described = new Set(descriptors.map(({ target, path }) => `${target}.${path}`))
       const expected = (['model', 'event', 'boundary', 'protection'] as const).flatMap((target) =>
@@ -132,8 +149,8 @@ describe('RunKind engineering field catalog', () => {
     const darcy = updateEngineeringFieldFromInput(hazen, method, 'darcy-weisbach', 'steady_single_pipe')
 
     expect(darcy.model).toEqual({
-      method: 'darcy-weisbach', innerDiameter: 0.3, length: 500, flowRate: 0.03,
-      upstreamElevation: 100, downstreamElevation: 88, frictionFactor: 0.02,
+      method: 'darcy-weisbach', innerDiameter: 0.3, length: 500, flowRate: 0.07,
+      upstreamElevation: 138.5, downstreamElevation: 114, frictionFactor: 0.02,
     })
     const darcyFields = engineeringFieldsFor('steady_single_pipe', darcy).filter(({ target }) => target === 'model')
     expect(darcyFields.map(({ path }) => path).sort()).toEqual([
@@ -146,8 +163,8 @@ describe('RunKind engineering field catalog', () => {
     const darcyMethod = darcyFields.find(({ path }) => path === 'method')!
     const hazenAgain = updateEngineeringFieldFromInput(darcy, darcyMethod, 'hazen-williams', 'steady_single_pipe')
     expect(hazenAgain.model).toEqual({
-      method: 'hazen-williams', innerDiameter: 0.3, length: 500, flowRate: 0.03,
-      upstreamElevation: 100, downstreamElevation: 88, roughnessC: 130,
+      method: 'hazen-williams', innerDiameter: 0.3, length: 500, flowRate: 0.07,
+      upstreamElevation: 138.5, downstreamElevation: 114, roughnessC: 130,
     })
     expect(engineeringFieldsFor('steady_single_pipe', hazenAgain).some(({ path }) => path === 'frictionFactor')).toBe(false)
   })
@@ -550,8 +567,8 @@ describe('RunKind engineering field catalog', () => {
     const darcy = updateEngineeringFieldFromInput(initial, method, 'darcy-weisbach', 'steady_single_pipe')
     const clearedDarcy = updateEngineeringFieldFromInput(darcy, engineeringFieldsFor('steady_single_pipe', darcy).find(({ path }) => path === 'method')!, '', 'steady_single_pipe')
     expect(clearedDarcy.model).toEqual({
-      innerDiameter: 0.3, length: 500, flowRate: 0.03, upstreamElevation: 100,
-      downstreamElevation: 88, roughnessC: 130,
+      innerDiameter: 0.3, length: 500, flowRate: 0.07, upstreamElevation: 138.5,
+      downstreamElevation: 114, roughnessC: 130,
     })
 
     const trip = structuredClone(ENGINEERING_TEMPLATES.transient_pump)

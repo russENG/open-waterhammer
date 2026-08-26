@@ -68,7 +68,7 @@ describe('MethodSelectionGuide', () => {
     const user = userEvent.setup()
     setupAnalysisPanel()
 
-    expect(screen.getByRole('radio', { name: /波速/ })).toBeChecked()
+    expect(screen.getByRole('radio', { name: /管路網の過渡解析/ })).toBeChecked()
     const groupHeadings = screen.getAllByRole('heading', { level: 2 }).map((heading) => heading.textContent)
     expect(groupHeadings.slice(0, 3)).toEqual(['主要解析', '準備計算', '簡易確認'])
     expect(screen.getAllByRole('radio')).toHaveLength(11)
@@ -88,7 +88,7 @@ describe('MethodSelectionGuide', () => {
     await user.click(screen.getByRole('button', { name: /経験式による水撃圧/ }))
 
     expect(screen.getByRole('radio', { name: /経験式による水撃圧/ })).toBeChecked()
-    expect(screen.getByRole('radio', { name: /波速/ })).not.toBeChecked()
+    expect(screen.getByRole('radio', { name: /管路網の過渡解析/ })).not.toBeChecked()
     expect(screen.getByRole('heading', { level: 2, name: '経験式による水撃圧' })).toBeVisible()
     const advanced = screen.getByText(/詳細な計算条件（3項目）/).closest('details')
     expect(advanced).not.toHaveAttribute('open')

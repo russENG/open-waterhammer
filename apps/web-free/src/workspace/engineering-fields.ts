@@ -142,14 +142,17 @@ const EVENT_TEMPLATES: Record<RunKind, JsonValue> = {
   transient_protection_device: {},
 }
 
+// sample-workspace.ts の SAMPLE_RUN_INPUTS.steady_single_pipe と同じ諸元（呑口 138.50 m →
+// 分水工 114.00 m、計画最大流量 0.070 m³/s）。方式を切り替えても標高・流量が変わらないよう、
+// 両分岐で揃えておく。
 const STEADY_SINGLE_PIPE_BRANCHES: Record<string, JsonValue> = {
   'hazen-williams': {
-    method: 'hazen-williams', innerDiameter: 0.3, length: 500, flowRate: 0.03,
-    upstreamElevation: 100, downstreamElevation: 88, roughnessC: 130,
+    method: 'hazen-williams', innerDiameter: 0.3, length: 500, flowRate: 0.07,
+    upstreamElevation: 138.5, downstreamElevation: 114, roughnessC: 130,
   },
   'darcy-weisbach': {
-    method: 'darcy-weisbach', innerDiameter: 0.3, length: 500, flowRate: 0.03,
-    upstreamElevation: 100, downstreamElevation: 88, frictionFactor: 0.02,
+    method: 'darcy-weisbach', innerDiameter: 0.3, length: 500, flowRate: 0.07,
+    upstreamElevation: 138.5, downstreamElevation: 114, frictionFactor: 0.02,
   },
 }
 
@@ -169,7 +172,7 @@ const TRANSIENT_PUMP_EVENT_BRANCHES: Record<string, JsonValue> = {
 // closing valve): a device may not replace an event-carrying valve/pump node (Task 4b-2 fix
 // round 1). initialLevel matches J-01's natural steady head in that network.
 const PROTECTION_TEMPLATES: Record<RunKind, JsonValue> = Object.fromEntries(RUN_KINDS.map((kind) => [kind, kind === 'transient_protection_device'
-  ? { devices: [{ id: 'J-01', type: 'surge_tank', enabled: true, tankArea: 4, initialLevel: 78.7 }] }
+  ? { devices: [{ id: 'J-01', type: 'surge_tank', enabled: true, tankArea: 4, initialLevel: 140.7 }] }
   : {}])) as Record<RunKind, JsonValue>
 
 // allowablePressureMpa is demo-only seasoning on SAMPLE_RUN_INPUTS (sample-workspace.ts) so
@@ -185,8 +188,31 @@ function withoutDemoOnlyAllowablePressure(model: JsonValue): JsonValue {
   return allowablePressureMpa === undefined ? model : rest
 }
 
+// The demo route's longitudinal input carries 11 survey stations (sample-workspace.ts) so the
+// sample's profile reads like a real 縦断図. A brand-new draft must not inherit all 11: that is
+// ~110 prefilled elevation and loss inputs belonging to another route, which the engineer would
+// have to overwrite row by row. Fresh drafts get a start/end skeleton instead — the same two-row
+// shape the sample itself had before it gained its intermediate stations — and add their own
+// stations with the 測点 collection control.
+const BLANK_PROFILE_STATION = {
+  pipeId: 'P-01', flowRate: 0.07, diameter: 0.3, roughnessC: 130,
+  bendLossCoeff: 0, valveLossCoeff: 0, branchLossCoeff: 0,
+}
+const LONGITUDINAL_BLANK_MODEL: JsonValue = {
+  caseName: '計画最大流量', staticWaterLevel: 142, waterhammerRatio: 0.2,
+  points: [
+    { id: 'STA-000', ...BLANK_PROFILE_STATION, nodeId: 'R-01', distanceAlongPipe: 0, horizontalDistance: 0, groundLevel: 143, pipeCenterHeight: 138.5, pipeLength: 0 },
+    { id: 'STA-500', ...BLANK_PROFILE_STATION, nodeId: 'J-01', distanceAlongPipe: 500, horizontalDistance: 500, groundLevel: 115.2, pipeCenterHeight: 114, pipeLength: 500 },
+  ],
+}
+
+function blankDraftModel(kind: RunKind): JsonValue {
+  if (kind === 'longitudinal_hydraulics') return LONGITUDINAL_BLANK_MODEL
+  return withoutDemoOnlyAllowablePressure(SAMPLE_RUN_INPUTS[kind])
+}
+
 export const ENGINEERING_TEMPLATES = Object.fromEntries(RUN_KINDS.map((kind) => [kind, {
-  model: structuredClone(withoutDemoOnlyAllowablePressure(SAMPLE_RUN_INPUTS[kind])),
+  model: structuredClone(blankDraftModel(kind)),
   event: structuredClone(EVENT_TEMPLATES[kind]),
   boundary: {},
   protection: structuredClone(PROTECTION_TEMPLATES[kind]),

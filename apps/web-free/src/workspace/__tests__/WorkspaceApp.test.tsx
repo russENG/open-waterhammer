@@ -183,7 +183,8 @@ describe('full workspace application', () => {
     await user.click(within(screen.getByRole('navigation', { name: '作業タブ' })).getByRole('link', { name: '解析' }))
     await waitFor(() => expect(window.location.hash).toContain(`/cases/${createdId}/analysis`))
 
-    // Default kind (wave_speed) is a form-only calculation: no GIS topology needed at all.
+    // Default kind (transient_single_pipe) is a form-only calculation: no GIS topology needed.
+    expect(await screen.findByRole('radio', { name: /単一管路の過渡解析/ })).toBeChecked()
     expect(await screen.findByText('フォーム入力のみ', {}, { timeout: 5_000 })).toBeVisible()
 
     // A network kind on the very same untouched Case is correctly identified as topology-required
@@ -339,7 +340,9 @@ describe('full workspace application', () => {
     const tabs = screen.getByRole('navigation', { name: '作業タブ' })
 
     await user.click(within(tabs).getByRole('link', { name: '解析' }))
-    const diameter = await screen.findByLabelText(/管内径/)
+    // 解析タブの既定はネットワークを持つ比較案では管路網の過渡解析なので、
+    // 編集する数値もその方式の主要フィールドから採る。
+    const diameter = await screen.findByLabelText(/第1管路 内径/)
     await user.clear(diameter)
     await user.type(diameter, '0.31')
     expect(screen.getByRole('button', { name: '計算を実行' })).toBeDisabled()
@@ -388,7 +391,7 @@ describe('full workspace application', () => {
     expect(await screen.findByRole('status')).toHaveTextContent('静水圧は必須です。')
     current = (await repository.snapshot()).cases.find(({ id }) => id === data.cases.at(-1)!.id)!
     empirical = (current.modelSnapshot as { runInputs: Record<string, Record<string, unknown>> }).runInputs.empirical_pressure!
-    expect(empirical.staticPressureMpa).toBe(0.42)
+    expect(empirical.staticPressureMpa).toBe(0.27)
   })
 
   test('persists explicitly mapped GeoJSON drafts into the selected Case', async () => {

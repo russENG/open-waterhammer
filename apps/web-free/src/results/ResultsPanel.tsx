@@ -46,6 +46,19 @@ function envelopeRows(envelope: PlotLine): CsvRow[] {
   ]
 }
 
+/**
+ * 時系列と圧力包絡を記録するのは特性曲線法（主要解析）だけで、準備計算や簡易確認の
+ * 計算結果には最初から入っていない。以前は方式によらず「この計算結果に時系列は
+ * ありません」とだけ出していたため、既定の波速計算をそのまま実行した利用者には
+ * 計算が失敗したのか記録が壊れたのか区別が付かなかった。方式の違いだと分かるように
+ * 理由と次の操作を書き分ける。
+ */
+function seriesEmptyNote(run: Run, label: string): string {
+  return run.kind.startsWith('transient_')
+    ? `この計算結果に${label}はありません。`
+    : `${runKindLabel(run.kind)}は${label}を出力しない計算方法です。解析タブの主要解析（特性曲線法）で計算すると記録されます。`
+}
+
 function seriesRows(series: Series, valueHeader: string): CsvRow[] {
   return [['t', valueHeader], ...series.seconds.map((t, index): CsvRow => [t, series.values[index] ?? ''])]
 }
@@ -128,7 +141,7 @@ export function ResultsPanel({ caseRecord, runs, selectedRun, focus, onSelectRun
             </svg>
             <ChartLegend items={[{ label: `${timeSeries.id} · H` }]} />
             <ChartActions svgRef={timeSeriesSvgRef} filenameBase={`time-series-${timeSeries.id}`} rows={seriesRows(timeSeries, 'H')} />
-          </> : <div className="empty-ledger"><span>∿</span><p>この計算結果に時系列はありません。</p></div>}
+          </> : <div className="empty-ledger"><span>∿</span><p>{seriesEmptyNote(run, '時系列')}</p></div>}
         </section>
         <section className="notebook-card envelope-card">
           <div className="chart-heading"><div><span className="eyebrow">圧力包絡</span><h2>保存済みの最大・最小水頭</h2></div><span>{envelope?.id ?? '記録なし'}</span></div>
@@ -142,7 +155,7 @@ export function ResultsPanel({ caseRecord, runs, selectedRun, focus, onSelectRun
             </svg>
             <ChartLegend items={[{ label: '定常水頭 H' }, { label: '最大水頭 H', className: 'legend-max' }, { label: '最小水頭 H', className: 'legend-min' }]} />
             <ChartActions svgRef={envelopeSvgRef} filenameBase={`envelope-${envelope.id}`} rows={envelopeRows(envelope)} />
-          </div> : <div className="empty-ledger"><span>—</span><p>包絡線は記録されていません。</p></div>}
+          </div> : <div className="empty-ledger"><span>—</span><p>{seriesEmptyNote(run, '圧力包絡線')}</p></div>}
         </section>
         <section className="notebook-card findings-card"><div className="chart-heading"><div><span className="eyebrow">自動評価</span><h2>関連する指摘事項</h2></div><span>{run.assessment.findings.length}</span></div>{run.assessment.findings.length ? <ol>{run.assessment.findings.map((finding) => <li key={`${finding.ruleId}-${finding.targetRef}`}><button aria-pressed={focus?.targetRef === finding.targetRef} onClick={() => onFocus(createLinkedFocus(finding))}><span className={`ng-marker ng-marker--${run.assessment.status}`}>{assessmentStatusLabel(run.assessment.status)}</span><div><strong>{finding.targetRef} · {finding.location ?? '位置情報なし'}</strong><small>{findingRuleLabel(finding.ruleId)}：{formatFindingValue(finding.observedValue)} / 許容 {formatFindingValue(finding.threshold)} {finding.unit}</small></div><span>連動 ↗</span></button></li>)}</ol> : <div className="empty-ledger"><span>{run.assessment.status === 'needs_review' ? '?' : '✓'}</span><p>{assessmentNote(run)}</p></div>}</section>
         <section className="notebook-card profile-card">
