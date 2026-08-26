@@ -240,11 +240,16 @@ const GOLDEN_NUMERICS = {
   transient_protection_device: {
     // summary.protection.reductionRate for the golden PROTECTION_NETWORK + PROTECTION_DEVICE_
     // SETTINGS above (surge_tank at J-01, tankArea 4, initialLevel 78.7) after the EPANET
-    // initial steady-state handoff — matches the ≈29.7%
+    // initial steady-state handoff — matches the ≈27.0%
     // figure already documented in docs/design-workspace.md §8. Pins the mitigation math
     // (baseline vs. protected MOC comparison) cross-runtime, the same way every other kind's
     // numeric goldens do.
-    reductionRate: 0.2972749871677246,
+    //
+    // Was 0.2972749871677246 before issue #47/#50. J-01 is a mid-line junction, and the old
+    // device solver treated the tank as the end of P-01, leaving P-02's flow pinned at 0 —
+    // the tank doubled as a full blockage, which over-credited the mitigation. Solving the
+    // device as a branch off the junction (both pipes carry flow) lowers the credit to 27.0%.
+    reductionRate: 0.27023587843853963,
   },
 };
 

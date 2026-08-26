@@ -374,7 +374,7 @@ describe("E7【要注意】適用範囲外では 2 エンジンの結果が乖�
     assert.match(ts.warnings[0]!, /閉路（ループまたは複数貯水槽の並行流入）を検出しました: p3。/);
   });
 
-  test('type:"junction" の demand: TS は無視して水頭を 2.3 m 高く（危険側に）出す', async () => {
+  test('type:"junction" の demand: 2 エンジンが一致する（issue #48 修正後）', async () => {
     const input: SteadyNetworkInput = {
       pipes: [
         { id: "p1", upstreamNodeId: "R", downstreamNodeId: "J", innerDiameter: 0.30, length: 500, roughnessC: 130 },
@@ -388,14 +388,14 @@ describe("E7【要注意】適用範囲外では 2 エンジンの結果が乖�
     };
     const ep = await calcSteadyNetworkEpanet(input);
     const ts = calcSteadyNetwork(input);
-    // EPANET は上流管に 0.10 を流す。TS は 0.05 のみ
+    // 両エンジンとも上流管に junction + 末端の需要合計 0.10 を流す
     assert.ok(Math.abs(relErrPct(pipeOf(ep, "p1")!.flow, 0.10)) < 0.1,
       `EPANET Q_p1=${pipeOf(ep, "p1")!.flow.toFixed(5)}`);
-    assert.ok(Math.abs(pipeOf(ts, "p1")!.flow - 0.05) < 1e-12,
-      "TS が junction の demand を集計するようになった = 実装が改善された");
-    const diff = nodeOf(ts, "J")!.head - nodeOf(ep, "J")!.head;
-    assert.ok(diff > 2.0 && diff < 2.6,
-      `H_J の差 = ${diff.toFixed(3)} m（TS の方が高い = 危険側）`);
+    assert.ok(Math.abs(pipeOf(ts, "p1")!.flow - 0.10) < 1e-12,
+      `TS Q_p1=${pipeOf(ts, "p1")!.flow.toFixed(5)}`);
+    const diff = Math.abs(nodeOf(ts, "J")!.head - nodeOf(ep, "J")!.head);
+    assert.ok(diff < 0.05,
+      `H_J の差 = ${diff.toFixed(4)} m（EPANET=${nodeOf(ep, "J")!.head.toFixed(3)}, TS=${nodeOf(ts, "J")!.head.toFixed(3)}）`);
   });
 
   test("複数貯水槽: TS は 2 つ目の貯水槽を落とし、接合点水頭が 1.5 m 高く出る", async () => {

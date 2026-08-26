@@ -194,6 +194,42 @@ class TestBuildMocMultiDiameter:
         """内部ノード(node_1)にはBCが設定されない（連続条件）."""
         assert "node_1" not in self.moc_output.network.nodes
 
+    def test_pipe_center_height_handed_to_moc(self):
+        """測点の管中心高が MOC セグメントまで届く（issue #50）.
+
+        水柱分離は動水頭（水頭 − 管中心高）で判定するため、これが無いと
+        標高差のある管路で判定を誤る。区間長の数え方（pipe_length は
+        「前測点からこの測点まで」）に合わせると、
+        seg_0 = A(98.5) → B(95.5)、seg_1 = B(95.5) → D(88.5)。
+        """
+        pipes = self.moc_output.network.pipes
+        assert pipes[0].upstream_elevation == 98.5
+        assert pipes[0].downstream_elevation == 95.5
+        assert pipes[1].upstream_elevation == 95.5
+        assert pipes[1].downstream_elevation == 88.5
+        # 区間の境目で管中心高が飛ばない
+        assert pipes[0].downstream_elevation == pipes[1].upstream_elevation
+
+    def test_cavitation_warning_has_no_missing_elevation_note(self):
+        """管中心高を渡しているので、警告に「未指定」の但し書きが付かない."""
+        hy = calc_longitudinal_hydraulic(
+            LongitudinalHydraulicInput(
+                points=POINTS_MULTI_D, static_water_level=99, case_name="負圧テスト"
+            )
+        )
+        low = build_moc_from_steady(
+            SteadyToMocInput(
+                hydraulic_result=hy,
+                points=POINTS_MULTI_D,
+                material=PipeMaterialSpec(pipe_type="ductile_iron"),
+                valve_close_time=0.5,
+            )
+        )
+        result = run_moc(low.network, low.options)
+        for w in result.warnings:
+            if "水柱分離" in w:
+                assert "管中心高が未指定" not in w
+
 
 # ─── カスタムBC ──────────────────────────────────────────────────────────────
 

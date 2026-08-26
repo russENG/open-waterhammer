@@ -11,7 +11,7 @@
  *   S2  直列管路のエネルギー収支 H_R − H_end = Σ損失
  *   S3  樹枝状網の連続条件 Q_幹線 = Σ Q_末端需要
  *   S4  局部損失 Σf·v²/2g の閉形式一致
- *   S5  【適用限界】樹枝状・単一貯水槽・demand ノード前提を外れた入力の挙動
+ *   S5  【適用限界】樹枝状・単一貯水槽の前提を外れた入力の検出
  *
  * ── 非定常計算（MOC）─────────────────────────────────────────────────────────
  *   T1  ジューコフスキーの式（瞬時閉・摩擦なし）ΔH = a·V₀/g
@@ -23,13 +23,13 @@
  *   T7  アリエビ連鎖式（摩擦なし緩閉そくの厳密解）との一致
  *   T8  摩擦による減衰が単調であること（エネルギー散逸の符号）
  *   T9  CFL 条件 Δt = Δx/a
- *   T10 【適用限界】負圧は 0 m でクランプされる（水柱分離モデルなし）
+ *   T10 負圧が理論どおり再現され、水柱分離の可能性は警告で通知される
  */
 
 import { describe, test } from "node:test";
 import assert from "node:assert/strict";
 
-import { runMoc, runMocSinglePipe, type MocNetwork } from "../moc.js";
+import { MOC_VAPOR_PRESSURE_HEAD, runMoc, runMocSinglePipe, type MocNetwork } from "../moc.js";
 import { calcSteadyNetwork } from "../steady-network.js";
 import { GRAVITY, joukowsky } from "../formulas.js";
 import type { Pipe } from "../types.js";
@@ -316,7 +316,7 @@ describe("S5 定常【適用限界】前提を外れた入力", () => {
     assert.equal(r.warnings.filter(w => w.includes("到達できません")).length, 2, JSON.stringify(r.warnings));
   });
 
-  test('【未対応】type:"junction" ノードの demand は依然として黙って無視される', () => {
+  test('type:"junction" ノードの demand も集計される（issue #48）', () => {
     const r = calcSteadyNetwork({
       pipes: [
         { id: "p1", upstreamNodeId: "R", downstreamNodeId: "J", innerDiameter: 0.30, length: 500, roughnessC: 130 },
@@ -328,14 +328,27 @@ describe("S5 定常【適用限界】前提を外れた入力", () => {
         { id: "D", elevation: 0, type: "demand", demand: 0.05 },
       ],
     });
-    // 上流管の流量は 0.10 であるべきだが 0.05 になる
-    assert.ok(Math.abs(r.pipeResults.find(p => p.pipeId === "p1")!.flow - 0.05) < 1e-12,
-      "junction の demand が集計された = 実装が改善された");
-    // 結果として節点水頭が危険側（高め）に出る（EPANET 厳密解は 96.79 m）
+    // 上流管には junction の需要と末端の需要の合計が流れる
+    assert.ok(Math.abs(r.pipeResults.find(p => p.pipeId === "p1")!.flow - 0.10) < 1e-12,
+      `Q_p1=${r.pipeResults.find(p => p.pipeId === "p1")!.flow}`);
+    assert.ok(Math.abs(r.pipeResults.find(p => p.pipeId === "p2")!.flow - 0.05) < 1e-12);
+    // 節点水頭が EPANET 厳密解 96.79 m と一致する
     const hJ = r.nodeResults.find(n => n.nodeId === "J")!.head;
-    assert.ok(Math.abs(hJ - 99.11) < 0.05, `H_J=${hJ.toFixed(2)} m（EPANET 厳密解は 96.79 m）`);
-    // トポロジは樹枝状なので閉路検出には掛からず、警告なしのまま誤答する
-    assert.deepEqual(r.warnings, [], "junction の demand に警告が実装された = 実装が改善された");
+    assert.ok(Math.abs(hJ - 96.79) < 0.05, `H_J=${hJ.toFixed(2)} m（EPANET 厳密解は 96.79 m）`);
+    assert.deepEqual(r.warnings, []);
+  });
+
+  test("reservoir ノードの demand は無視される（無限水源）", () => {
+    const r = calcSteadyNetwork({
+      pipes: [
+        { id: "p1", upstreamNodeId: "R", downstreamNodeId: "D", innerDiameter: 0.30, length: 500, roughnessC: 130 },
+      ],
+      nodes: [
+        { id: "R", elevation: 0, type: "reservoir", head: 100, demand: 0.99 },
+        { id: "D", elevation: 0, type: "demand", demand: 0.05 },
+      ],
+    });
+    assert.ok(Math.abs(r.pipeResults[0]!.flow - 0.05) < 1e-12, `Q=${r.pipeResults[0]!.flow}`);
   });
 
   test("貯水槽が 2 つあると 2 つ目からの流入が無視され、警告で通知される", () => {
@@ -401,10 +414,10 @@ describe("T1 非定常: ジューコフスキーの式との一致（瞬時閉�
     assert.ok(Math.abs(dHTheory - A_WAVE * V0 / GRAVITY) < 1e-12);
   });
 
-  test("バルブ端の最大水頭上昇が ΔH = a·V₀/g と 1% 以内で一致する", () => {
+  test("バルブ端の最大水頭上昇が ΔH = a·V₀/g と 0.05% 以内で一致する", () => {
     const dH = p.Hmax[N]! - H0;
     const err = Math.abs(relErrPct(dH, dHTheory));
-    assert.ok(err < 1.0, `MOC ΔH=${dH.toFixed(2)} m, 理論=${dHTheory.toFixed(2)} m, 誤差=${err.toFixed(2)}%`);
+    assert.ok(err < 0.05, `MOC ΔH=${dH.toFixed(2)} m, 理論=${dHTheory.toFixed(2)} m, 誤差=${err.toFixed(2)}%`);
   });
 
   test("貯水槽端では水頭が変化しない（定水頭境界）", () => {
@@ -426,17 +439,17 @@ describe("T2 非定常: 格子収束性", () => {
   }));
   const dHTheory = joukowsky(A_WAVE, -V0);
 
-  test("すべての分割数で理論値と 1% 以内", () => {
+  test("すべての分割数で理論値と 0.05% 以内", () => {
     for (const { N, dH } of results) {
       const err = Math.abs(relErrPct(dH, dHTheory));
-      assert.ok(err < 1.0, `N=${N}: ΔH=${dH.toFixed(3)}, 誤差=${err.toFixed(3)}%`);
+      assert.ok(err < 0.05, `N=${N}: ΔH=${dH.toFixed(3)}, 誤差=${err.toFixed(3)}%`);
     }
   });
 
-  test("分割数を 8 倍にしても解の変化が 0.1% 未満（収束している）", () => {
+  test("分割数を 8 倍にしても解の変化が 0.01% 未満（収束している）", () => {
     const coarse = results[0]!.dH, fine = results[3]!.dH;
     const err = Math.abs(relErrPct(fine, coarse));
-    assert.ok(err < 0.1, `N=10 → N=80 の変化=${err.toFixed(4)}%`);
+    assert.ok(err < 0.01, `N=10 → N=80 の変化=${err.toFixed(4)}%`);
   });
 });
 
@@ -608,19 +621,19 @@ describe("T7 非定常: アリエビ連鎖式（緩閉そくの厳密解）と�
     const res = frictionlessValveClose(tc, N, nSteps * T_ROUND);
     const hMoc = res.pipes["pipe_0"]!.Hmax[N]! / H0;
 
-    test(`tν = ${nT}×(2L/a) = ${tc.toFixed(1)} s: 最大水頭比が厳密解と 0.5% 以内`, () => {
+    test(`tν = ${nT}×(2L/a) = ${tc.toFixed(1)} s: 最大水頭比が厳密解と 0.05% 以内`, () => {
       const ref = Math.max(...hTheory);
       const err = Math.abs(relErrPct(hMoc, ref));
-      assert.ok(err < 0.5,
+      assert.ok(err < 0.05,
         `MOC h_max=${hMoc.toFixed(4)}, アリエビ連鎖式=${ref.toFixed(4)}, 誤差=${err.toFixed(3)}%`);
     });
 
-    test(`tν = ${nT}×(2L/a): 各 2L/a 時点の水頭比が厳密解と 1% 以内`, () => {
+    test(`tν = ${nT}×(2L/a): 各 2L/a 時点の水頭比が厳密解と 0.1% 以内`, () => {
       const series = res.nodes["downstream"]!.H;
       const at = (t: number) => series.reduce((b, c) => (Math.abs(c.t - t) < Math.abs(b.t - t) ? c : b)).H / H0;
       for (let i = 1; i < hTheory.length; i++) {
         const err = Math.abs(relErrPct(at(i * T_ROUND), hTheory[i]!));
-        assert.ok(err < 1.0,
+        assert.ok(err < 0.1,
           `i=${i} (t=${(i * T_ROUND).toFixed(1)}s): MOC=${at(i * T_ROUND).toFixed(4)}, 厳密解=${hTheory[i]!.toFixed(4)}, 誤差=${err.toFixed(3)}%`);
       }
     });
@@ -631,7 +644,7 @@ describe("T7 非定常: アリエビ連鎖式（緩閉そくの厳密解）と�
     const res = frictionlessValveClose(T_ROUND, N, 4 * T_PERIOD);
     const dH = res.pipes["pipe_0"]!.Hmax[N]! - H0;
     const err = Math.abs(relErrPct(dH, joukowsky(A_WAVE, -V0)));
-    assert.ok(err < 2.0, `ΔH=${dH.toFixed(2)} m, ジューコフスキー=${joukowsky(A_WAVE, -V0).toFixed(2)} m, 誤差=${err.toFixed(2)}%`);
+    assert.ok(err < 0.5, `ΔH=${dH.toFixed(2)} m, ジューコフスキー=${joukowsky(A_WAVE, -V0).toFixed(2)} m, 誤差=${err.toFixed(2)}%`);
   });
 
   test("閉そく時間を延ばすと最大水頭が単調に減少する", () => {
@@ -687,11 +700,10 @@ describe("T8 非定常: 摩擦による減衰（エネルギー散逸の符号�
       `C=1e6 の残存率=${ratioSmooth.toFixed(3)} が C=130 の ${ratioRough.toFixed(3)} 以下`);
   });
 
-  // 【実装特性】localDarcyF は等価ダルシー係数を max(0.005, min(…, 0.15)) で
-  // 挟み込み、さらに |V| < 1e-4 では f = 0.02 を返す。このため粗度係数 C を
-  // どれだけ大きくしても摩擦は完全には消えず、残留減衰が残る。
-  // 解析解（摩擦なし）と比較する際は 1〜2% 程度の系統誤差として見込む必要がある。
-  test("【実装特性】C→∞ でも摩擦係数の下限により残留減衰がある", () => {
+  // issue #51（摩擦係数の下限撤廃）と issue #50（負圧の 0 m クランプ撤廃）により、
+  // C→∞ では数値減衰が完全に消えた。解析解との系統誤差も無くなり、
+  // T1・T7・T10 の許容差を 0.05% まで締められた。
+  test("C→∞ では全く減衰しない（数値散逸がない）", () => {
     const f = frictionlessValveClose(0, N, 10 * T_PERIOD);
     const s = f.nodes["downstream"]!.H;
     const amp = (c: number) => {
@@ -699,8 +711,7 @@ describe("T8 非定常: 摩擦による減衰（エネルギー散逸の符号�
       return Math.max(...w) - Math.min(...w);
     };
     const ratio = amp(9) / amp(0);
-    assert.ok(ratio < 1.0, `C=1e6 で全く減衰しない = 実装が変わった（残存率=${ratio.toFixed(4)}）`);
-    assert.ok(ratio > 0.85, `C=1e6 の 10 周期後残存率=${ratio.toFixed(4)}（現状 ≈0.905）`);
+    assert.ok(ratio > 0.999, `C=1e6 の 10 周期後残存率=${ratio.toFixed(6)}（現状 ≈1.000000）`);
   });
 });
 
@@ -735,14 +746,11 @@ describe("T9 非定常: CFL 条件 Δt = Δx/a", () => {
 // T10 適用限界の特性化テスト
 // ─────────────────────────────────────────────────────────────────────────────
 
-describe("T10 非定常【適用限界】境界節点の負圧が 0 m で打ち切られる", () => {
+describe("T10 非定常: 負圧と水柱分離の扱い", () => {
   // 摩擦なし・瞬時閉では理論上 Hmin = H₀ − a·V₀/g = 100 − 102.04 = −2.04 m。
-  // 本ソルバーは水柱分離（キャビテーション）モデルを持たず、さらに境界条件
-  // ソルバー（バルブ・行き止まり・ポンプ等）が Math.max(…, 0) で水頭を 0 m 以上に
-  // 丸めるため、下降側の水撃圧が**過小評価（危険側）**になる。
-  // 内部格子点にはクランプがないため負値自体は現れるが、境界の打ち切りが
-  // 特性線を通じて内部にも伝わり、理論値までは下がらない。
-  // → 負圧が想定される系では §8.3 の防護工検討が別途必要（README「適用限界」参照）。
+  // issue #50 で境界条件ソルバーの 0 m クランプを撤廃したため、この負圧が
+  // 理論どおり再現される。水柱分離（キャビテーション）モデルは持たないので、
+  // 水蒸気圧水頭を下回った場合は警告で利用者に知らせる。
   const N = 40;
   const res = frictionlessValveClose(0, N, 4 * T_PERIOD);
   const p = res.pipes["pipe_0"]!;
@@ -752,19 +760,107 @@ describe("T10 非定常【適用限界】境界節点の負圧が 0 m で打ち�
     assert.ok(hTheoryMin < 0, `理論 Hmin=${hTheoryMin.toFixed(2)} m`);
   });
 
-  test("バルブ節点（境界）の Hmin はちょうど 0 m で打ち切られる", () => {
-    assert.ok(Math.abs(p.Hmin[N]!) < 1e-9,
-      `Hmin[valve]=${p.Hmin[N]!.toFixed(6)} m — 0 でない = 実装が変わった`);
+  test("バルブ節点の Hmin が理論値と 0.05% 以内で一致する（0 m で打ち切られない）", () => {
+    assert.ok(p.Hmin[N]! < 0, `Hmin[valve]=${p.Hmin[N]!.toFixed(6)} m — 負圧が出ていない`);
+    const err = Math.abs(relErrPct(H0 - p.Hmin[N]!, joukowsky(A_WAVE, -V0)));
+    assert.ok(err < 0.05,
+      `Hmin[valve]=${p.Hmin[N]!.toFixed(6)} m, 理論=${hTheoryMin.toFixed(6)} m, 誤差=${err.toFixed(4)}%`);
   });
 
-  test("内部格子点は負値になるが、理論値の半分にも届かない", () => {
+  test("内部格子点の Hmin も理論値と 0.05% 以内で一致する", () => {
     const interiorMin = Math.min(...p.Hmin.slice(1, N));
-    assert.ok(interiorMin < 0, `内部 Hmin=${interiorMin.toFixed(4)} m（負値が出ない = 実装が変わった）`);
-    assert.ok(interiorMin > hTheoryMin / 2,
-      `内部 Hmin=${interiorMin.toFixed(4)} m（理論=${hTheoryMin.toFixed(2)} m。現状 ≈-0.40 m まで打ち切られる）`);
+    const err = Math.abs(relErrPct(H0 - interiorMin, joukowsky(A_WAVE, -V0)));
+    assert.ok(err < 0.05,
+      `内部 Hmin=${interiorMin.toFixed(6)} m, 理論=${hTheoryMin.toFixed(6)} m, 誤差=${err.toFixed(4)}%`);
   });
 
-  test("初期水頭が十分高くクランプが働かない場合は、下降側も理論値と 2% 以内で一致する", () => {
+  test("水蒸気圧水頭を下回らなければ水柱分離の警告は出ない", () => {
+    assert.ok(hTheoryMin > MOC_VAPOR_PRESSURE_HEAD, "この条件では水蒸気圧水頭を下回らないはず");
+    const cav = (res.warnings ?? []).filter(w => w.includes("水蒸気圧水頭"));
+    assert.equal(cav.length, 0, JSON.stringify(cav));
+  });
+
+  test("水蒸気圧水頭を下回ると、位置・時刻・水頭を含む警告が出る", () => {
+    // 静水頭 5 m で瞬時閉 → 理論 Hmin ≈ −97 m で水蒸気圧水頭を大きく下回る
+    const low = runMocSinglePipe({
+      pipe: { ...BENCH_PIPE, roughnessCoeff: FRICTIONLESS_C },
+      waveSpeed: A_WAVE, initialVelocity: V0, initialDownstreamHead: 5,
+      closeTime: 0, nReaches: N, tMax: 2 * T_PERIOD,
+    });
+    assert.ok(Math.min(...low.pipes["pipe_0"]!.Hmin) < MOC_VAPOR_PRESSURE_HEAD);
+    const cav = (low.warnings ?? []).filter(w => w.includes("水蒸気圧水頭"));
+    assert.equal(cav.length, 1, JSON.stringify(low.warnings));
+    assert.match(cav[0]!, /上流端から \d+ m の地点/);
+    assert.match(cav[0]!, /t=\d+\.\d+ s/);
+    assert.match(cav[0]!, /水柱分離（キャビテーション）/);
+    assert.match(cav[0]!, /§8\.3 の防護工検討/);
+  });
+
+  test("管中心高を指定すると動水頭（H − 管中心高）で判定される", () => {
+    // 同じ水頭でも管路が標高 50 m にあれば動水頭は 50 m 低い。
+    // 動水位の最小は −2.04 m なので、管中心高 0 m なら警告なし、50 m なら警告あり。
+    const q0 = V0 * Math.PI * 0.25 * 0.25;
+    const build = (upEl?: number, dnEl?: number) => runMoc({
+      pipes: [{
+        id: "p", pipe: { ...BENCH_PIPE, roughnessCoeff: FRICTIONLESS_C },
+        waveSpeed: A_WAVE, nReaches: N, upstreamNodeId: "R", downstreamNodeId: "V",
+        initialFlow: q0,
+        ...(upEl !== undefined && { upstreamElevation: upEl }),
+        ...(dnEl !== undefined && { downstreamElevation: dnEl }),
+      }],
+      nodes: {
+        R: { type: "reservoir", head: H0 },
+        V: { type: "valve", Q0: q0, H0v: H0, closeTime: 0 },
+      },
+    }, { tMax: 2 * T_PERIOD });
+
+    const flat = (build().warnings ?? []).filter(w => w.includes("水蒸気圧水頭"));
+    assert.equal(flat.length, 0, `管中心高 0 m で警告が出た: ${JSON.stringify(flat)}`);
+
+    const raised = (build(50, 50).warnings ?? []).filter(w => w.includes("水蒸気圧水頭"));
+    assert.equal(raised.length, 1, `管中心高 50 m で警告が出ない: ${JSON.stringify(raised)}`);
+    // 動水頭 −52.04 m / 動水位 −2.04 m の両方が示される
+    assert.match(raised[0]!, /動水頭が -52\.\d+ m/);
+    assert.match(raised[0]!, /動水位 -2\.\d+ m/);
+  });
+
+  test("管中心高が未指定の場合はその旨を警告文に添える", () => {
+    const q0 = V0 * Math.PI * 0.25 * 0.25;
+    const low = runMoc({
+      pipes: [{
+        id: "p", pipe: { ...BENCH_PIPE, roughnessCoeff: FRICTIONLESS_C },
+        waveSpeed: A_WAVE, nReaches: N, upstreamNodeId: "R", downstreamNodeId: "V", initialFlow: q0,
+      }],
+      nodes: {
+        R: { type: "reservoir", head: 5 },
+        V: { type: "valve", Q0: q0, H0v: 5, closeTime: 0 },
+      },
+    }, { tMax: 2 * T_PERIOD });
+    const cav = (low.warnings ?? []).filter(w => w.includes("水蒸気圧水頭"));
+    assert.equal(cav.length, 1);
+    assert.match(cav[0]!, /管中心高が未指定/);
+    assert.match(cav[0]!, /upstreamElevation \/ downstreamElevation/);
+  });
+
+  test("水蒸気圧水頭は MocOptions で上書きできる", () => {
+    const strict = runMoc({
+      pipes: [{
+        id: "p", pipe: { ...BENCH_PIPE, roughnessCoeff: FRICTIONLESS_C },
+        waveSpeed: A_WAVE, nReaches: N, upstreamNodeId: "R", downstreamNodeId: "V",
+        initialFlow: V0 * Math.PI * 0.25 * 0.25,
+      }],
+      nodes: {
+        R: { type: "reservoir", head: H0 },
+        V: { type: "valve", Q0: V0 * Math.PI * 0.25 * 0.25, H0v: H0, closeTime: 0 },
+      },
+      // 高標高を想定して水蒸気圧水頭を −1 m まで引き上げると、−2.04 m で警告が出る
+    }, { tMax: 2 * T_PERIOD, vaporPressureHead: -1.0 });
+    const cav = (strict.warnings ?? []).filter(w => w.includes("水蒸気圧水頭"));
+    assert.equal(cav.length, 1, JSON.stringify(strict.warnings));
+    assert.match(cav[0]!, /水蒸気圧水頭 -1\.00 m/);
+  });
+
+  test("初期水頭が高い場合も下降側が理論値と 0.05% 以内で一致する", () => {
     const res2 = runMocSinglePipe({
       pipe: { ...BENCH_PIPE, roughnessCoeff: FRICTIONLESS_C },
       waveSpeed: A_WAVE, initialVelocity: V0, initialDownstreamHead: 300,
@@ -773,8 +869,7 @@ describe("T10 非定常【適用限界】境界節点の負圧が 0 m で打ち�
     const p2 = res2.pipes["pipe_0"]!;
     const dHDown = 300 - p2.Hmin[N]!;
     const err = Math.abs(relErrPct(dHDown, joukowsky(A_WAVE, -V0)));
-    // 残差 1.2% は T8 の「摩擦係数の下限」による系統誤差
-    assert.ok(err < 2.0,
-      `ΔH_下降=${dHDown.toFixed(2)} m, 理論=${joukowsky(A_WAVE, -V0).toFixed(2)} m, 誤差=${err.toFixed(2)}%`);
+    assert.ok(err < 0.05,
+      `ΔH_下降=${dHDown.toFixed(2)} m, 理論=${joukowsky(A_WAVE, -V0).toFixed(2)} m, 誤差=${err.toFixed(4)}%`);
   });
 });

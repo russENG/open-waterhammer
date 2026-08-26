@@ -25,7 +25,7 @@
 """
 
 import math
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from typing import Literal, Union
 
 from .formulas import GRAVITY
@@ -37,6 +37,13 @@ from .types import Pipe
 # 200 m 超は設計用途として粗すぎるため、本ソルバーでは入力エラーとする。
 MOC_GRID_SPACING_RECOMMENDED_MIN = 50.0
 MOC_GRID_SPACING_MAX = 200.0
+
+# 水蒸気圧水頭（ゲージ、標高0m・常温）[m]
+#
+# これを下回ると水柱分離（キャビテーション）が発生する。本ソルバーは分離後の
+# 挙動を追跡しないため、下回った場合は警告を返す（issue #50）。
+# 標高が高い現場や水温が高い場合は MocOptions.vapor_pressure_head で調整する。
+MOC_VAPOR_PRESSURE_HEAD = -10.33
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # 境界条件型（Discriminated Union）
@@ -182,6 +189,13 @@ class MocPipeSegment:
     upstream_node_id: str
     downstream_node_id: str
     initial_flow: float | None = None  # 初期流量 [m³/s]（分岐管路時）
+    # 上流端・下流端の管中心高 [m]（issue #50: 水柱分離の判定に使う）
+    #
+    # 水柱分離は**動水頭**（水頭 − 管中心高）が水蒸気圧水頭を下回ったときに起きる。
+    # 省略すると 0 とみなし、水頭をそのまま動水頭として判定する（＝基準面が
+    # 管中心にある場合のみ正しい）。標高差のある管路では必ず指定すること。
+    upstream_elevation: float | None = None
+    downstream_elevation: float | None = None
 
 
 @dataclass(frozen=True)
@@ -202,6 +216,8 @@ class MocOptions:
     t_max: float | None = None  # シミュレーション時間 [s]
     initial_flow: float | None = None  # 全管路共通の初期流量 [m³/s]
     initial_node_heads: dict[str, float] | None = None  # 定常計算由来の節点水頭 [m]
+    # 水柱分離を判定する水蒸気圧水頭（ゲージ）[m]。既定 MOC_VAPOR_PRESSURE_HEAD。
+    vapor_pressure_head: float | None = None
 
 
 @dataclass(frozen=True)
@@ -287,19 +303,148 @@ def harmonize_time_step(segs: list[MocPipeSegment]) -> tuple[list[MocPipeSegment
                 f"{s.id}: dt整合化で n_reaches={s.n_reaches}→{n_new}"
                 f"（誤差 {rel_err * 100:.2f}%）"
             )
-        # frozen dataclass を更新するには新しいインスタンスを作る
-        harmonized.append(
-            MocPipeSegment(
-                id=s.id,
-                pipe=s.pipe,
-                wave_speed=s.wave_speed,
-                n_reaches=n_new,
-                upstream_node_id=s.upstream_node_id,
-                downstream_node_id=s.downstream_node_id,
-                initial_flow=s.initial_flow,
-            )
-        )
+        # frozen dataclass を更新するには新しいインスタンスを作る。
+        # replace() を使うことで、フィールドが増えても取りこぼさない。
+        harmonized.append(replace(s, n_reaches=n_new))
     return (harmonized, dt, warnings)
+
+
+# ─── 計算区間数の自動提案（issue #49）────────────────────────────────────────
+
+
+@dataclass(frozen=True)
+class ReachCandidatePipe:
+    """suggest_reaches の入力（管路 1 本ぶんの最小情報）."""
+
+    length: float  # 管路延長 L [m]
+    wave_speed: float  # 波速 a [m/s]
+
+
+@dataclass(frozen=True)
+class SuggestReachesResult:
+    reaches: list[int]  # 各管路の計算区間数（入力と同じ順）
+    dt: float  # 共通タイムステップ Δt [s]
+    courant_error: float  # 全管路で最大の |Δx − a·Δt| / (a·Δt)
+    dx_min: float  # 実際に採用した差分距離の下限 [m]
+    warnings: list[str] = field(default_factory=list)
+
+
+def _search_reaches(
+    pipes: list[ReachCandidatePipe],
+    dx_min: float,
+    dx_max: float,
+    dx_target: float,
+    tolerance: float,
+) -> tuple[list[int], float, float] | None:
+    """指定した Δx 下限のもとで最良の分割数の組を探す."""
+    first = pipes[0]
+    n_max = max(1, math.ceil(first.length / dx_min))
+    best: tuple[list[int], float, float, tuple[int, float]] | None = None
+
+    for n0 in range(1, n_max + 1):
+        dt_seed = first.length / (first.wave_speed * n0)
+        reaches = [max(1, round(p.length / (p.wave_speed * dt_seed))) for p in pipes]
+        # 実際に run_moc（harmonize_time_step）が採用する Δt は各管路の素の Δt の最小値。
+        # 誤差評価もそれに合わせないと提案値とソルバーの挙動がずれる。
+        dt = min(p.length / (p.wave_speed * n) for p, n in zip(pipes, reaches, strict=True))
+        err = 0.0
+        dx_penalty = 0.0
+        ok = True
+        for p, n in zip(pipes, reaches, strict=True):
+            dx = p.length / n
+            if dx > dx_max or dx < dx_min:
+                ok = False
+                break
+            err = max(err, abs(dx - p.wave_speed * dt) / (p.wave_speed * dt))
+            dx_penalty = max(dx_penalty, abs(dx - dx_target))
+        if not ok:
+            continue
+        # 許容内の誤差は実用上等価とみなし、Δx が目標に近い組を優先する
+        rank = (0, dx_penalty) if err <= tolerance else (1, err)
+        if best is None or rank < best[3]:
+            best = (reaches, dt, err, rank)
+
+    return None if best is None else (best[0], best[1], best[2])
+
+
+def suggest_reaches(
+    pipes: list[ReachCandidatePipe],
+    dx_min: float | None = None,
+    dx_max: float | None = None,
+    dx_target: float | None = None,
+    courant_tolerance: float = 0.01,
+) -> SuggestReachesResult:
+    """全管路で共通の Δt が成立する計算区間数の組を提案する（技術書 §8.4.2(2)）.
+
+    MOC は全管路で共通の Δt を使うため、Δx = a·Δt が全管路で同時に成り立つ分割数を
+    選ぶ必要がある。実務データでは管路長と波速の比が整数分割で揃わず、
+    実務目安 Δx = 50〜200 m と Courant 誤差の許容が両立しないことがある。
+
+    本関数はまず実務目安の範囲で探し、そこで許容誤差に収まらなければ Δx の下限を
+    段階的に下げる。どこまで下げたかと理由は ``warnings`` で返す。
+    """
+    if not pipes:
+        raise ValueError("管路が 0 本です")
+    for p in pipes:
+        if p.length <= 0 or p.wave_speed <= 0:
+            raise ValueError("管路延長と波速は正の値で指定してください。")
+
+    dx_max_v = dx_max if dx_max is not None else MOC_GRID_SPACING_MAX
+    dx_target_v = (
+        dx_target
+        if dx_target is not None
+        else (MOC_GRID_SPACING_RECOMMENDED_MIN + MOC_GRID_SPACING_MAX) / 2
+    )
+    recommended_min = MOC_GRID_SPACING_RECOMMENDED_MIN
+
+    # 下限の候補: 実務目安から段階的に下げる（明示指定があればそれだけ）
+    floors = (
+        [dx_min]
+        if dx_min is not None
+        else [recommended_min * f for f in (1.0, 0.7, 0.4, 0.2, 0.1)]
+    )
+
+    fallback: tuple[list[int], float, float, float] | None = None
+
+    for floor in floors:
+        if floor > dx_max_v:
+            continue
+        found = _search_reaches(pipes, floor, dx_max_v, dx_target_v, courant_tolerance)
+        if found is None:
+            continue
+        reaches, dt, err = found
+        if fallback is None or err < fallback[2]:
+            fallback = (reaches, dt, err, floor)
+        if err <= courant_tolerance:
+            warnings: list[str] = []
+            if floor < recommended_min:
+                warnings.append(
+                    f"Δx を実務目安の下限 {recommended_min:.0f} m 以上にすると Courant 誤差が"
+                    f"許容値 {courant_tolerance * 100:.1f}% に収まらないため、"
+                    f"下限を {floor:.0f} m まで下げました。"
+                    "管路長と波速の比が整数分割で揃わないことによるもので、"
+                    "計算精度上の問題はありません（技術書 §8.4.2(2)）。"
+                )
+            return SuggestReachesResult(
+                reaches=reaches, dt=dt, courant_error=err, dx_min=floor, warnings=warnings
+            )
+
+    if fallback is None:
+        raise ValueError(
+            f"Δx を {dx_max_v:.0f} m 以下に収める計算区間数の組が見つかりません。"
+            "管路延長・波速を確認してください。"
+        )
+    return SuggestReachesResult(
+        reaches=fallback[0],
+        dt=fallback[1],
+        courant_error=fallback[2],
+        dx_min=fallback[3],
+        warnings=[
+            f"どの分割数でも Courant 誤差が許容値 {courant_tolerance * 100:.1f}% に"
+            f"収まりません（最小 {fallback[2] * 100:.2f}%）。"
+            "管路延長または波速の組み合わせを見直してください（技術書 §8.4.2(2)）。"
+        ],
+    )
 
 
 def _validate_grid_spacing(segs: list[MocPipeSegment]) -> list[str]:
@@ -333,7 +478,21 @@ def _local_darcy_f(velocity: float, diameter: float, c_hw: float) -> float:
     rh = diameter / 4
     # Hazen-Williams 式（技術書 式7.2.2）: V = 0.849·C·R^0.63·I^0.54
     s_grad = (abs_v / (0.849 * c_hw * rh**0.63)) ** (1 / 0.54)
-    return max(0.005, min((2 * GRAVITY * diameter * s_grad) / (abs_v * abs_v), 0.15))
+    # 上限 0.15 は乱流域の妥当範囲として残す。下限は設けない（issue #51）:
+    # 粗度係数 C を大きくとった検証条件で無摩擦を表現できるようにするため。
+    # 極低流速は上の早期リターンで処理済みで、f は常に乗数としてしか使わないので
+    # 0 に近づいても 0 除算は起きない。
+    return min((2 * GRAVITY * diameter * s_grad) / (abs_v * abs_v), 0.15)
+
+
+def _pipe_elevation_at(seg: "MocPipeSegment", i: int) -> float:
+    """格子点 i の管中心高 [m]（上下流端の直線補間、未指定なら 0）.
+
+    issue #50: 水柱分離は動水頭（水頭 − 管中心高）で判定するため必要。
+    """
+    up = seg.upstream_elevation if seg.upstream_elevation is not None else 0.0
+    dn = seg.downstream_elevation if seg.downstream_elevation is not None else up
+    return up + (dn - up) * (i / seg.n_reaches)
 
 
 def _pipe_area(diameter: float) -> float:
@@ -371,14 +530,23 @@ def _solve_reservoir(
 def _solve_valve(
     cp: float, b: float, tau: float, q0: float, h0v: float
 ) -> tuple[float, float]:
-    """バルブ BC（下流端専用）: H_P = CP - B·τᵥ·√H_P の 2 次方程式."""
+    """バルブ BC（下流端専用）: H_P = CP - B·τᵥ·√H_P の 2 次方程式.
+
+    issue #50: 全閉時・流出不能時は水頭を 0 m で打ち切らず、C+ の値をそのまま返す。
+    下降側の水撃圧を過小評価（危険側）しないため。負圧の妥当性は run_moc 側で
+    水蒸気圧水頭と照合して警告する。
+    """
+    # 全閉 → 行き止まりと同じ（水頭は C+ そのもの、負値も許容）
     if tau < 1e-10:
-        return (max(cp, 0), 0)
+        return (cp, 0.0)
+    # C+ が基準面以下だと弁は流出できない（√H が定義できない）。行き止まり扱い。
+    if cp <= 0:
+        return (cp, 0.0)
     h0_safe = max(h0v, 0.01)
     tau_v = (tau * q0) / math.sqrt(h0_safe)
-    disc = b * b * tau_v * tau_v + 4 * max(cp, 0)
+    disc = b * b * tau_v * tau_v + 4 * cp
     y = (-b * tau_v + math.sqrt(disc)) / 2
-    return (max(y * y, 0), tau_v * y)
+    return (y * y, tau_v * y)
 
 
 def _solve_pump(
@@ -413,8 +581,10 @@ def _solve_pump(
     bq = (hs - bc.H0) / (bc.Q0 * bc.Q0)
 
     # ポンプ停止時
+    # issue #50: 停止後は逆止め弁で閉じた行き止まりと同じ。水頭は C- そのもので、
+    # 0 m で打ち切らない（ポンプ直後の負圧を過小評価しないため）。
     if alpha < 1e-6:
-        return (max(cm, 0.0), 0.0)
+        return (cm, 0.0)
 
     # H-Q 交点の解
     # H = α²·Hs - Bq·Q² かつ H = CM + B·Q → Bq·Q² + B·Q + (CM - α²·Hs) = 0
@@ -429,9 +599,9 @@ def _solve_pump(
         h = cm + b * q
 
     if check_valve and q < 0:
-        h = max(cm, 0.0)
+        # 逆止め弁が閉じる → 行き止まり。水頭は C- そのもの（issue #50）
+        h = cm
         q = 0.0
-    h = max(h, 0.0)
     q = max(q, 0.0)
 
     # GD² による回転速度更新（技術書式 8.4.10-11）
@@ -457,76 +627,134 @@ def _solve_pump(
     return (h, q)
 
 
-def _solve_air_chamber(
-    cp: float,
-    b: float,
+def _solve_device_node(
+    in_pipes: list[tuple[float, float]],
+    out_pipes: list[tuple[float, float]],
+    bc: "AirChamberBC | SurgeTankBC | AirReleaseValveBC",
     dt: float,
-    bc: AirChamberBC,
-    state: dict[str, float],
-) -> tuple[float, float]:
-    """エアチャンバ BC.
+    state: dict,
+) -> tuple[float, list[float], list[float]]:
+    """装置節点（エアチャンバ・サージタンク・吸気弁）の求解.
 
-    H_a · V_a^m = const（ポリトロープ気体則）.
-    陽的 predictor-corrector で安定更新.
+    issue #47: これらの防護工は実務では管路の**途中**に設置する。従来は
+    「流入管 1 本の末端」としてしか解いておらず、流出管の流量が 0 のまま残って
+    装置が完全閉そくとして働いていた。
+
+    ここでは装置を「節点から流量 Q_dev を出し入れする枝」として扱い、
+    分岐点の連続条件と連立させる。
+
+        流入管 k: Q_in,k  = (CP_k - H) / B_k
+        流出管 k: Q_out,k = (H - CM_k) / B_k
+        連続条件: sum(Q_in) - sum(Q_out) - Q_dev(H) = 0
+
+    S = sum_in CP_k/B_k + sum_out CM_k/B_k、T = sum_all 1/B_k と置くと
+    sum(Q_in) - sum(Q_out) = S - H*T なので、解くべきは
+    f(H) = S - H*T - Q_dev(H) = 0。
+
+    流出管が 0 本（管路末端）の場合はこの一般形の特殊ケースとして落ちるため、
+    従来の末端配置の挙動はそのまま保たれる。
+
+    Args:
+        in_pipes: [(CP, B), ...] 流入管.
+        out_pipes: [(CM, B), ...] 流出管.
+
+    Returns:
+        (H, Q_in のリスト, Q_out のリスト).
     """
+    s_sum = sum(cp / b for cp, b in in_pipes) + sum(cm / b for cm, b in out_pipes)
+    t_sum = sum(1 / b for _, b in in_pipes) + sum(1 / b for _, b in out_pipes)
+
+    def finish(h: float) -> tuple[float, list[float], list[float]]:
+        return (
+            h,
+            [(cp - h) / b for cp, b in in_pipes],
+            [(h - cm) / b for cm, b in out_pipes],
+        )
+
+    if t_sum <= 0:
+        return finish(0.0)
+
+    if isinstance(bc, SurgeTankBC):
+        # Q_dev = (H - datum - z)*A_s/dt は H について線形 -> 閉形式で解ける
+        #   H = (S + (z + datum)*A_s/dt) / (T + A_s/dt)
+        datum = bc.datum
+        k = bc.tank_area / dt
+        h = (s_sum + (state["z"] + datum) * k) / (t_sum + k)
+        q_dev = (h - datum - state["z"]) * k
+        state["z"] += q_dev * dt / bc.tank_area
+        return finish(h)
+
+    if isinstance(bc, AirReleaseValveBC):
+        # まず装置なし（Q_dev = 0）で解き、大気圧水頭を下回るときだけ開放する
+        h_free = s_sum / t_sum
+        return finish(bc.atmospheric_head if h_free < bc.atmospheric_head else h_free)
+
+    # エアチャンバ: ポリトロープ気体則 H*V^m = H_a0*V_a0^m
+    #   V_new(H) = V_a0*(H_a0/H)^(1/m)、Q_dev(H) = (V_state - V_new(H)) / dt
+    #   f(H) = S - H*T - Q_dev(H) は H について単調減少なので二分法で確実に解ける。
     m = bc.polytropic_index
     v_min = bc.V_air0 * 0.02  # 最小空気容積（チャンバ容量の 2%）
+    v_state = state["V_air"]
 
-    # 現在の気体圧水頭
-    h_cur = bc.H_air0 * (bc.V_air0 / state["V_air"]) ** m
+    def volume_at(h: float) -> float:
+        return bc.V_air0 * (bc.H_air0 / h) ** (1 / m)
 
-    # Predictor: 現水頭から Q を推算
-    q_pred = (cp - h_cur) / b
-    v_pred = max(state["V_air"] - q_pred * dt, v_min)
-    h_pred = bc.H_air0 * (bc.V_air0 / v_pred) ** m
+    def f(h: float) -> float:
+        return s_sum - h * t_sum - (v_state - volume_at(h)) / dt
 
-    # Corrector: 修正水頭から Q を再計算
-    q_corr = (cp - h_pred) / b
-    q_avg = (q_pred + q_corr) / 2
+    # 空気容積の下限に対応する水頭の上限（これ以上は圧縮できない）
+    h_ceiling = bc.H_air0 * (bc.V_air0 / v_min) ** m
+    lo = 1e-9
+    hi = max(h_ceiling, abs(s_sum / t_sum) * 2 + 1)
+    if f(hi) > 0:
+        # 上限でもまだ f > 0 -> 圧縮限界。V_min に張り付く
+        state["V_air"] = v_min
+        return finish(h_ceiling)
+    for _ in range(80):
+        mid = (lo + hi) / 2
+        if f(mid) > 0:
+            lo = mid
+        else:
+            hi = mid
+    h = (lo + hi) / 2
+    state["V_air"] = min(max(volume_at(h), v_min), bc.V_air0 / 0.02)
+    return finish(h)
 
-    # 最終更新
-    state["V_air"] = max(state["V_air"] - q_avg * dt, v_min)
-    h_new = bc.H_air0 * (bc.V_air0 / state["V_air"]) ** m
 
-    return (h_new, q_avg)
+def _solve_prv_inline(
+    in_pipe: tuple[float, float],
+    out_pipe: tuple[float, float],
+    bc: "PressureReducingValveBC",
+) -> tuple[float, float, float, float]:
+    """減圧バルブ BC — 管路の途中（流入管 1 本・流出管 1 本）.
 
+    issue #47: 減圧弁は流量を出し入れする装置ではなく、節点の上流側と下流側で
+    **異なる水頭**を持つ要素なので、他の防護工とは別扱いにする。
 
-def _solve_surge_tank(
-    cp: float,
-    b: float,
-    dt: float,
-    bc: SurgeTankBC,
-    state: dict[str, float],
-) -> tuple[float, float]:
-    """サージタンク BC（技術書 §8.5）.
+        下流側: H_dn = H_set（設定圧を維持）-> Q = (H_set - CM) / B_dn
+        上流側: H_up = CP - B_up*Q
 
-    A_s·dz/dt = Q_in を陰的離散化で無条件安定に解く.
+    動作モード:
+        - 通常制御: 上式のとおり
+        - 全開: 上流水頭が設定圧まで届かない場合は減圧できないので、
+                単なる接合点（連続条件のみ）に退化する
+        - 遮断: 逆流になる場合は Q = 0（逆止機能）
 
-    陰的解:
-        H_new = (z_old + datum + CP·γ) / (1 + γ)  ここで γ = dt / (B·A_s)
+    Returns:
+        (H_上流側, H_下流側, Q_in, Q_out).
     """
-    gamma = dt / (b * bc.tank_area)
-    h_new = (state["z"] + bc.datum + cp * gamma) / (1 + gamma)
-    q_new = (cp - h_new) / b
-    state["z"] += q_new * dt / bc.tank_area
-    return (h_new, q_new)
-
-
-def _solve_air_release_valve(
-    cp: float, b: float, bc: AirReleaseValveBC
-) -> tuple[float, float]:
-    """吸気弁 BC（負圧防止）.
-
-    H < H_atm のとき開放: H = H_atm.
-    H ≥ H_atm のとき全閉: Q = 0（行き止まり）.
-    """
-    h_atm = bc.atmospheric_head
-    h_dead = max(cp, 0.0)
-    if h_dead < h_atm:
-        # 負圧 → 吸気弁開放、大気圧維持
-        q = (cp - h_atm) / b
-        return (h_atm, q)
-    return (h_dead, 0.0)
+    cp, b_in = in_pipe
+    cm, b_out = out_pipe
+    q = (bc.set_head - cm) / b_out
+    if q <= 0:
+        # 逆流 -> 遮断。両側とも行き止まりとして解く
+        return (cp, cm, 0.0, 0.0)
+    h_up = cp - b_in * q
+    if h_up <= bc.set_head:
+        # 上流水頭が設定圧以下 -> 減圧不要。全開＝単なる接合点
+        h = (cp / b_in + cm / b_out) / (1 / b_in + 1 / b_out)
+        return (h, h, (cp - h) / b_in, (h - cm) / b_out)
+    return (h_up, bc.set_head, q, q)
 
 
 def _solve_prv(
@@ -539,8 +767,12 @@ def _solve_prv(
 
 
 def _solve_dead_end(cp: float) -> tuple[float, float]:
-    """行き止まり BC: Q=0, H=CP."""
-    return (max(cp, 0.0), 0.0)
+    """行き止まり BC: Q=0, H=CP.
+
+    issue #50: 水頭を 0 m で打ち切らない。負圧の妥当性は run_moc 側で
+    水蒸気圧水頭と照合して警告する。
+    """
+    return (cp, 0.0)
 
 
 def _solve_junction(
@@ -691,6 +923,14 @@ def run_moc(
                 f"本ソルバの Δt=Δx/a は {ratio * 100:.2f}% 超過しています。"
                 "n_reaches を増やすか、初期流速を見直してください。"
             )
+
+    vapor_head = (
+        options.vapor_pressure_head
+        if options.vapor_pressure_head is not None
+        else MOC_VAPOR_PRESSURE_HEAD
+    )
+    # 最初に水蒸気圧水頭を下回った位置・時刻（issue #50）
+    cavitation: dict | None = None
 
     t0_max = max(p.T0 for p in physics)
     t_max = options.t_max if options.t_max is not None else 3 * t0_max
@@ -845,6 +1085,8 @@ def run_moc(
 
         # 3. 全ノードを一括処理
         node_h_new: dict[str, float] = {}
+        # 上流側と下流側で水頭が異なる節点（減圧弁）の下流側水頭
+        node_h_new_out: dict[str, float] = {}
         node_q_in: dict[str, list[float]] = {}
         node_q_out: dict[str, list[float]] = {}
 
@@ -888,39 +1130,45 @@ def run_moc(
                     )
                     q_outs = [q_p]
 
-            elif isinstance(bc, AirChamberBC):
-                if not in_pipes:
-                    h_node = 0.0
+            elif isinstance(bc, (AirChamberBC, SurgeTankBC, AirReleaseValveBC)):
+                # 防護工（issue #47）:
+                # 装置を「節点から流量 Q_dev を出し入れする枝」として扱い、
+                # 分岐点の連続条件と連立させる。管路末端・途中のどちらでも解ける。
+                in_data = [(cp_arr[pi], physics[pi].B) for pi in in_pipes]
+                out_data = [(cm_arr[pi], physics[pi].B) for pi in out_pipes]
+                if isinstance(bc, AirChamberBC):
+                    dev_state = air_chamber_state[node_id]
+                elif isinstance(bc, SurgeTankBC):
+                    dev_state = surge_tank_state[node_id]
                 else:
-                    pi = in_pipes[0]
-                    st = air_chamber_state[node_id]
-                    h_node, q_a = _solve_air_chamber(cp_arr[pi], physics[pi].B, dt_global, bc, st)
-                    q_ins = [q_a]
-
-            elif isinstance(bc, SurgeTankBC):
-                if not in_pipes:
-                    h_node = 0.0
-                else:
-                    pi = in_pipes[0]
-                    st = surge_tank_state[node_id]
-                    h_node, q_s = _solve_surge_tank(cp_arr[pi], physics[pi].B, dt_global, bc, st)
-                    q_ins = [q_s]
-
-            elif isinstance(bc, AirReleaseValveBC):
-                if not in_pipes:
-                    h_node = 0.0
-                else:
-                    pi = in_pipes[0]
-                    h_node, q_av = _solve_air_release_valve(cp_arr[pi], physics[pi].B, bc)
-                    q_ins = [q_av]
+                    dev_state = {}
+                h_node, q_ins, q_outs = _solve_device_node(
+                    in_data, out_data, bc, dt_global, dev_state
+                )
 
             elif isinstance(bc, PressureReducingValveBC):
-                if not in_pipes:
-                    h_node = 0.0
-                else:
+                # 減圧バルブ（issue #47）:
+                # 上流側と下流側で水頭が異なるため、装置枝ではなく専用の扱いにする。
+                if len(in_pipes) == 1 and len(out_pipes) == 1:
+                    p_in, p_out = in_pipes[0], out_pipes[0]
+                    h_node, h_out_v, q_in_v, q_out_v = _solve_prv_inline(
+                        (cp_arr[p_in], physics[p_in].B),
+                        (cm_arr[p_out], physics[p_out].B),
+                        bc,
+                    )
+                    node_h_new_out[node_id] = h_out_v
+                    q_ins = [q_in_v]
+                    q_outs = [q_out_v]
+                elif not out_pipes and in_pipes:
+                    # 管路末端の減圧弁（従来どおり）
                     pi = in_pipes[0]
                     h_node, q_prv = _solve_prv(cp_arr[pi], physics[pi].B, bc)
                     q_ins = [q_prv]
+                else:
+                    # 未対応構成（流入・流出が複数）。接合点として解く
+                    in_data = [(cp_arr[pi], physics[pi].B) for pi in in_pipes]
+                    out_data = [(cm_arr[pi], physics[pi].B) for pi in out_pipes]
+                    h_node, q_ins, q_outs = _solve_junction(in_data, out_data)
 
             else:  # DeadEndBC
                 if not in_pipes:
@@ -946,8 +1194,9 @@ def run_moc(
             for k, pi in enumerate(in_pipes):
                 h_news[pi][segs[pi].n_reaches] = h_node
                 q_news[pi][segs[pi].n_reaches] = q_ins[k] if k < len(q_ins) else 0.0
+            h_out = node_h_new_out.get(node_id, h_node)
             for k, pi in enumerate(out_pipes):
-                h_news[pi][0] = h_node
+                h_news[pi][0] = h_out
                 q_news[pi][0] = q_outs[k] if k < len(q_outs) else 0.0
 
         # 5. 状態時系列記録
@@ -971,10 +1220,46 @@ def run_moc(
                     h_maxes[pi][i] = h
                 if h < h_mines[pi][i]:
                     h_mines[pi][i] = h
+                # 水柱分離の判定（issue #50）: 動水頭が水蒸気圧水頭を下回った位置・時刻
+                if cavitation is None:
+                    gauge = h - _pipe_elevation_at(seg, i)
+                    if gauge < vapor_head:
+                        cavitation = {
+                            "pipe_id": seg.id, "index": i, "t": t, "H": h, "gauge": gauge,
+                        }
             if step % save_every == 0:
                 snapshots_arr[pi].append(
                     MocSnapshot(t=t, H=list(h_state[pi]), Q=list(q_state[pi]))
                 )
+
+    # 水柱分離の警告（issue #50）
+    if cavitation is not None:
+        _pi = next(
+            (k for k, s2 in enumerate(segs) if s2.id == cavitation["pipe_id"]), -1
+        )
+        _dist = cavitation["index"] * physics[_pi].dx if _pi >= 0 else 0.0
+        _seg = segs[_pi] if _pi >= 0 else None
+        _has_elev = _seg is not None and (
+            _seg.upstream_elevation is not None or _seg.downstream_elevation is not None
+        )
+        warnings.append(
+            f"{cavitation['pipe_id']}: 上流端から {_dist:.0f} m の地点"
+            f"（格子点 {cavitation['index']}）で t={cavitation['t']:.2f} s に"
+            f"動水頭が {cavitation['gauge']:.2f} m"
+            f"（動水位 {cavitation['H']:.2f} m）となり、"
+            f"水蒸気圧水頭 {vapor_head:.2f} m を"
+            "下回りました。この位置で水柱分離（キャビテーション）が発生する可能性が"
+            "ありますが、本ソルバーは分離・再結合の挙動を追跡しません。"
+            "これ以降の計算結果は参考値として扱い、技術書 §8.3 の防護工検討に"
+            "進んでください。"
+            + (
+                ""
+                if _has_elev
+                else "（管中心高が未指定のため基準面 0 m で判定しています。"
+                "標高差のある管路では upstream_elevation / downstream_elevation を"
+                "指定してください。）"
+            )
+        )
 
     # 結果整形
     pipes_result: dict[str, MocPipeResult] = {}

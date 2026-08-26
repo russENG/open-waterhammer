@@ -190,8 +190,11 @@ def calc_steady_network(input_data: SteadyNetworkInput) -> SteadyNetworkResult:
         _detect_out_of_scope_topology(pipes, reservoirs, visited, parent_pipe)
     )
 
+    # 需要は reservoir 以外の全ノードから集計する（技術書 §7 の節点需要）。
+    # reservoir は無限水源なので EPANET 同様 demand を無視する。
+    # 集計対象は EPANET アダプタの buildInp() が [JUNCTIONS] に書き出す範囲と一致させる。
     subtree_demand = {
-        node.id: node.demand if node.type == "demand" else 0.0 for node in nodes
+        node.id: 0.0 if node.type == "reservoir" else node.demand for node in nodes
     }
     pipe_flows: dict[str, float] = {}
     for current in reversed(topo_order):

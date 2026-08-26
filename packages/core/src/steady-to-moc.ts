@@ -172,6 +172,9 @@ interface SegmentDraft {
   initialFlow?: number;
   upstreamNodeId: string;
   downstreamNodeId: string;
+  /** 区間の上流端・下流端の管中心高 FH [m]（issue #50: 水柱分離の判定に使う） */
+  upstreamElevation: number;
+  downstreamElevation: number;
 }
 
 /**
@@ -228,6 +231,14 @@ function groupIntoSegments(
         initialFlow: points[segStart]!.flowRate,
         upstreamNodeId: "",
         downstreamNodeId: "",
+        // 測点の管中心高をそのまま渡す。これが無いと MOC 側は基準面 0 m で
+        // 水柱分離を判定してしまい、標高差のある管路で判定を誤る（issue #50）。
+        //
+        // 測点の pipeLength は「前測点からこの測点まで」なので、上の区間長と同じく、
+        // 区間の物理的な始点は 1 つ前の測点になる（先頭区間だけは自分自身が始点）。
+        // ここを segPoints[0] にすると、区間の境目で管中心高が不連続になる。
+        upstreamElevation: points[segStart === 0 ? 0 : segStart - 1]!.pipeCenterHeight,
+        downstreamElevation: segPoints[segPoints.length - 1]!.pipeCenterHeight,
       });
 
       if (diameterChanged) {

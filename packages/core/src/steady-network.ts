@@ -249,10 +249,14 @@ export function calcSteadyNetwork(input: SteadyNetworkInput): SteadyNetworkResul
   warnings.push(...detectOutOfScopeTopology(pipes, reservoirs, visited, parentPipe));
 
   // 逆順（葉→根）で需要を積み上げ
+  //
+  // 需要は reservoir 以外の全ノードから集計する（技術書 §7 の節点需要）。
+  // reservoir は無限水源なので EPANET 同様 demand を無視する。
+  // 集計対象は EPANET アダプタの buildInp() が [JUNCTIONS] に書き出す範囲と一致させる。
   const subtreeDemand = new Map<string, number>();
   for (const n of nodes) {
     const def = nodeMap.get(n.id);
-    subtreeDemand.set(n.id, def?.type === "demand" ? (def.demand ?? 0) : 0);
+    subtreeDemand.set(n.id, def?.type === "reservoir" ? 0 : (def?.demand ?? 0));
   }
 
   for (let i = topoOrder.length - 1; i >= 0; i--) {
