@@ -226,9 +226,11 @@ class TestBuildMocMultiDiameter:
             )
         )
         result = run_moc(low.network, low.options)
-        for w in result.warnings:
-            if "水柱分離" in w:
-                assert "管中心高が未指定" not in w
+        cav = [w for w in result.warnings if "水柱分離" in w]
+        # 警告そのものが出ていないと、この検証は空回りしてしまう
+        assert cav, "この条件では水柱分離の警告が出るはず"
+        for w in cav:
+            assert "管中心高が未指定" not in w
 
 
 # ─── カスタムBC ──────────────────────────────────────────────────────────────

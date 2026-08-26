@@ -178,7 +178,9 @@ describe("buildMocFromSteady — 管中心高の引き継ぎ（issue #50）", ()
       valveCloseTime: 0.5,
     });
     const result = runMoc(low.network, low.options);
-    const cav = result.warnings.filter((w) => w.includes("水柱分離"));
+    const cav = (result.warnings ?? []).filter((w) => w.includes("水柱分離"));
+    // 警告そのものが出ていないと、この検証は空回りしてしまう
+    assert.ok(cav.length > 0, "この条件では水柱分離の警告が出るはず");
     for (const w of cav) {
       assert.ok(!w.includes("管中心高が未指定"), w);
     }
