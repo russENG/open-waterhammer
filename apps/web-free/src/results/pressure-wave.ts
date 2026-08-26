@@ -173,6 +173,53 @@ export function derivePressureWaveAnimation(
   }
 }
 
+/** 設計を支配する地点。管路IDと、その管路の起点からの位置比 (0〜1)。 */
+export interface GoverningLocation {
+  pipeId: string
+  ratio: number
+  /** 定常水頭からの最大振れ幅 [m]。上昇側・下降側の大きいほう。 */
+  excursion: number
+  /** 振れの向き。上昇側なら 'up'（設計内圧側）、下降側なら 'down'（負圧側）。 */
+  direction: 'up' | 'down'
+}
+
+/**
+ * 保存済み計算結果の包絡線から、設計を支配する地点を1つ選ぶ。
+ *
+ * 判定は「定常水頭からの振れ幅が最大の位置」。上昇側 (Hmax − H_steady) と
+ * 下降側 (H_steady − Hmin) を同じ水頭 [m] の物差しで比べ、大きいほうを採る。
+ * 上昇側が勝てば設計内圧を、下降側が勝てば負圧・水柱分離を検討すべき地点になる。
+ *
+ * 何も選択していないときに時系列へ出す既定地点として使う。以前の既定は
+ * 「最初の管路の中央」で、工学的な意味がないうえに、なぜそこなのかも画面から
+ * 分からなかった。
+ *
+ * 包絡線 (`summary.pipes[*].Hmax / Hmin / H_steady`) は計算エンジンが全区間で
+ * 求めた値で、アニメーション用に間引く前の解像度を持つ。位置は配列の添字から
+ * 比に直すので、間引かれたフレーム側とも `valueAtRatio` で突き合わせられる。
+ */
+export function deriveGoverningLocation(run: Run): GoverningLocation | undefined {
+  const pipes = record(record(run.summary)?.pipes)
+  if (!pipes) return undefined
+  let best: GoverningLocation | undefined
+  for (const pipeId of Object.keys(pipes).sort()) {
+    const pipe = record(pipes[pipeId])
+    if (!pipe) continue
+    const steady = finiteNumbers(pipe.H_steady)
+    const maximum = finiteNumbers(pipe.Hmax)
+    const minimum = finiteNumbers(pipe.Hmin)
+    const length = Math.min(steady.length, maximum.length, minimum.length)
+    for (let index = 0; index < length; index += 1) {
+      const up = maximum[index]! - steady[index]!
+      const down = steady[index]! - minimum[index]!
+      const excursion = Math.max(up, down)
+      if (!Number.isFinite(excursion) || (best && excursion <= best.excursion)) continue
+      best = { pipeId, ratio: length === 1 ? 0 : index / (length - 1), excursion, direction: up >= down ? 'up' : 'down' }
+    }
+  }
+  return best
+}
+
 export function valueAtRatio(values: number[], ratio: number): number | undefined {
   if (!values.length) return undefined
   if (values.length === 1) return values[0]
