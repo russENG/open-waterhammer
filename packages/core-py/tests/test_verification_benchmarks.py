@@ -408,6 +408,8 @@ class TestS5OutOfScopeTopology:
 # T. 非定常計算（MOC）の検証
 # ═══════════════════════════════════════════════════════════════════════════════
 
+# run_moc_single_pipe は入力管路のID（ここでは "bench" / "upstream" / "downstream"）を
+# そのまま結果のキーに使う（moc.py の _convenience_pipe_ids）。
 BENCH_PIPE = Pipe(
     id="bench",
     start_node_id="upstream",
@@ -460,12 +462,12 @@ class TestT1Joukowsky:
         assert joukowsky(A_WAVE, -V0) == pytest.approx(A_WAVE * V0 / GRAVITY, abs=1e-12)
 
     def test_valve_head_rise_matches_joukowsky(self, result):
-        dh = result.pipes["pipe_0"].Hmax[self.N] - H0
+        dh = result.pipes[BENCH_PIPE.id].Hmax[self.N] - H0
         err = abs(rel_err_pct(dh, joukowsky(A_WAVE, -V0)))
         assert err < 0.05, f"MOC ΔH={dh:.2f} m, 理論={joukowsky(A_WAVE, -V0):.2f} m, 誤差={err:.2f}%"
 
     def test_reservoir_head_is_fixed(self, result):
-        p = result.pipes["pipe_0"]
+        p = result.pipes[BENCH_PIPE.id]
         assert p.Hmax[0] == pytest.approx(p.H_steady[0], abs=1e-9)
         assert p.Hmin[0] == pytest.approx(p.H_steady[0], abs=1e-9)
 
@@ -482,7 +484,7 @@ class TestT2GridConvergence:
     @pytest.fixture(scope="class")
     @classmethod
     def peaks(cls):
-        return {n: frictionless_valve_close(0, n, 4 * T_PERIOD).pipes["pipe_0"].Hmax[n] - H0 for n in (10, 20, 40, 80)}
+        return {n: frictionless_valve_close(0, n, 4 * T_PERIOD).pipes[BENCH_PIPE.id].Hmax[n] - H0 for n in (10, 20, 40, 80)}
 
     def test_all_within_tolerance(self, peaks):
         for n, dh in peaks.items():
@@ -505,7 +507,7 @@ class TestT3WavePeriod:
         return frictionless_valve_close(0, cls.N, 2.5 * T_PERIOD)
 
     def test_vibration_period_recorded(self, result):
-        assert result.pipes["pipe_0"].vibration_period == pytest.approx(T_PERIOD, abs=1e-9)
+        assert result.pipes[BENCH_PIPE.id].vibration_period == pytest.approx(T_PERIOD, abs=1e-9)
 
     @pytest.mark.parametrize("k", [0.25, 1.25, 2.25])
     def test_high_pressure_phase(self, result, k):
@@ -685,7 +687,7 @@ class TestT7AllieviChain:
     def test_peak_matches_exact_solution(self, n_t):
         tc, n_steps, h_theory = self._theory(n_t)
         result = frictionless_valve_close(tc, self.N, n_steps * T_ROUND)
-        h_moc = result.pipes["pipe_0"].Hmax[self.N] / H0
+        h_moc = result.pipes[BENCH_PIPE.id].Hmax[self.N] / H0
         ref = max(h_theory)
         err = abs(rel_err_pct(h_moc, ref))
         assert err < 0.05, f"MOC h_max={h_moc:.4f}, アリエビ連鎖式={ref:.4f}, 誤差={err:.3f}%"
@@ -703,13 +705,13 @@ class TestT7AllieviChain:
     def test_rapid_closure_boundary_equals_joukowsky(self):
         """tν = 2L/a（急閉そくの境界）ではジューコフスキー値に一致する."""
         result = frictionless_valve_close(T_ROUND, self.N, 4 * T_PERIOD)
-        dh = result.pipes["pipe_0"].Hmax[self.N] - H0
+        dh = result.pipes[BENCH_PIPE.id].Hmax[self.N] - H0
         err = abs(rel_err_pct(dh, joukowsky(A_WAVE, -V0)))
         assert err < 0.5, f"ΔH={dh:.2f} m, ジューコフスキー={joukowsky(A_WAVE, -V0):.2f} m, 誤差={err:.2f}%"
 
     def test_longer_closure_monotonically_reduces_peak(self):
         peaks = [
-            frictionless_valve_close(n_t * T_ROUND, self.N, (n_t + 4) * T_ROUND).pipes["pipe_0"].Hmax[self.N]
+            frictionless_valve_close(n_t * T_ROUND, self.N, (n_t + 4) * T_ROUND).pipes[BENCH_PIPE.id].Hmax[self.N]
             for n_t in (2, 4, 6, 10)
         ]
         assert all(peaks[i] < peaks[i - 1] for i in range(1, len(peaks))), peaks
@@ -825,14 +827,14 @@ class TestT10NegativePressure:
 
     def test_valve_node_matches_theory(self, result):
         """バルブ節点の Hmin が理論値と 0.05% 以内で一致する（0 m で打ち切られない）."""
-        hmin = result.pipes["pipe_0"].Hmin[self.N]
+        hmin = result.pipes[BENCH_PIPE.id].Hmin[self.N]
         assert hmin < 0, f"Hmin[valve]={hmin:.6f} m — 負圧が出ていない"
         err = abs(rel_err_pct(H0 - hmin, joukowsky(A_WAVE, -V0)))
         assert err < 0.05, f"Hmin[valve]={hmin:.6f} m, 理論={self.H_THEORY_MIN:.6f} m, 誤差={err:.4f}%"
 
     def test_interior_matches_theory(self, result):
         """内部格子点の Hmin も理論値と 0.05% 以内で一致する."""
-        interior_min = min(result.pipes["pipe_0"].Hmin[1 : self.N])
+        interior_min = min(result.pipes[BENCH_PIPE.id].Hmin[1 : self.N])
         err = abs(rel_err_pct(H0 - interior_min, joukowsky(A_WAVE, -V0)))
         assert err < 0.05, f"内部 Hmin={interior_min:.6f} m, 理論={self.H_THEORY_MIN:.6f} m, 誤差={err:.4f}%"
 
@@ -856,7 +858,7 @@ class TestT10NegativePressure:
                 t_max=2 * T_PERIOD,
             )
         )
-        assert min(low.pipes["pipe_0"].Hmin) < MOC_VAPOR_PRESSURE_HEAD
+        assert min(low.pipes[BENCH_PIPE.id].Hmin) < MOC_VAPOR_PRESSURE_HEAD
         cav = [w for w in low.warnings if "水蒸気圧水頭" in w]
         assert len(cav) == 1, low.warnings
         assert re.search(r"上流端から \d+ m の地点", cav[0])
@@ -961,6 +963,6 @@ class TestT10NegativePressure:
                 t_max=T_PERIOD,
             )
         )
-        dh_down = 300 - result.pipes["pipe_0"].Hmin[self.N]
+        dh_down = 300 - result.pipes[BENCH_PIPE.id].Hmin[self.N]
         err = abs(rel_err_pct(dh_down, joukowsky(A_WAVE, -V0)))
         assert err < 0.05, f"ΔH_下降={dh_down:.2f} m, 理論={joukowsky(A_WAVE, -V0):.2f} m, 誤差={err:.4f}%"

@@ -59,6 +59,14 @@ PIPE_DI_300 = Pipe(
     roughness_coeff=130,
 )
 
+# 便利 API（run_moc_single_pipe / run_moc_pump_trip / run_moc_pump_start）が
+# 組み立てるネットワークは入力管路のIDをそのまま使う（moc.py の
+# _convenience_pipe_ids）ので、結果のキーもこの3つになる。直接 run_moc を呼ぶ
+# テストは自前のIDを使うため無関係。
+CONVENIENCE_PIPE_ID = PIPE_DI_300.id
+CONVENIENCE_UPSTREAM_ID = PIPE_DI_300.start_node_id
+CONVENIENCE_DOWNSTREAM_ID = PIPE_DI_300.end_node_id
+
 V0 = 1.0
 H0 = 30.0
 A_DEFAULT = math.pi * 0.3 * 0.3 / 4
@@ -181,11 +189,12 @@ class TestSinglePipeConvenience:
             )
         )
 
-    def test_pipe_0_exists(self, result):
-        assert "pipe_0" in result.pipes
+    def test_result_is_keyed_by_input_pipe_id(self, result):
+        assert CONVENIENCE_PIPE_ID in result.pipes
+        assert "pipe_0" not in result.pipes
 
     def test_downstream_head_rises_on_instant_close(self, result):
-        hmax = max(p["H"] for p in result.nodes["downstream"].H)
+        hmax = max(p["H"] for p in result.nodes[CONVENIENCE_DOWNSTREAM_ID].H)
         assert hmax > H0
 
 
@@ -208,13 +217,13 @@ class TestPumpTrip:
         )
 
     def test_no_crash(self, result):
-        assert "pipe_0" in result.pipes
+        assert CONVENIENCE_PIPE_ID in result.pipes
 
     def test_dead_end_h_recorded(self, result):
-        assert len(result.nodes["dead_end_node"].H) > 0
+        assert len(result.nodes[CONVENIENCE_DOWNSTREAM_ID].H) > 0
 
     def test_negative_pressure_possible(self, result):
-        hmin = min(p["H"] for p in result.nodes["pump_node"].H)
+        hmin = min(p["H"] for p in result.nodes[CONVENIENCE_UPSTREAM_ID].H)
         assert hmin < 50
 
 
@@ -302,19 +311,19 @@ class TestGD2PumpModel:
         )
 
     def test_no_crash(self, result):
-        assert "pipe_0" in result.pipes
+        assert CONVENIENCE_PIPE_ID in result.pipes
 
     def test_n_series_recorded(self, result):
-        assert result.nodes["pump_node"].N is not None
-        assert len(result.nodes["pump_node"].N) > 0
+        assert result.nodes[CONVENIENCE_UPSTREAM_ID].N is not None
+        assert len(result.nodes[CONVENIENCE_UPSTREAM_ID].N) > 0
 
     def test_n_decreases(self, result):
-        ns = result.nodes["pump_node"].N
+        ns = result.nodes[CONVENIENCE_UPSTREAM_ID].N
         n_last = ns[-1]["N"]
         assert n_last < 1450, f"N_last={n_last:.0f}"
 
     def test_hmin_below_pump_head(self, result):
-        hmin = min(p["H"] for p in result.nodes["pump_node"].H)
+        hmin = min(p["H"] for p in result.nodes[CONVENIENCE_UPSTREAM_ID].H)
         assert hmin < 50
 
 
@@ -361,7 +370,7 @@ class TestAirChamber:
         assert "pipe_0" in r_with_ac.pipes
         assert r_with_ac.nodes["ac"].V_air is not None
         assert len(r_with_ac.nodes["ac"].V_air) > 0
-        hmin_de = min(p["H"] for p in r_no_ac.nodes["dead_end_node"].H)
+        hmin_de = min(p["H"] for p in r_no_ac.nodes[CONVENIENCE_DOWNSTREAM_ID].H)
         hmin_ac = min(p["H"] for p in r_with_ac.nodes["ac"].H)
         assert hmin_ac > hmin_de, f"Hmin_ac={hmin_ac:.1f}, Hmin_de={hmin_de:.1f}"
 

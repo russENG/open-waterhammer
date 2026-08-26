@@ -48,6 +48,13 @@ const a = calcWaveSpeed(PIPE_DI_300);
 const A = Math.PI * 0.3 * 0.3 / 4;
 const Q0 = V0 * A;
 
+// 便利 API（runMocSinglePipe / runMocPumpTrip / runMocPumpStart）が組み立てる
+// ネットワークは入力管路のIDをそのまま使う（moc.ts の conveniencePipeIds）ので、
+// 結果のキーもこの3つになる。直接 runMoc を呼ぶテストは自前のIDを使うため無関係。
+const CONVENIENCE_PIPE_ID = PIPE_DI_300.id;
+const CONVENIENCE_UPSTREAM_ID = PIPE_DI_300.startNodeId;
+const CONVENIENCE_DOWNSTREAM_ID = PIPE_DI_300.endNodeId;
+
 // ── ヘルパー ──────────────────────────────────────────────────────────────────
 
 function singlePipeNetwork(closeTime: number, operation: "close" | "open" = "close"): MocNetwork {
@@ -150,12 +157,13 @@ describe("runMocSinglePipe（便利 API）", () => {
     nReaches: 10,
   });
 
-  test("pipe_0 が存在", () => {
-    assert.ok(r.pipes["pipe_0"] !== undefined);
+  test("結果が入力管路のIDで返る", () => {
+    assert.ok(r.pipes[CONVENIENCE_PIPE_ID] !== undefined);
+    assert.ok(r.pipes["pipe_0"] === undefined);
   });
 
   test("下流端水頭が上昇している（瞬時閉）", () => {
-    const Hmax = Math.max(...r.nodes["downstream"]!.H.map((p) => p.H));
+    const Hmax = Math.max(...r.nodes[CONVENIENCE_DOWNSTREAM_ID]!.H.map((p) => p.H));
     assert.ok(Hmax > H0);
   });
 });
@@ -172,15 +180,15 @@ describe("ポンプ急停止 — runMocPumpTrip", () => {
   });
 
   test("クラッシュしない", () => {
-    assert.ok(r.pipes["pipe_0"] !== undefined);
+    assert.ok(r.pipes[CONVENIENCE_PIPE_ID] !== undefined);
   });
 
   test("下流端（行き止まり）水頭が存在する", () => {
-    assert.ok(r.nodes["dead_end_node"]!.H.length > 0);
+    assert.ok(r.nodes[CONVENIENCE_DOWNSTREAM_ID]!.H.length > 0);
   });
 
   test("ポンプ停止後に負圧が発生している可能性（Hmin < ポンプ揚程）", () => {
-    const Hmin = Math.min(...r.nodes["pump_node"]!.H.map((p) => p.H));
+    const Hmin = Math.min(...r.nodes[CONVENIENCE_UPSTREAM_ID]!.H.map((p) => p.H));
     assert.ok(Hmin < 50);
   });
 });
@@ -253,22 +261,22 @@ describe("GD² ポンプ急停止モデル", () => {
   });
 
   test("クラッシュしない", () => {
-    assert.ok(r.pipes["pipe_0"] !== undefined);
+    assert.ok(r.pipes[CONVENIENCE_PIPE_ID] !== undefined);
   });
 
   test("ポンプ節点の回転速度時系列が記録されている", () => {
-    assert.ok(r.nodes["pump_node"]!.N !== undefined);
-    assert.ok(r.nodes["pump_node"]!.N!.length > 0);
+    assert.ok(r.nodes[CONVENIENCE_UPSTREAM_ID]!.N !== undefined);
+    assert.ok(r.nodes[CONVENIENCE_UPSTREAM_ID]!.N!.length > 0);
   });
 
   test("停止後に回転速度が低下している", () => {
-    const Ns = r.nodes["pump_node"]!.N!;
+    const Ns = r.nodes[CONVENIENCE_UPSTREAM_ID]!.N!;
     const N_last = Ns[Ns.length - 1]!.N;
     assert.ok(N_last < 1450, `N_last=${N_last.toFixed(0)}`);
   });
 
   test("停止後に負圧が発生している可能性（Hmin < H0）", () => {
-    const Hmin = Math.min(...r.nodes["pump_node"]!.H.map((p) => p.H));
+    const Hmin = Math.min(...r.nodes[CONVENIENCE_UPSTREAM_ID]!.H.map((p) => p.H));
     assert.ok(Hmin < 50);
   });
 });
@@ -304,7 +312,7 @@ describe("エアチャンバ BC — 負圧抑制", () => {
 
   test("エアチャンバあり: 下流端 Hmin が dead_end より高い（負圧抑制）", () => {
     // AC なし: dead_end での Hmin
-    const Hmin_de = Math.min(...r_no_ac.nodes["dead_end_node"]!.H.map((p) => p.H));
+    const Hmin_de = Math.min(...r_no_ac.nodes[CONVENIENCE_DOWNSTREAM_ID]!.H.map((p) => p.H));
     // AC あり: air_chamber 端での Hmin
     const Hmin_ac = Math.min(...r_with_ac.nodes["ac"]!.H.map((p) => p.H));
     assert.ok(Hmin_ac > Hmin_de,

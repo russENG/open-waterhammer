@@ -1301,6 +1301,33 @@ def run_moc(
 # ═══════════════════════════════════════════════════════════════════════════════
 
 
+def _convenience_pipe_ids(
+    pipe: Pipe, upstream_fallback: str, downstream_fallback: str
+) -> tuple[str, str, str]:
+    """便利APIが組み立てる単一管路ネットワークの識別子を決める.
+
+    以前は "pipe_0" / "upstream" / "downstream"（ポンプは "pump_node" /
+    "dead_end_node"）という内部の仮IDで固定していた。仮IDは計算結果の pipes /
+    nodes のキーとしてそのまま外へ出るため、呼び出し側は結果を実際の管路・節点へ
+    対応付けられない。web-free では単一管路の過渡解析・ポンプ過渡解析だけ縦断図の
+    結果重ね合わせと平面図の着色が効かず、系列名も内部識別子のまま画面に出ていた
+    （docs/ui-terminology.md: 内部の識別子を画面に出さない）。入力の管路が持つIDを
+    優先する。
+
+    プロトコル入力では startNodeId / endNodeId を省略できる（protocol.py の
+    ``_pipe`` は空文字を既定にする）。空、または上下流が同じIDのときだけ従来の仮IDへ
+    落とす — 節点IDが重複すると単一節点のネットワークになり、計算そのものが壊れるため。
+
+    Returns:
+        (管路ID, 上流節点ID, 下流節点ID).
+    """
+    upstream = (pipe.start_node_id or "").strip() or upstream_fallback
+    downstream = (pipe.end_node_id or "").strip() or downstream_fallback
+    if upstream == downstream:
+        upstream, downstream = upstream_fallback, downstream_fallback
+    return (pipe.id or "").strip() or "pipe_0", upstream, downstream
+
+
 @dataclass
 class SinglePipeMocInput:
     """単一管路シナリオの簡易入力."""
@@ -1325,20 +1352,21 @@ def run_moc_single_pipe(input: SinglePipeMocInput) -> MocResult:
     ) / (2 * GRAVITY * input.pipe.inner_diameter)
     h_r = input.initial_downstream_head + hf_total
 
+    pipe_id, upstream_id, downstream_id = _convenience_pipe_ids(input.pipe, "upstream", "downstream")
     network = MocNetwork(
         pipes=[
             MocPipeSegment(
-                id="pipe_0",
+                id=pipe_id,
                 pipe=input.pipe,
                 wave_speed=input.wave_speed,
                 n_reaches=input.n_reaches,
-                upstream_node_id="upstream",
-                downstream_node_id="downstream",
+                upstream_node_id=upstream_id,
+                downstream_node_id=downstream_id,
             )
         ],
         nodes={
-            "upstream": ReservoirBC(head=h_r),
-            "downstream": ValveBC(
+            upstream_id: ReservoirBC(head=h_r),
+            downstream_id: ValveBC(
                 Q0=q0,
                 H0v=input.initial_downstream_head,
                 close_time=input.close_time,
@@ -1384,18 +1412,19 @@ def run_moc_pump_trip(input: PumpTripInput) -> MocResult:
         check_valve=input.check_valve,
         mode="trip",
     )
+    pipe_id, pump_id, dead_end_id = _convenience_pipe_ids(input.pipe, "pump_node", "dead_end_node")
     network = MocNetwork(
         pipes=[
             MocPipeSegment(
-                id="pipe_0",
+                id=pipe_id,
                 pipe=input.pipe,
                 wave_speed=input.wave_speed,
                 n_reaches=input.n_reaches,
-                upstream_node_id="pump_node",
-                downstream_node_id="dead_end_node",
+                upstream_node_id=pump_id,
+                downstream_node_id=dead_end_id,
             )
         ],
-        nodes={"pump_node": pump_bc, "dead_end_node": DeadEndBC()},
+        nodes={pump_id: pump_bc, dead_end_id: DeadEndBC()},
     )
     return run_moc(
         network,
@@ -1421,19 +1450,20 @@ class PumpStartInput:
 
 def run_moc_pump_start(input: PumpStartInput) -> MocResult:
     """ポンプ起動."""
+    pipe_id, pump_id, dead_end_id = _convenience_pipe_ids(input.pipe, "pump_node", "dead_end_node")
     network = MocNetwork(
         pipes=[
             MocPipeSegment(
-                id="pipe_0",
+                id=pipe_id,
                 pipe=input.pipe,
                 wave_speed=input.wave_speed,
                 n_reaches=input.n_reaches,
-                upstream_node_id="pump_node",
-                downstream_node_id="dead_end_node",
+                upstream_node_id=pump_id,
+                downstream_node_id=dead_end_id,
             )
         ],
         nodes={
-            "pump_node": PumpBC(
+            pump_id: PumpBC(
                 Q0=input.Q_rated,
                 H0=input.pump_head,
                 Hs=input.Hs,
@@ -1442,7 +1472,7 @@ def run_moc_pump_start(input: PumpStartInput) -> MocResult:
                 startup_time=input.startup_time,
                 static_head=input.static_head,
             ),
-            "dead_end_node": DeadEndBC(),
+            dead_end_id: DeadEndBC(),
         },
     )
     return run_moc(

@@ -1368,6 +1368,35 @@ export function runMoc(network: MocNetwork, options: MocOptions = {}): MocResult
 // 便利 API
 // ═══════════════════════════════════════════════════════════════════════════════
 
+/**
+ * 便利APIが組み立てる単一管路ネットワークの識別子を決める。
+ *
+ * 以前は "pipe_0" / "upstream" / "downstream"（ポンプは "pump_node" / "dead_end_node"）
+ * という内部の仮IDで固定していた。仮IDは計算結果の `pipes` / `nodes` のキーとしてそのまま
+ * 外へ出るため、呼び出し側は結果を実際の管路・節点へ対応付けられない。web-free では
+ * 単一管路の過渡解析・ポンプ過渡解析だけ縦断図の結果重ね合わせと平面図の着色が効かず、
+ * 系列名も内部識別子のまま画面に出ていた（docs/ui-terminology.md: 内部の識別子を画面に
+ * 出さない）。入力の管路が持つIDを優先する。
+ *
+ * プロトコル入力では startNodeId / endNodeId を省略できる（protocol.py の `_pipe` は
+ * 空文字を既定にする）。空、または上下流が同じIDのときだけ従来の仮IDへ落とす — 節点IDが
+ * 重複すると単一節点のネットワークになり、計算そのものが壊れるため。
+ */
+function conveniencePipeIds(pipe: Pipe, upstreamFallback: string, downstreamFallback: string): {
+  pipeId: string;
+  upstreamNodeId: string;
+  downstreamNodeId: string;
+} {
+  const upstream = pipe.startNodeId?.trim() || upstreamFallback;
+  const downstream = pipe.endNodeId?.trim() || downstreamFallback;
+  const distinct = upstream !== downstream;
+  return {
+    pipeId: pipe.id?.trim() || "pipe_0",
+    upstreamNodeId: distinct ? upstream : upstreamFallback,
+    downstreamNodeId: distinct ? downstream : downstreamFallback,
+  };
+}
+
 /** 単一管路シナリオの簡易入力型 */
 export interface SinglePipeMocInput {
   pipe: Pipe;
@@ -1393,11 +1422,12 @@ export function runMocSinglePipe(input: SinglePipeMocInput): MocResult {
   const hfTotal = (f * pipe.length * initialVelocity * initialVelocity) / (2 * GRAVITY * pipe.innerDiameter);
   const HR = H0v + hfTotal;
 
+  const { pipeId, upstreamNodeId, downstreamNodeId } = conveniencePipeIds(pipe, "upstream", "downstream");
   const network: MocNetwork = {
-    pipes: [{ id: "pipe_0", pipe, waveSpeed, nReaches, upstreamNodeId: "upstream", downstreamNodeId: "downstream" }],
+    pipes: [{ id: pipeId, pipe, waveSpeed, nReaches, upstreamNodeId, downstreamNodeId }],
     nodes: {
-      upstream: { type: "reservoir", head: HR },
-      downstream: { type: "valve", Q0, H0v, closeTime, operation },
+      [upstreamNodeId]: { type: "reservoir", head: HR },
+      [downstreamNodeId]: { type: "valve", Q0, H0v, closeTime, operation },
     },
   };
 
@@ -1440,9 +1470,10 @@ export function runMocPumpTrip(input: PumpTripInput): MocResult {
     shutdownTime, checkValve, mode: "trip",
   };
 
+  const { pipeId, upstreamNodeId, downstreamNodeId } = conveniencePipeIds(pipe, "pump_node", "dead_end_node");
   const network: MocNetwork = {
-    pipes: [{ id: "pipe_0", pipe, waveSpeed, nReaches, upstreamNodeId: "pump_node", downstreamNodeId: "dead_end_node" }],
-    nodes: { pump_node: pumpBC, dead_end_node: { type: "dead_end" } },
+    pipes: [{ id: pipeId, pipe, waveSpeed, nReaches, upstreamNodeId, downstreamNodeId }],
+    nodes: { [upstreamNodeId]: pumpBC, [downstreamNodeId]: { type: "dead_end" } },
   };
 
   return runMoc(network, { ...(tMax !== undefined && { tMax }), initialFlow: Q0 });
@@ -1465,15 +1496,16 @@ export interface PumpStartInput {
 export function runMocPumpStart(input: PumpStartInput): MocResult {
   const { pipe, waveSpeed, Q_rated, pumpHead, Hs, startupTime, staticHead = 0, nReaches = 10, tMax } = input;
 
+  const { pipeId, upstreamNodeId, downstreamNodeId } = conveniencePipeIds(pipe, "pump_node", "dead_end_node");
   const network: MocNetwork = {
-    pipes: [{ id: "pipe_0", pipe, waveSpeed, nReaches, upstreamNodeId: "pump_node", downstreamNodeId: "dead_end_node" }],
+    pipes: [{ id: pipeId, pipe, waveSpeed, nReaches, upstreamNodeId, downstreamNodeId }],
     nodes: {
-      pump_node: {
+      [upstreamNodeId]: {
         type: "pump", Q0: Q_rated, H0: pumpHead,
         ...(Hs !== undefined && { Hs }),
         shutdownTime: 0, mode: "start", startupTime, staticHead,
       },
-      dead_end_node: { type: "dead_end" },
+      [downstreamNodeId]: { type: "dead_end" },
     },
   };
 

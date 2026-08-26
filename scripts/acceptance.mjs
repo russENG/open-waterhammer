@@ -232,9 +232,12 @@ const GOLDEN_NUMERICS = {
   transient_single_pipe: {
     dt: 0.045454545454545456,
     vibrationPeriod: 1.8181818181818181,
-    // Peak surge head: pipe "pipe_0" (the single-pipe MOC engine's synthetic id, independent
-    // of the input Pipe.id "P-01" — see packages/core-py/open_waterhammer/moc.py), reach index
-    // 10 (nReaches=10 -> 11 samples, index 0..10) of Hmax.
+    // Peak surge head: pipe "P-01" — the single-pipe MOC convenience API now keys its result
+    // by the input Pipe.id (and its node ids) instead of the synthetic "pipe_0" / "upstream" /
+    // "downstream" it used before, so callers can map the result back onto the model
+    // (see conveniencePipeIds / _convenience_pipe_ids in packages/core{,-py}). The value is
+    // unchanged — only the key is — because the network solved is identical.
+    // Reach index 10 (nReaches=10 -> 11 samples, index 0..10) of Hmax.
     peakHmax: 74.1054816939722,
   },
   transient_protection_device: {
@@ -497,10 +500,11 @@ await check("4. Numeric parity — transient_single_pipe", () => {
   const { summary } = runsByKind.transient_single_pipe;
   const expected = GOLDEN_NUMERICS.transient_single_pipe;
   assertClose(summary.dt, expected.dt, "transient_single_pipe.summary.dt");
-  const pipe = summary.pipes.pipe_0;
-  assert.ok(pipe, "transient_single_pipe.summary.pipes.pipe_0 must exist");
-  assertClose(pipe.vibrationPeriod, expected.vibrationPeriod, "transient_single_pipe.summary.pipes.pipe_0.vibrationPeriod");
-  assertClose(pipe.Hmax[10], expected.peakHmax, "transient_single_pipe.summary.pipes.pipe_0.Hmax[10]");
+  const pipe = summary.pipes[PIPE.id];
+  assert.ok(pipe, `transient_single_pipe.summary.pipes.${PIPE.id} must exist`);
+  assert.ok(!summary.pipes.pipe_0, "transient_single_pipe must not key its result by the synthetic id pipe_0");
+  assertClose(pipe.vibrationPeriod, expected.vibrationPeriod, `transient_single_pipe.summary.pipes.${PIPE.id}.vibrationPeriod`);
+  assertClose(pipe.Hmax[10], expected.peakHmax, `transient_single_pipe.summary.pipes.${PIPE.id}.Hmax[10]`);
 });
 
 await check("4. Numeric parity — transient_protection_device (mitigation reductionRate)", () => {

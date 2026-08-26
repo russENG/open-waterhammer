@@ -387,6 +387,8 @@ const BENCH_PIPE: Pipe = {
   pipeType: "steel", innerDiameter: 0.5, wallThickness: 0.010,
   length: 1200, roughnessCoeff: 130,
 };
+// runMocSinglePipe は入力管路のID（ここでは "bench" / "upstream" / "downstream"）を
+// そのまま結果のキーに使う（moc.ts の conveniencePipeIds）。
 /** 摩擦を無視するための実質無限大の粗度係数（解析解と比較する場合に使う） */
 const FRICTIONLESS_C = 1e6;
 
@@ -407,7 +409,7 @@ function frictionlessValveClose(closeTime: number, nReaches: number, tMax: numbe
 describe("T1 非定常: ジューコフスキーの式との一致（瞬時閉・摩擦なし）", () => {
   const N = 40;
   const res = frictionlessValveClose(0, N, 4 * T_PERIOD);
-  const p = res.pipes["pipe_0"]!;
+  const p = res.pipes[BENCH_PIPE.id]!;
   const dHTheory = joukowsky(A_WAVE, -V0); // = a·V₀/g
 
   test("理論値 ΔH = a·V₀/g が正しく評価できる", () => {
@@ -435,7 +437,7 @@ describe("T1 非定常: ジューコフスキーの式との一致（瞬時閉�
 
 describe("T2 非定常: 格子収束性", () => {
   const results = [10, 20, 40, 80].map(N => ({
-    N, dH: frictionlessValveClose(0, N, 4 * T_PERIOD).pipes["pipe_0"]!.Hmax[N]! - H0,
+    N, dH: frictionlessValveClose(0, N, 4 * T_PERIOD).pipes[BENCH_PIPE.id]!.Hmax[N]! - H0,
   }));
   const dHTheory = joukowsky(A_WAVE, -V0);
 
@@ -460,7 +462,7 @@ describe("T3 非定常: 圧力波の周期 4L/a と位相", () => {
   const at = (t: number) => series.reduce((b, c) => (Math.abs(c.t - t) < Math.abs(b.t - t) ? c : b)).H;
 
   test("T0（振動周期）= 4L/a が結果に記録されている", () => {
-    assert.ok(Math.abs(res.pipes["pipe_0"]!.vibrationPeriod - T_PERIOD) < 1e-9);
+    assert.ok(Math.abs(res.pipes[BENCH_PIPE.id]!.vibrationPeriod - T_PERIOD) < 1e-9);
   });
 
   test("t = 0.25T / 1.25T / 2.25T は高圧相（H > H₀）", () => {
@@ -619,7 +621,7 @@ describe("T7 非定常: アリエビ連鎖式（緩閉そくの厳密解）と�
 
     const N = 60;
     const res = frictionlessValveClose(tc, N, nSteps * T_ROUND);
-    const hMoc = res.pipes["pipe_0"]!.Hmax[N]! / H0;
+    const hMoc = res.pipes[BENCH_PIPE.id]!.Hmax[N]! / H0;
 
     test(`tν = ${nT}×(2L/a) = ${tc.toFixed(1)} s: 最大水頭比が厳密解と 0.05% 以内`, () => {
       const ref = Math.max(...hTheory);
@@ -642,7 +644,7 @@ describe("T7 非定常: アリエビ連鎖式（緩閉そくの厳密解）と�
   test("tν = 2L/a（急閉そくの境界）ではジューコフスキー値に一致する", () => {
     const N = 60;
     const res = frictionlessValveClose(T_ROUND, N, 4 * T_PERIOD);
-    const dH = res.pipes["pipe_0"]!.Hmax[N]! - H0;
+    const dH = res.pipes[BENCH_PIPE.id]!.Hmax[N]! - H0;
     const err = Math.abs(relErrPct(dH, joukowsky(A_WAVE, -V0)));
     assert.ok(err < 0.5, `ΔH=${dH.toFixed(2)} m, ジューコフスキー=${joukowsky(A_WAVE, -V0).toFixed(2)} m, 誤差=${err.toFixed(2)}%`);
   });
@@ -650,7 +652,7 @@ describe("T7 非定常: アリエビ連鎖式（緩閉そくの厳密解）と�
   test("閉そく時間を延ばすと最大水頭が単調に減少する", () => {
     const N = 60;
     const peaks = [2, 4, 6, 10].map(nT =>
-      frictionlessValveClose(nT * T_ROUND, N, (nT + 4) * T_ROUND).pipes["pipe_0"]!.Hmax[N]!);
+      frictionlessValveClose(nT * T_ROUND, N, (nT + 4) * T_ROUND).pipes[BENCH_PIPE.id]!.Hmax[N]!);
     for (let i = 1; i < peaks.length; i++) {
       assert.ok(peaks[i]! < peaks[i - 1]!, `tν の増加で Hmax が下がらない: ${peaks.map(v => v.toFixed(2)).join(" -> ")}`);
     }
@@ -753,7 +755,7 @@ describe("T10 非定常: 負圧と水柱分離の扱い", () => {
   // 水蒸気圧水頭を下回った場合は警告で利用者に知らせる。
   const N = 40;
   const res = frictionlessValveClose(0, N, 4 * T_PERIOD);
-  const p = res.pipes["pipe_0"]!;
+  const p = res.pipes[BENCH_PIPE.id]!;
   const hTheoryMin = H0 - joukowsky(A_WAVE, -V0); // = −2.04 m
 
   test("理論上の最小水頭は負になる条件を選んでいる", () => {
@@ -787,7 +789,7 @@ describe("T10 非定常: 負圧と水柱分離の扱い", () => {
       waveSpeed: A_WAVE, initialVelocity: V0, initialDownstreamHead: 5,
       closeTime: 0, nReaches: N, tMax: 2 * T_PERIOD,
     });
-    assert.ok(Math.min(...low.pipes["pipe_0"]!.Hmin) < MOC_VAPOR_PRESSURE_HEAD);
+    assert.ok(Math.min(...low.pipes[BENCH_PIPE.id]!.Hmin) < MOC_VAPOR_PRESSURE_HEAD);
     const cav = (low.warnings ?? []).filter(w => w.includes("水蒸気圧水頭"));
     assert.equal(cav.length, 1, JSON.stringify(low.warnings));
     assert.match(cav[0]!, /上流端から \d+ m の地点/);
@@ -866,7 +868,7 @@ describe("T10 非定常: 負圧と水柱分離の扱い", () => {
       waveSpeed: A_WAVE, initialVelocity: V0, initialDownstreamHead: 300,
       closeTime: 0, nReaches: N, tMax: T_PERIOD,
     });
-    const p2 = res2.pipes["pipe_0"]!;
+    const p2 = res2.pipes[BENCH_PIPE.id]!;
     const dHDown = 300 - p2.Hmin[N]!;
     const err = Math.abs(relErrPct(dHDown, joukowsky(A_WAVE, -V0)));
     assert.ok(err < 0.05,
