@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useState, type KeyboardEvent } from 'react'
-import type { Case, JsonValue, Run } from '@open-waterhammer/contracts'
+import type { Case, Run } from '@open-waterhammer/contracts'
 import { headToMpa, type CanonicalHydraulicModel } from '@open-waterhammer/core'
 
+import { resolveCanonicalHydraulicModel } from '../workspace/canonical-model-compat'
 import type { LinkedFocus } from '../workspace/focus'
 import { deriveLongitudinalProfile, type ProfilePoint } from '../workspace/longitudinal-profile'
 import { derivePlanDiagram } from '../workspace/plan-view'
@@ -15,17 +16,6 @@ import {
 import './PressureWaveAnimator.css'
 
 type DisplayMode = 'head' | 'pressure'
-
-function record(value: JsonValue | undefined): Record<string, JsonValue> | undefined {
-  return value && typeof value === 'object' && !Array.isArray(value) ? value as Record<string, JsonValue> : undefined
-}
-
-function canonicalModel(caseRecord: Case): CanonicalHydraulicModel | undefined {
-  const value = record(caseRecord.modelSnapshot)?.canonicalModel
-  if (!value || typeof value !== 'object' || Array.isArray(value)) return undefined
-  const candidate = value as unknown as Partial<CanonicalHydraulicModel>
-  return candidate.schema === 'open-waterhammer/hydraulic-model' && candidate.version === 1 ? candidate as CanonicalHydraulicModel : undefined
-}
 
 function focusFor(id: string, kind: 'pipe' | 'node'): LinkedFocus {
   return {
@@ -133,7 +123,7 @@ export function PressureWaveAnimator({ caseRecord, run, focus, onFocus }: {
   const animation = useMemo(() => derivePressureWaveAnimation(run), [run])
   const plan = useMemo(() => derivePlanDiagram(caseRecord), [caseRecord])
   const profile = useMemo(() => deriveLongitudinalProfile(caseRecord, [run], run.id), [caseRecord, run])
-  const model = useMemo(() => canonicalModel(caseRecord), [caseRecord])
+  const model = useMemo(() => resolveCanonicalHydraulicModel(caseRecord), [caseRecord])
   const pipeElevations = useMemo(() => elevationByPipe(model), [model])
   const pipeLengths = useMemo(() => new Map((model?.pipes ?? []).map((pipe) => [pipe.id, pipe.length])), [model])
   const [frameIndex, setFrameIndex] = useState(0)

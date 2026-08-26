@@ -58,6 +58,7 @@ Excelを読み込んだ直後から、測点の水平距離・地盤高・管中
 ## 実装位置
 
 - 正準測点と保存済み結果の統合・検証: `apps/web-free/src/workspace/longitudinal-profile.ts`
+- 旧プロジェクトの表示用互換モデル: `apps/web-free/src/workspace/canonical-model-compat.ts`
 - SVG、凡例、選択連動: `apps/web-free/src/workspace/LongitudinalProfile.tsx`
 - 計算前表示: `apps/web-free/src/workspace/tabs/OverviewPanel.tsx`
 - 計算後表示: `apps/web-free/src/results/ResultsPanel.tsx`

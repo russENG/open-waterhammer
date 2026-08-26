@@ -38,6 +38,23 @@ function renderInWorkspace() {
   return { data, repository, project }
 }
 
+describe('OverviewPanel legacy hydraulic model compatibility', () => {
+  test('shows the plan and input profile for a persisted sample that predates canonicalModel', () => {
+    const data = buildSampleWorkspace('2026-08-23T01:02:03.000Z')
+    const source = data.cases[0]!
+    const snapshot = source.modelSnapshot as Record<string, unknown>
+    const legacySnapshot = { ...snapshot }
+    delete legacySnapshot.canonicalModel
+    const legacyCase = { ...source, modelSnapshot: legacySnapshot as Case['modelSnapshot'] }
+
+    render(<OverviewPanel project={data.projects[0]!} caseRecord={legacyCase} runs={[]} />)
+
+    expect(screen.getByRole('group', { name: /実座標平面図、管路1件、節点2件/ })).toBeVisible()
+    expect(screen.getByRole('group', { name: /入力確認図（計算前）、測点2件/ })).toBeVisible()
+    expect(screen.queryByText('縦断図に必要な測点データがありません。')).not.toBeInTheDocument()
+  })
+})
+
 describe('OverviewPanel project bundle card', () => {
   test('renders the export and import controls as buttons', () => {
     renderInWorkspace()

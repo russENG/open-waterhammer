@@ -1,5 +1,7 @@
-import type { Case, JsonValue } from '@open-waterhammer/contracts'
+import type { Case } from '@open-waterhammer/contracts'
 import type { CanonicalCoordinate, CanonicalHydraulicModel, NodeType } from '@open-waterhammer/core'
+
+import { resolveCanonicalHydraulicModel } from './canonical-model-compat'
 
 export type PlanMode = 'real-coordinates' | 'schematic'
 export type PlanElementStatus = 'valid' | 'disconnected' | 'isolated' | 'missing'
@@ -51,18 +53,6 @@ interface WorkingNode {
   elevation?: number
   coordinate?: CanonicalCoordinate
   missing: boolean
-}
-
-function record(value: JsonValue | undefined): Record<string, JsonValue> | undefined {
-  return value && typeof value === 'object' && !Array.isArray(value) ? value as Record<string, JsonValue> : undefined
-}
-
-function modelFromCase(caseRecord: Case): CanonicalHydraulicModel | undefined {
-  const value = record(caseRecord.modelSnapshot)?.canonicalModel
-  if (!value || typeof value !== 'object' || Array.isArray(value)) return undefined
-  const candidate = value as unknown as Partial<CanonicalHydraulicModel>
-  if (candidate.schema !== 'open-waterhammer/hydraulic-model' || candidate.version !== 1 || !Array.isArray(candidate.nodes) || !Array.isArray(candidate.pipes)) return undefined
-  return candidate as CanonicalHydraulicModel
 }
 
 function finiteCoordinate(value: CanonicalCoordinate | undefined): value is CanonicalCoordinate {
@@ -300,8 +290,8 @@ export function derivePlanDiagramFromModel(model: CanonicalHydraulicModel): Plan
   }
 }
 
-/** Excel・GeoJSON・Web入力の由来を見ず、比較案に保存した正準水理モデルだけから描画データを作る。 */
+/** 正準モデル、または旧プロジェクトから非破壊で復元した互換モデルから描画データを作る。 */
 export function derivePlanDiagram(caseRecord: Case): PlanDiagram | undefined {
-  const model = modelFromCase(caseRecord)
+  const model = resolveCanonicalHydraulicModel(caseRecord)
   return model ? derivePlanDiagramFromModel(model) : undefined
 }

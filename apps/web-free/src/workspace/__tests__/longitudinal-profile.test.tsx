@@ -1,5 +1,5 @@
 import { caseFixture, runFixture, type Case, type JsonValue, type Run } from '@open-waterhammer/contracts'
-import type { CanonicalHydraulicModel, CanonicalMeasurementPoint } from '@open-waterhammer/core'
+import type { CanonicalHydraulicModel, CanonicalMeasurementPoint, MeasurementPoint } from '@open-waterhammer/core'
 import { render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { describe, expect, test, vi } from 'vitest'
@@ -48,6 +48,25 @@ function caseWith(canonical: CanonicalHydraulicModel): Case {
   return { ...caseFixture, modelSnapshot: { canonicalModel: canonical as unknown as JsonValue } }
 }
 
+function legacyPoint(id: string, distance: number, nodeId: string): MeasurementPoint {
+  return {
+    id,
+    pipeId: 'P1',
+    nodeId,
+    distanceAlongPipe: distance,
+    horizontalDistance: distance,
+    groundLevel: 100 - distance * 0.02,
+    pipeCenterHeight: 98 - distance * 0.02,
+    pipeLength: distance,
+    flowRate: 0.03,
+    diameter: 0.3,
+    roughnessC: 130,
+    bendLossCoeff: 0,
+    valveLossCoeff: 0,
+    branchLossCoeff: 0,
+  }
+}
+
 function run(kind: Run['kind'], summary: JsonValue, suffix: string): Run {
   return {
     ...runFixture,
@@ -71,6 +90,34 @@ describe('deriveLongitudinalProfile', () => {
     expect(diagram.pipeSpans).toEqual([{ pipeId: 'P1', fromDistance: 0, toDistance: 100, diameter: 0.3 }])
     expect(diagram.hasCalculationResults).toBe(false)
     expect(diagram.issues).toEqual([])
+  })
+
+  test('restores the input profile non-destructively from legacy run inputs without a canonical model', () => {
+    const points = [legacyPoint('STA-0', 0, 'N0'), legacyPoint('STA-100', 100, 'N1')]
+    const modelSnapshot = {
+      runInputs: {
+        longitudinal_hydraulics: { points, staticWaterLevel: 110 },
+        steady_network_python: {
+          nodes: [
+            { id: 'N0', elevation: 100, type: 'reservoir', head: 110 },
+            { id: 'N1', elevation: 90, type: 'junction' },
+          ],
+          pipes: [{ id: 'P1', upstreamNodeId: 'N0', downstreamNodeId: 'N1', innerDiameter: 0.3, length: 100, roughnessC: 130 }],
+        },
+        wave_speed: {
+          pipe: { id: 'P1', startNodeId: 'N0', endNodeId: 'N1', pipeType: 'ductile_iron', innerDiameter: 0.3, wallThickness: 0.01, length: 100, roughnessCoeff: 130 },
+        },
+      },
+    } as unknown as JsonValue
+    const record = { ...caseFixture, modelSnapshot }
+    const before = structuredClone(record.modelSnapshot)
+
+    const diagram = deriveLongitudinalProfile(record)!
+
+    expect(diagram.points.map(({ id, distance }) => [id, distance])).toEqual([['STA-0', 0], ['STA-100', 100]])
+    expect(diagram.pipeSpans).toEqual([{ pipeId: 'P1', fromDistance: 0, toDistance: 100, diameter: 0.3 }])
+    expect(diagram.issues).toEqual([])
+    expect(record.modelSnapshot).toEqual(before)
   })
 
   test('shows pipe diameter changes as separate spans', () => {

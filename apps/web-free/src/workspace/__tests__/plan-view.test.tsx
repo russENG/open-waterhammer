@@ -96,6 +96,39 @@ describe('derivePlanDiagramFromModel', () => {
 
     expect(derivePlanDiagram(excelCase)).toEqual(derivePlanDiagram(gisCase))
   })
+
+  test('restores a schematic from legacy run inputs without a canonical model', () => {
+    const legacyCase = {
+      id: '33333333-3333-4333-8333-333333333333',
+      alternativeId: '22222222-2222-4222-8222-222222222222',
+      name: '旧比較案',
+      state: 'draft',
+      inputRevision: 1,
+      createdAt: '2026-01-01T00:00:00.000Z',
+      updatedAt: '2026-01-01T00:00:00.000Z',
+      modelSnapshot: {
+        runInputs: {
+          longitudinal_hydraulics: {
+            points: [
+              { id: 'STA-0', pipeId: 'P1', nodeId: 'N0', distanceAlongPipe: 0, horizontalDistance: 0, groundLevel: 100, pipeCenterHeight: 98, pipeLength: 0, flowRate: 0.03, diameter: 0.3, roughnessC: 130, bendLossCoeff: 0, valveLossCoeff: 0, branchLossCoeff: 0 },
+              { id: 'STA-100', pipeId: 'P1', nodeId: 'N1', distanceAlongPipe: 100, horizontalDistance: 100, groundLevel: 98, pipeCenterHeight: 96, pipeLength: 100, flowRate: 0.03, diameter: 0.3, roughnessC: 130, bendLossCoeff: 0, valveLossCoeff: 0, branchLossCoeff: 0 },
+            ],
+          },
+          steady_network_python: {
+            nodes: [{ id: 'N0', elevation: 100, type: 'reservoir', head: 110 }, { id: 'N1', elevation: 90, type: 'junction' }],
+            pipes: [{ id: 'P1', upstreamNodeId: 'N0', downstreamNodeId: 'N1', innerDiameter: 0.3, length: 100, roughnessC: 130 }],
+          },
+        },
+      },
+    } as unknown as Case
+
+    const diagram = derivePlanDiagram(legacyCase)!
+
+    expect(diagram.mode).toBe('schematic')
+    expect(diagram.nodes.map(({ id }) => id)).toEqual(['N0', 'N1'])
+    expect(diagram.pipes.map(({ id }) => id)).toEqual(['P1'])
+    expect(diagram.issues).toEqual([])
+  })
 })
 
 describe('PlanView', () => {

@@ -129,7 +129,8 @@ erDiagram
 
 - version 1 の正準モデルは `Case.modelSnapshot.canonicalModel` へ追加保存する。既存ファイルの必須項目を変更しないため、`.owhproj` 全体の形式は下位互換とする。
 - 新しいExcel取込みでは `canonicalModel` と `canonicalIssues` を作り、各 `runInputs` は正準モデルから導出する。
-- `canonicalModel` がない旧プロジェクトはそのまま読み込み、既存 `runInputs`、`excelImport`、`geoDrafts` は変更しない。Excel再読込みまたは将来の明示的な移行操作で正準モデルを追加する。
+- `canonicalModel` がない旧プロジェクトは保存内容を変更せず、そのまま読み込む。平面図・縦断図・圧力波表示では、`excelImport`、または `runInputs` の管路網・縦断入力から表示専用の互換モデルを非破壊で復元する。
+- 互換モデルは保存データへ書き戻さない。正準モデルを永続化する場合はExcelを読み直す。
 - 移行時に推定した管路参照と重複値の不一致は `canonicalIssues` に残し、利用者の確認なしに元データを削除しない。
 
 ## 実装位置
@@ -137,3 +138,4 @@ erDiagram
 - 型・正規化・変換: `packages/core/src/canonical-model.ts`
 - Excel列と後方互換読込み: `packages/excel-io/src/template.ts`, `packages/excel-io/src/reader.ts`
 - Webプロジェクトへの保存: `apps/web-free/src/workspace/excel-import.ts`, `bootstrap.ts`, `workspace-context.tsx`
+- 旧プロジェクトの表示用互換モデル: `apps/web-free/src/workspace/canonical-model-compat.ts`

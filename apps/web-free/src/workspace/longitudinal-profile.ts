@@ -1,6 +1,7 @@
 import type { Case, JsonValue, Run } from '@open-waterhammer/contracts'
-import type { CanonicalHydraulicModel } from '@open-waterhammer/core'
 import { mpaToHead } from '@open-waterhammer/core'
+
+import { resolveCanonicalHydraulicModel } from './canonical-model-compat'
 
 export type ProfileIssueCode = 'POINT_ORDER' | 'DISTANCE_INVALID' | 'DISTANCE_MISMATCH' | 'VALUE_MISSING' | 'PIPE_UNKNOWN' | 'POINT_OUT_OF_PIPE' | 'NODE_UNKNOWN'
 
@@ -47,14 +48,6 @@ type JsonRecord = Record<string, JsonValue>
 
 function record(value: JsonValue | undefined): JsonRecord | undefined {
   return value && typeof value === 'object' && !Array.isArray(value) ? value as JsonRecord : undefined
-}
-
-function canonicalModel(caseRecord: Case): CanonicalHydraulicModel | undefined {
-  const value = record(caseRecord.modelSnapshot)?.canonicalModel
-  if (!value || typeof value !== 'object' || Array.isArray(value)) return undefined
-  const candidate = value as unknown as Partial<CanonicalHydraulicModel>
-  if (candidate.schema !== 'open-waterhammer/hydraulic-model' || candidate.version !== 1 || !Array.isArray(candidate.measurementPoints) || !Array.isArray(candidate.pipes)) return undefined
-  return candidate as CanonicalHydraulicModel
 }
 
 function finite(value: unknown): value is number {
@@ -128,7 +121,7 @@ function pipeSpans(points: ProfilePoint[]): ProfilePipeSpan[] {
 }
 
 export function deriveLongitudinalProfile(caseRecord: Case, runs: Run[] = [], preferredRunId?: string): LongitudinalProfileDiagram | undefined {
-  const model = canonicalModel(caseRecord)
+  const model = resolveCanonicalHydraulicModel(caseRecord)
   if (!model || model.measurementPoints.length === 0) return undefined
   const issues: ProfileIssue[] = []
   const pipeById = new Map(model.pipes.map((pipe) => [pipe.id, pipe]))
