@@ -58,7 +58,15 @@ export function AnalysisPanel({
   onFork(): void
 }) {
   const { run, saveModel, busy, lastError } = useWorkspace()
-  const [kind, setKind] = useState<RunKind>('wave_speed')
+  // 既定は主要解析。以前の既定 wave_speed は準備計算で、時系列も圧力包絡も出力しない
+  // ため、「サンプルを開く → 計算を実行 → 結果」をそのまま辿ると結果タブが空欄ばかりに
+  // なり、計算が失敗したのか方式の違いなのか読み取れなかった。
+  // 推奨は管路網の過渡解析だが、これはトポロジ必須なので、まだモデルの無い新規比較案では
+  // 開いた瞬間に実行できない状態から始まってしまう。その場合はフォーム入力だけで完結する
+  // 単一管路の過渡解析（同じ主要解析グループ）に倒す。
+  const [kind, setKind] = useState<RunKind>(() => (
+    evaluateRunGate('transient_network', caseRecord).canRun ? 'transient_network' : 'transient_single_pipe'
+  ))
   const modelRoot = root(caseRecord)
   const inputs = modelRoot.runInputs && typeof modelRoot.runInputs === 'object' && !Array.isArray(modelRoot.runInputs)
     ? modelRoot.runInputs as Record<string, JsonValue> : {}

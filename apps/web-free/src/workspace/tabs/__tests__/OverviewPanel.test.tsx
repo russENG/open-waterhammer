@@ -50,7 +50,7 @@ describe('OverviewPanel legacy hydraulic model compatibility', () => {
     render(<OverviewPanel project={data.projects[0]!} caseRecord={legacyCase} runs={[]} />)
 
     expect(screen.getByRole('group', { name: /実座標平面図、管路1件、節点2件/ })).toBeVisible()
-    expect(screen.getByRole('group', { name: /入力確認図（計算前）、測点2件/ })).toBeVisible()
+    expect(screen.getByRole('group', { name: /入力確認図（計算前）、測点11件/ })).toBeVisible()
     expect(screen.queryByText('縦断図に必要な測点データがありません。')).not.toBeInTheDocument()
   })
 })
