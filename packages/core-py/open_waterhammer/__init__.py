@@ -8,6 +8,9 @@ License: AGPL-3.0-or-later
 """
 
 from .moc import (
+    MOC_GRID_SPACING_MAX,
+    MOC_GRID_SPACING_RECOMMENDED_MIN,
+    MOC_VAPOR_PRESSURE_HEAD,
     AirChamberBC,
     AirReleaseValveBC,
     BoundaryCondition,
@@ -23,8 +26,10 @@ from .moc import (
     PumpBC,
     PumpStartInput,
     PumpTripInput,
+    ReachCandidatePipe,
     ReservoirBC,
     SinglePipeMocInput,
+    SuggestReachesResult,
     SurgeTankBC,
     ValveBC,
     harmonize_time_step,
@@ -32,6 +37,7 @@ from .moc import (
     run_moc_pump_start,
     run_moc_pump_trip,
     run_moc_single_pipe,
+    suggest_reaches,
 )
 from .formulas import (
     BULK_MODULUS_WATER,
@@ -138,6 +144,9 @@ __all__ = [
     "JudgementStatus",
     "JudgementResult",
     # MOC
+    "MOC_GRID_SPACING_RECOMMENDED_MIN",
+    "MOC_GRID_SPACING_MAX",
+    "MOC_VAPOR_PRESSURE_HEAD",
     "BoundaryCondition",
     "ReservoirBC",
     "ValveBC",
@@ -157,7 +166,10 @@ __all__ = [
     "SinglePipeMocInput",
     "PumpTripInput",
     "PumpStartInput",
+    "ReachCandidatePipe",
+    "SuggestReachesResult",
     "harmonize_time_step",
+    "suggest_reaches",
     "run_moc",
     "run_moc_single_pipe",
     "run_moc_pump_trip",

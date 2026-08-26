@@ -77,6 +77,9 @@ class _SegmentDraft:
     pipe: Pipe
     wave_speed: float
     n_reaches: int
+    # 区間の上流端・下流端の管中心高 FH [m]（issue #50: 水柱分離の判定に使う）
+    upstream_elevation: float
+    downstream_elevation: float
     initial_flow: float | None = None
 
 
@@ -135,6 +138,14 @@ def _group_into_segments(
                     pipe=pipe,
                     wave_speed=wave_speed,
                     n_reaches=n_reaches,
+                    # 測点の管中心高をそのまま渡す。これが無いと MOC 側は基準面 0 m で
+                    # 水柱分離を判定してしまい、標高差のある管路で判定を誤る（issue #50）。
+                    #
+                    # 測点の pipe_length は「前測点からこの測点まで」なので、上の区間長と
+                    # 同じく、区間の物理的な始点は 1 つ前の測点になる（先頭区間だけは自分
+                    # 自身が始点）。ここを seg_points[0] にすると境目で管中心高が飛ぶ。
+                    upstream_elevation=points[0 if seg_start == 0 else seg_start - 1].pipe_center_height,
+                    downstream_elevation=seg_points[-1].pipe_center_height,
                     initial_flow=points[seg_start].flow_rate,
                 )
             )
@@ -236,6 +247,8 @@ def build_moc_from_steady(input_data: SteadyToMocInput) -> SteadyToMocOutput:
                 upstream_node_id=f"node_{i}",
                 downstream_node_id=f"node_{i + 1}",
                 initial_flow=seg.initial_flow,
+                upstream_elevation=seg.upstream_elevation,
+                downstream_elevation=seg.downstream_elevation,
             )
         )
 

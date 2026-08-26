@@ -26,6 +26,7 @@ import {
   joukowsky,
   judgeDesignPressure,
   runMoc,
+  suggestReaches,
   type BoundaryCondition,
   type MocNetwork,
   type MocResult,
@@ -56,60 +57,6 @@ const CLOSURE_LABEL: Record<string, string> = {
   slow: "緩閉そく",
   numerical_required: "数値解析要",
 };
-
-/**
- * 全管路の Courant 誤差が小さくなる計算区間数の組を選ぶ。
- *
- * MOC は全管路で共通の Δt を使うため、Δx = a·Δt が全管路で同時に成り立つ
- * 分割数を選ぶ必要がある（技術書 §8.4.2(2)）。実務では管路長・波速が揃わないので、
- * Δx を実務目安 50〜200 m に収めつつ Courant 誤差が許容内になる組を探索し、
- * 誤差が同等なら Δx が目安の中央（100 m）に近い方を選ぶ。
- */
-function pickReaches(
-  pipes: { length: number; waveSpeed: number }[],
-  opts: { dxMin?: number; dxMax?: number; dxTarget?: number } = {},
-): { reaches: number[]; courantErr: number; dt: number; dxMin: number } {
-  // まず実務目安 50〜200 m で探し、見つからなければ段階的に下限を下げる
-  const floors = opts.dxMin !== undefined ? [opts.dxMin] : [50, 35, 20];
-  for (const dxMin of floors) {
-    const found = searchReaches(pipes, dxMin, opts.dxMax ?? 200, opts.dxTarget ?? 100);
-    if (found && found.courantErr < 0.01) return { ...found, dxMin };
-  }
-  const last = searchReaches(pipes, floors[floors.length - 1]!, opts.dxMax ?? 200, opts.dxTarget ?? 100);
-  if (last) return { ...last, dxMin: floors[floors.length - 1]! };
-  throw new Error("Courant 条件を満たす計算区間数の組が見つかりません");
-}
-
-function searchReaches(
-  pipes: { length: number; waveSpeed: number }[],
-  dxMin: number,
-  dxMax: number,
-  dxTarget: number,
-): { reaches: number[]; courantErr: number; dt: number } | null {
-  let best: { reaches: number[]; err: number; dt: number; rank: [number, number] } | null = null;
-  const first = pipes[0]!;
-
-  for (let n0 = 1; n0 <= 800; n0++) {
-    const dt = first.length / (first.waveSpeed * n0);
-    const reaches = pipes.map(p => Math.max(1, Math.round(p.length / (p.waveSpeed * dt))));
-    let err = 0;
-    let dxPenalty = 0;
-    let ok = true;
-    for (let i = 0; i < pipes.length; i++) {
-      const dx = pipes[i]!.length / reaches[i]!;
-      if (dx > dxMax || dx < dxMin) { ok = false; break; }
-      err = Math.max(err, Math.abs(dx - pipes[i]!.waveSpeed * dt) / (pipes[i]!.waveSpeed * dt));
-      dxPenalty = Math.max(dxPenalty, Math.abs(dx - dxTarget));
-    }
-    if (!ok) continue;
-    // Courant 誤差 0.5% 以下は実用上等価とみなし、Δx が目安中央に近い方を優先する
-    const rank: [number, number] = err <= 0.005 ? [0, dxPenalty] : [1, err];
-    if (best === null || rank[0] < best.rank[0] || (rank[0] === best.rank[0] && rank[1] < best.rank[1])) {
-      best = { reaches, err, dt, rank };
-    }
-  }
-  return best === null ? null : { reaches: best.reaches, courantErr: best.err, dt: best.dt };
-}
 
 /** 単一管路の定常損失 [m]（摩擦 + 局部） */
 function steadyLoss(D: number, L: number, C: number, Q: number, minorLossCoeff = 0): number {
@@ -167,6 +114,12 @@ function judgeAlongPipe(
     + (minGauge < 0 ? "  → 負圧発生。技術書 §8.3 の防護工検討が必要" : "  → 負圧なし"),
   );
   void surgeHead;
+}
+
+/** 水柱分離（キャビテーション）の警告があれば報告に載せる */
+function reportCavitation(result: MocResult, lines: string[]): void {
+  const cav = (result.warnings ?? []).filter(w => w.includes("水蒸気圧水頭"));
+  for (const w of cav) lines.push(`  ⚠ ${w}`);
 }
 
 /** 管路諸元を 1 行で表示 */
@@ -256,13 +209,15 @@ for (const [caseId, closeTime, note] of [
 ] as const) {
   const lines: string[] = [];
   const hf = steadyLoss(MAIN_PIPE.innerDiameter, MAIN_PIPE.length, MAIN_PIPE.roughnessCoeff, MAIN_Q);
-  const grid = pickReaches([{ length: MAIN_PIPE.length, waveSpeed: MAIN_A }]);
+  const grid = suggestReaches([{ length: MAIN_PIPE.length, waveSpeed: MAIN_A }]);
   const nReaches = grid.reaches[0]!;
 
   const result = runMoc({
     pipes: [{
       id: "幹線", pipe: MAIN_PIPE, waveSpeed: MAIN_A, nReaches,
       upstreamNodeId: "ファームポンド", downstreamNodeId: "制水弁", initialFlow: MAIN_Q,
+      // 管中心高を与えると水柱分離の判定が動水頭ベースになる（issue #50）
+      upstreamElevation: MAIN_POND_EL, downstreamElevation: MAIN_VALVE_EL,
     }],
     nodes: {
       "ファームポンド": { type: "reservoir", head: MAIN_POND_WL },
@@ -280,13 +235,13 @@ for (const [caseId, closeTime, note] of [
     `  閉そく時間 tν=${fmt(closeTime, 1)} s → 区分「${CLOSURE_LABEL[closure.closureType]}」`
     + `（α=tν/(4L/a)=${fmt(closure.alpha, 3)}、2L/a=${fmt(2 * MAIN_PIPE.length / MAIN_A)} s、4L/a=${fmt(calcVibrationPeriod(MAIN_PIPE.length, MAIN_A))} s）`,
   );
-  lines.push(`  計算格子 N=${nReaches}（Δx=${fmt(MAIN_PIPE.length / nReaches, 1)} m、Δt=${fmt(result.dt, 4)} s、Courant誤差=${fmt(grid.courantErr * 100, 2)}%）`);
+  lines.push(`  計算格子 N=${nReaches}（Δx=${fmt(MAIN_PIPE.length / nReaches, 1)} m、Δt=${fmt(result.dt, 4)} s、Courant誤差=${fmt(grid.courantError * 100, 2)}%）`);
   lines.push(`  参考 ジューコフスキー ΔH=aV₀/g=${fmt(joukowsky(MAIN_A, -MAIN_V0))} m`);
 
   const p = result.pipes["幹線"]!;
   lines.push(`  弁直上流: Hmax=${fmt(p.Hmax[nReaches]!)} m  Hmin=${fmt(p.Hmin[nReaches]!)} m  水撃圧上昇=${fmt(p.Hmax[nReaches]! - MAIN_POND_WL)} m`);
   judgeAlongPipe(result, "幹線", MAIN_POND_EL, MAIN_VALVE_EL, MAIN_POND_WL, DCIP_ALLOWABLE_MPA, lines);
-  if (result.warnings?.length) lines.push(`  warnings: ${JSON.stringify(result.warnings)}`);
+  reportCavitation(result, lines);
 
   check(MAIN_A > 1000 && MAIN_A < 1300, `${caseId}: ダクタイル鋳鉄管の波速 ${fmt(MAIN_A, 0)} m/s が妥当範囲外`);
   check(closure.closureType === (caseId === "B" ? "rapid" : "slow"), `${caseId}: 閉そく区分の判定が想定と違う`);
@@ -318,10 +273,14 @@ for (const [caseId, closeTime, note] of [
   const closeTime = 0.5;
 
   const hf = steadyLoss(pipe.innerDiameter, pipe.length, pipe.roughnessCoeff, Q);
-  const grid = pickReaches([{ length: pipe.length, waveSpeed: a }]);
+  const grid = suggestReaches([{ length: pipe.length, waveSpeed: a }]);
   const nReaches = grid.reaches[0]!;
   const result = runMoc({
-    pipes: [{ id: "支線", pipe, waveSpeed: a, nReaches, upstreamNodeId: "分水工", downstreamNodeId: "給水栓", initialFlow: Q }],
+    pipes: [{
+      id: "支線", pipe, waveSpeed: a, nReaches,
+      upstreamNodeId: "分水工", downstreamNodeId: "給水栓", initialFlow: Q,
+      upstreamElevation: tankEl, downstreamElevation: outletEl,
+    }],
     nodes: {
       "分水工": { type: "reservoir", head: tankWl },
       "給水栓": { type: "valve", Q0: Q, H0v: tankWl - hf, closeTime, operation: "close" },
@@ -341,6 +300,7 @@ for (const [caseId, closeTime, note] of [
   const p = result.pipes["支線"]!;
   lines.push(`  給水栓: Hmax=${fmt(p.Hmax[nReaches]!)} m  Hmin=${fmt(p.Hmin[nReaches]!)} m  水撃圧上昇=${fmt(p.Hmax[nReaches]! - tankWl)} m`);
   judgeAlongPipe(result, "支線", tankEl, outletEl, tankWl, VP_ALLOWABLE_MPA, lines);
+  reportCavitation(result, lines);
 
   check(a > 250 && a < 600, `D: 硬質塩ビ管の波速 ${fmt(a, 0)} m/s が妥当範囲外`);
   check(a < MAIN_A, "D: 樹脂管の波速が鋳鉄管を上回っている");
@@ -366,7 +326,7 @@ const PUMP_SUCTION_EL = 20.0;
 const PUMP_TANK_EL = 68.0;
 const PUMP_HF = steadyLoss(PUMP_PIPE.innerDiameter, PUMP_PIPE.length, PUMP_PIPE.roughnessCoeff, PUMP_Q, 3.0);
 const PUMP_HEAD = (PUMP_TANK_EL - PUMP_SUCTION_EL) + PUMP_HF; // 全揚程 = 実揚程 + 損失
-const PUMP_GRID = pickReaches([{ length: PUMP_PIPE.length, waveSpeed: PUMP_A }]);
+const PUMP_GRID = suggestReaches([{ length: PUMP_PIPE.length, waveSpeed: PUMP_A }]);
 const PUMP_N = PUMP_GRID.reaches[0]!;
 
 const PUMP_BC: BoundaryCondition = {
@@ -378,7 +338,11 @@ function runPumpTrip(midDevice?: BoundaryCondition): MocResult {
   // 防護工は吐出直後（ポンプから 100 m）に置く。midDevice 未指定なら単純な接続点。
   const network: MocNetwork = {
     pipes: [
-      { id: "圧送管", pipe: PUMP_PIPE, waveSpeed: PUMP_A, nReaches: PUMP_N, upstreamNodeId: "ポンプ", downstreamNodeId: "配水池", initialFlow: PUMP_Q },
+      {
+        id: "圧送管", pipe: PUMP_PIPE, waveSpeed: PUMP_A, nReaches: PUMP_N,
+        upstreamNodeId: "ポンプ", downstreamNodeId: "配水池", initialFlow: PUMP_Q,
+        upstreamElevation: PUMP_SUCTION_EL, downstreamElevation: PUMP_TANK_EL,
+      },
     ],
     nodes: { "ポンプ": PUMP_BC, "配水池": { type: "reservoir", head: PUMP_TANK_EL } },
   };
@@ -398,6 +362,7 @@ function runPumpTrip(midDevice?: BoundaryCondition): MocResult {
   lines.push(`  計算格子 N=${PUMP_N}（Δx=${fmt(PUMP_PIPE.length / PUMP_N, 1)} m、Δt=${fmt(result.dt, 4)} s）`);
   lines.push(`  管路全体: Hmax=${fmt(Math.max(...p.Hmax))} m  Hmin=${fmt(Math.min(...p.Hmin))} m`);
   judgeAlongPipe(result, "圧送管", PUMP_SUCTION_EL, PUMP_TANK_EL, PUMP_TANK_EL, DCIP_ALLOWABLE_MPA, lines);
+  reportCavitation(result, lines);
 
   const nSeries = result.nodes["ポンプ"]?.N;
   if (nSeries?.length) {
@@ -407,25 +372,27 @@ function runPumpTrip(midDevice?: BoundaryCondition): MocResult {
   reports.push({ id: "E", title: "非定常 — 揚水機場の停電（DCIP φ250 × L=1500m、防護工なし）", lines });
 }
 
-// ── F: 防護工を「管路の途中（インライン）」に置こうとした場合 ──────────────────
+// ── F: 防護工を管路の途中（実務の設置位置）に置く ─────────────────────────────
 //
-// 実務でエアチャンバ・調圧水槽・吸気弁・減圧弁を設置する位置は、いずれも
-// 管路の途中（流入管と流出管の両方がある節点）である。ところが本ソルバーは
-// これらの境界条件を「流入管 1 本の末端」としてしか解いておらず、流出管の
-// 流量が 0 に固定される。結果として防護工が完全閉そくとして働いてしまう。
+// エアチャンバ・調圧水槽は、実務では吐出直後など管路の途中に設置する。
+// issue #47 の修正で、これらの防護工が流入管・流出管の両方を持つ節点でも
+// 解けるようになった（従来は流出管の流量が 0 に固定され、防護工が完全閉そくと
+// して働いてしまっていた）。
 {
   const lines: string[] = [];
-  const mkSeg = (id: string, L: number, N: number, from: string, to: string) => ({
+  // 管中心高は吸水槽 EL.20 → 配水池 EL.68 の直線とみなし、距離で按分する
+  const elAt = (dist: number) => PUMP_SUCTION_EL + (PUMP_TANK_EL - PUMP_SUCTION_EL) * dist / 1500;
+  const mkSeg = (id: string, L: number, N: number, from: string, to: string, startDist: number) => ({
     id,
     pipe: { ...PUMP_PIPE, id, name: id, length: L } as Pipe,
     waveSpeed: PUMP_A, nReaches: N, upstreamNodeId: from, downstreamNodeId: to, initialFlow: PUMP_Q,
+    upstreamElevation: elAt(startDist), downstreamElevation: elAt(startDist + L),
   });
   // 吐出から 100 m の位置に防護工を置く（100 m + 1400 m に分割）
-  const segs = [
-    { length: 100, waveSpeed: PUMP_A },
-    { length: 1400, waveSpeed: PUMP_A },
-  ];
-  const grid = pickReaches(segs, { dxMin: 20, dxMax: 200, dxTarget: 100 });
+  const grid = suggestReaches(
+    [{ length: 100, waveSpeed: PUMP_A }, { length: 1400, waveSpeed: PUMP_A }],
+    { dxMin: 20 },
+  );
 
   function runWithMidNode(device?: BoundaryCondition): MocResult {
     const nodes: Record<string, BoundaryCondition> = {
@@ -435,8 +402,8 @@ function runPumpTrip(midDevice?: BoundaryCondition): MocResult {
     if (device) nodes["防護工"] = device;
     return runMoc({
       pipes: [
-        mkSeg("吐出管", 100, grid.reaches[0]!, "ポンプ", "防護工"),
-        mkSeg("圧送管", 1400, grid.reaches[1]!, "防護工", "配水池"),
+        mkSeg("吐出管", 100, grid.reaches[0]!, "ポンプ", "防護工", 0),
+        mkSeg("圧送管", 1400, grid.reaches[1]!, "防護工", "配水池", 100),
       ],
       nodes,
     }, { tMax: 60, initialFlow: PUMP_Q });
@@ -444,67 +411,55 @@ function runPumpTrip(midDevice?: BoundaryCondition): MocResult {
 
   const none = runWithMidNode();
   const withAc = runWithMidNode({ type: "air_chamber", V_air0: 1.2, H_air0: PUMP_SUCTION_EL + PUMP_HEAD, polytropicIndex: 1.2 });
+  const withTank = runWithMidNode({ type: "surge_tank", tankArea: 4.0, initialLevel: PUMP_SUCTION_EL + PUMP_HEAD, datum: 0 });
 
-  const mainNone = none.pipes["圧送管"]!;
-  const mainAc = withAc.pipes["圧送管"]!;
-  const qNone = mainNone.snapshots.slice(0, 5).map(s => s.Q[0]!.toFixed(5)).join(", ");
-  const qAc = mainAc.snapshots.slice(0, 5).map(s => s.Q[0]!.toFixed(5)).join(", ");
-
-  lines.push("  ケース E の吐出から 100 m の位置にエアチャンバ（V_air0=1.2 m³、m=1.2）を設置");
-  lines.push(`  計算格子 N=[${grid.reaches.join(", ")}]（Δt=${fmt(none.dt, 4)} s、Courant誤差=${fmt(grid.courantErr * 100, 2)}%）`);
+  lines.push("  ケース E の吐出から 100 m の位置に防護工を設置（実務の設置位置）");
+  lines.push(`  計算格子 N=[${grid.reaches.join(", ")}]（Δt=${fmt(none.dt, 4)} s、Courant誤差=${fmt(grid.courantError * 100, 2)}%）`);
   lines.push("");
-  lines.push("  ▼ 防護工を置かず単純な接続点にした場合（＝ケース E 相当）");
-  lines.push(`    圧送管 上流端 Q（先頭5点）: ${qNone} m³/s`);
-  lines.push(`    圧送管 Hmax=${fmt(Math.max(...mainNone.Hmax))} m  Hmin=${fmt(Math.min(...mainNone.Hmin))} m`);
-  lines.push("");
-  lines.push("  ▼ 同じ位置にエアチャンバを置いた場合");
-  lines.push(`    圧送管 上流端 Q（先頭5点）: ${qAc} m³/s`);
-  lines.push(`    圧送管 Hmax=${fmt(Math.max(...mainAc.Hmax))} m  Hmin=${fmt(Math.min(...mainAc.Hmin))} m`);
+  lines.push("  区分                          圧送管 Hmax    圧送管 Hmin    最小動水頭");
 
-  const acQ = mainAc.snapshots.slice(1, 6).map(s => s.Q[0]!);
-  const blocked = acQ.every(q => Math.abs(q) < 1e-12);
-  if (blocked) {
-    lines.push("");
-    lines.push("  ⚠ エアチャンバ設置後、下流側（圧送管）の流量が 1 ステップ目から厳密に 0 になっている。");
-    lines.push("    これは物理現象ではなく、moc.ts の境界条件処理が air_chamber を");
-    lines.push("    「流入管 1 本の末端」としてしか解かず、流出管の流量を 0 のまま残すため。");
-    lines.push("    防護工が完全閉そくとして働き、下流管が水源から切り離される。");
-    lines.push("    → 現状 air_chamber / surge_tank / air_release_valve / pressure_reducing_valve は");
-    lines.push("      管路末端にしか設置できない。実務の設置位置（管路途中）では使えない。");
-    findings.push(
-      "moc.ts: air_chamber / surge_tank / air_release_valve / pressure_reducing_valve を"
-      + "管路途中（流入管+流出管のある節点）に置くと、流出管の流量が 0 に固定される。"
-      + "既存テストはいずれも管路末端配置しか検証していない。",
-    );
+  const centerAt = (i: number, n: number) => PUMP_SUCTION_EL + (PUMP_TANK_EL - PUMP_SUCTION_EL) * (100 + i * 1400 / n) / 1500;
+  function summarize(label: string, res: MocResult): { hmax: number; hmin: number; gauge: number } {
+    const p = res.pipes["圧送管"]!;
+    const hmax = Math.max(...p.Hmax);
+    const hmin = Math.min(...p.Hmin);
+    let gauge = Infinity;
+    for (let i = 0; i <= p.nReaches; i++) gauge = Math.min(gauge, p.Hmin[i]! - centerAt(i, p.nReaches));
+    lines.push(`  ${label.padEnd(28)} ${fmt(hmax).padStart(10)} m ${fmt(hmin).padStart(12)} m ${fmt(gauge).padStart(12)} m`);
+    return { hmax, hmin, gauge };
   }
 
-  // 末端配置なら防護工モデル自体は正しく動く、という対照を示す
-  const deadEnd = runMoc({
-    pipes: [{ id: "圧送管", pipe: PUMP_PIPE, waveSpeed: PUMP_A, nReaches: PUMP_N, upstreamNodeId: "ポンプ", downstreamNodeId: "末端", initialFlow: PUMP_Q }],
-    nodes: { "ポンプ": PUMP_BC, "末端": { type: "dead_end" } },
-  }, { tMax: 60, initialFlow: PUMP_Q });
-  const acEnd = runMoc({
-    pipes: [{ id: "圧送管", pipe: PUMP_PIPE, waveSpeed: PUMP_A, nReaches: PUMP_N, upstreamNodeId: "ポンプ", downstreamNodeId: "末端", initialFlow: PUMP_Q }],
-    nodes: {
-      "ポンプ": PUMP_BC,
-      "末端": { type: "air_chamber", V_air0: 1.2, H_air0: PUMP_SUCTION_EL + PUMP_HEAD, polytropicIndex: 1.2 },
-    },
-  }, { tMax: 60, initialFlow: PUMP_Q });
-  const minDead = Math.min(...deadEnd.pipes["圧送管"]!.Hmin);
-  const minAcEnd = Math.min(...acEnd.pipes["圧送管"]!.Hmin);
-  const vs = acEnd.nodes["末端"]?.V_air?.map(s => s.V) ?? [];
+  const sNone = summarize("防護工なし（接続点のみ）", none);
+  const sAc = summarize("エアチャンバ V=1.2 m³", withAc);
+  const sTank = summarize("調圧水槽 A=4.0 m²", withTank);
 
   lines.push("");
-  lines.push("  ▼ 対照: 管路末端（行き止まり位置）にエアチャンバを置いた場合＝現状サポートされる配置");
-  lines.push(`    行き止まりのまま:     管路最小水頭 ${fmt(minDead)} m`);
-  lines.push(`    エアチャンバ設置後:   管路最小水頭 ${fmt(minAcEnd)} m（${fmt(minAcEnd - minDead)} m の改善）`);
-  if (vs.length) {
-    lines.push(`    空気容積: 初期 ${fmt(vs[0]!, 3)} → 最小 ${fmt(Math.min(...vs), 3)} / 最大 ${fmt(Math.max(...vs), 3)} m³`);
-    check(Math.max(...vs) - Math.min(...vs) > 1e-6, "F: 末端配置でも空気容積が変化していない");
-  }
-  check(minAcEnd > minDead, "F: 末端配置のエアチャンバで最小水頭が改善していない");
+  lines.push(`  エアチャンバ: 最大水頭 ${fmt(sAc.hmax - sNone.hmax)} m / 最小動水頭 ${fmt(sAc.gauge - sNone.gauge)} m の改善`);
+  lines.push(`  調圧水槽:     最大水頭 ${fmt(sTank.hmax - sNone.hmax)} m / 最小動水頭 ${fmt(sTank.gauge - sNone.gauge)} m の改善`);
 
-  reports.push({ id: "F", title: "非定常 — 防護工（エアチャンバ）の設置位置と効果", lines });
+  // 下流管が遮断されていないこと（issue #47 の回帰確認）
+  const qNone = none.pipes["圧送管"]!.snapshots.slice(1, 5).map(s => s.Q[0]!);
+  const qAc = withAc.pipes["圧送管"]!.snapshots.slice(1, 5).map(s => s.Q[0]!);
+  lines.push("");
+  lines.push(`  圧送管 上流端 Q（先頭4点）  防護なし: ${qNone.map(q => fmt(q, 5)).join(", ")} m³/s`);
+  lines.push(`  ${" ".repeat(26)}エアチャンバ: ${qAc.map(q => fmt(q, 5)).join(", ")} m³/s`);
+  lines.push("  → 防護工を置いても下流管に流量が通る（issue #47 修正前は 0 に固定されていた）");
+
+  const vSeries = withAc.nodes["防護工"]?.V_air?.map(s => s.V) ?? [];
+  if (vSeries.length) {
+    lines.push(`  空気容積: 初期 ${fmt(vSeries[0]!, 3)} → 最小 ${fmt(Math.min(...vSeries), 3)} / 最大 ${fmt(Math.max(...vSeries), 3)} m³`);
+  }
+  const zSeries = withTank.nodes["防護工"]?.z?.map(s => s.z) ?? [];
+  if (zSeries.length) {
+    lines.push(`  タンク水位: 初期 ${fmt(zSeries[0]!, 2)} → 最小 ${fmt(Math.min(...zSeries), 2)} / 最大 ${fmt(Math.max(...zSeries), 2)} m`);
+  }
+
+  check(qAc.some(q => Math.abs(q) > 1e-6), "F: エアチャンバ設置で下流管が遮断されている（issue #47 の再発）");
+  check(vSeries.length > 0 && Math.max(...vSeries) - Math.min(...vSeries) > 1e-6, "F: 空気容積が変化していない");
+  check(sAc.gauge > sNone.gauge, "F: エアチャンバで最小動水頭が改善していない");
+  check(sTank.gauge > sNone.gauge, "F: 調圧水槽で最小動水頭が改善していない");
+
+  reports.push({ id: "F", title: "非定常 — 防護工を管路途中に設置した場合の効果（エアチャンバ／調圧水槽）", lines });
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -528,7 +483,7 @@ function runPumpTrip(midDevice?: BoundaryCondition): MocResult {
   const hfA = steadyLoss(brA.innerDiameter, brA.length, brA.roughnessCoeff, QA);
   const hfB = steadyLoss(brB.innerDiameter, brB.length, brB.roughnessCoeff, QB);
 
-  const grid = pickReaches([
+  const grid = suggestReaches([
     { length: main.length, waveSpeed: aMain },
     { length: brA.length, waveSpeed: aA },
     { length: brB.length, waveSpeed: aB },
@@ -537,9 +492,9 @@ function runPumpTrip(midDevice?: BoundaryCondition): MocResult {
 
   const result = runMoc({
     pipes: [
-      { id: "幹線", pipe: main, waveSpeed: aMain, nReaches: nM, upstreamNodeId: "取水工", downstreamNodeId: "分水工", initialFlow: QM },
-      { id: "支線A", pipe: brA, waveSpeed: aA, nReaches: nA, upstreamNodeId: "分水工", downstreamNodeId: "バルブA", initialFlow: QA },
-      { id: "支線B", pipe: brB, waveSpeed: aB, nReaches: nB, upstreamNodeId: "分水工", downstreamNodeId: "バルブB", initialFlow: QB },
+      { id: "幹線", pipe: main, waveSpeed: aMain, nReaches: nM, upstreamNodeId: "取水工", downstreamNodeId: "分水工", initialFlow: QM, upstreamElevation: 82, downstreamElevation: 62 },
+      { id: "支線A", pipe: brA, waveSpeed: aA, nReaches: nA, upstreamNodeId: "分水工", downstreamNodeId: "バルブA", initialFlow: QA, upstreamElevation: 62, downstreamElevation: 45 },
+      { id: "支線B", pipe: brB, waveSpeed: aB, nReaches: nB, upstreamNodeId: "分水工", downstreamNodeId: "バルブB", initialFlow: QB, upstreamElevation: 62, downstreamElevation: 50 },
     ],
     nodes: {
       "取水工": { type: "reservoir", head: headSource },
@@ -553,7 +508,7 @@ function runPumpTrip(midDevice?: BoundaryCondition): MocResult {
   lines.push(pipeLine(main, aMain, QM));
   lines.push(pipeLine(brA, aA, QA));
   lines.push(pipeLine(brB, aB, QB));
-  lines.push(`  計算格子 N=[${grid.reaches.join(", ")}]（Δt=${fmt(result.dt, 4)} s、Courant誤差=${fmt(grid.courantErr * 100, 2)}%）`);
+  lines.push(`  計算格子 N=[${grid.reaches.join(", ")}]（Δt=${fmt(result.dt, 4)} s、Courant誤差=${fmt(grid.courantError * 100, 2)}%）`);
   if (grid.dxMin < 50) {
     lines.push(
       `  ※ Δx≥50 m（実務目安）では全 3 管路の Courant 誤差を 1% 以内に収められないため、`
@@ -562,7 +517,8 @@ function runPumpTrip(midDevice?: BoundaryCondition): MocResult {
     );
     findings.push(
       "分岐管路では実務目安 Δx=50〜200 m と共通 Δt（Courant 誤差 1% 以内）が両立しないことがある。"
-      + "ケース G（φ300×900m / φ200×600m / φ150×400m）では Δx≈41〜44 m まで細かくする必要があった。",
+      + "ケース G（φ300×900m / φ200×600m / φ150×400m）では Δx≈41〜44 m まで細かくする必要があった。"
+      + "分割数の探索は core の suggestReaches() が行い、下げた理由も返す（issue #49）。",
     );
   }
   for (const pipeId of ["幹線", "支線A", "支線B"]) {
@@ -579,12 +535,14 @@ function runPumpTrip(midDevice?: BoundaryCondition): MocResult {
     `  開いたままの バルブB: ${fmt(Math.min(...vbSeries))} 〜 ${fmt(Math.max(...vbSeries))} m`
     + ` → 操作していない支線にも ${fmt(Math.max(...vbSeries) - vbSeries[0]!)} m の圧力上昇が伝わる`,
   );
-  if (result.warnings?.length) {
-    lines.push(`  warnings: ${result.warnings.length} 件（いずれも Δx が実務目安 50 m 未満である旨の注意）`);
+  reportCavitation(result, lines);
+  const gridWarnings = (result.warnings ?? []).filter(w => w.includes("差分距離"));
+  if (gridWarnings.length) {
+    lines.push(`  warnings: Δx が実務目安 50 m 未満である旨の注意 ${gridWarnings.length} 件`);
   }
 
   check(Math.max(...vbSeries) > vbSeries[0]!, "G: 開いたままの支線に水撃圧が伝わっていない");
-  check(grid.courantErr < 0.01, `G: Courant 誤差 ${fmt(grid.courantErr * 100, 2)}% が許容 1% を超過`);
+  check(grid.courantError < 0.01, `G: Courant 誤差 ${fmt(grid.courantError * 100, 2)}% が許容 1% を超過`);
   reports.push({ id: "G", title: "非定常 — T字分岐で片方の支線バルブを閉じる（幹線 φ300 + 支線 φ200/φ150）", lines });
 }
 

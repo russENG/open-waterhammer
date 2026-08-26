@@ -32,6 +32,15 @@ export const MOC_GRID_SPACING_RECOMMENDED_MIN = 50;
 /** 技術書 §8.4.2(2): 本ソルバーが設計用途で許容する最大差分距離 [m] */
 export const MOC_GRID_SPACING_MAX = 200;
 
+/**
+ * 水蒸気圧水頭（ゲージ、標高0m・常温）[m]
+ *
+ * これを下回ると水柱分離（キャビテーション）が発生する。本ソルバーは分離後の
+ * 挙動を追跡しないため、下回った場合は警告を返す（issue #50）。
+ * 標高が高い現場や水温が高い場合は `MocOptions.vaporPressureHead` で調整する。
+ */
+export const MOC_VAPOR_PRESSURE_HEAD = -10.33;
+
 // ═══════════════════════════════════════════════════════════════════════════════
 // 境界条件型（Discriminated Union）
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -190,6 +199,16 @@ export interface MocPipeSegment {
    * 省略時は options.initialFlow または下流 BC から推算
    */
   initialFlow?: number;
+  /**
+   * 上流端の管中心高 [m]（issue #50: 水柱分離の判定に使う）
+   *
+   * 水柱分離は**動水頭**（水頭 − 管中心高）が水蒸気圧水頭を下回ったときに起きる。
+   * 省略すると 0 とみなし、水頭をそのまま動水頭として判定する（＝基準面が
+   * 管中心にある場合のみ正しい）。標高差のある管路では必ず指定すること。
+   */
+  upstreamElevation?: number;
+  /** 下流端の管中心高 [m]（省略時 0。管中心高は上下流端の直線補間とする） */
+  downstreamElevation?: number;
 }
 
 /**
@@ -213,6 +232,11 @@ export interface MocOptions {
   initialFlow?: number;
   /** 定常計算から引き継ぐ節点水頭 [m] */
   initialNodeHeads?: Record<string, number>;
+  /**
+   * 水柱分離を判定する水蒸気圧水頭（ゲージ）[m]
+   * 既定 `MOC_VAPOR_PRESSURE_HEAD`（-10.33 m）。下回ると警告を返す。
+   */
+  vaporPressureHead?: number;
 }
 
 export interface MocSnapshot {
@@ -298,6 +322,160 @@ export function harmonizeTimeStep(segs: MocPipeSegment[]): {
   return { segs: harmonized, dt, warnings };
 }
 
+// ─── 計算区間数の自動提案（issue #49）────────────────────────────────────────
+
+/** `suggestReaches` の入力（管路 1 本ぶんの最小情報） */
+export interface ReachCandidatePipe {
+  /** 管路延長 L [m] */
+  length: number;
+  /** 波速 a [m/s] */
+  waveSpeed: number;
+}
+
+export interface SuggestReachesOptions {
+  /** 差分距離の下限 [m]（既定 `MOC_GRID_SPACING_RECOMMENDED_MIN` = 50） */
+  dxMin?: number;
+  /** 差分距離の上限 [m]（既定 `MOC_GRID_SPACING_MAX` = 200） */
+  dxMax?: number;
+  /** 目標とする差分距離 [m]（既定 100 = 実務目安の中央） */
+  dxTarget?: number;
+  /**
+   * 許容する Courant 誤差（既定 0.01 = 1%）
+   *
+   * `harmonizeTimeStep` は 5% 超で警告を出す。既定値はそれより十分厳しく、かつ
+   * Δx を不必要に細かくしない水準として 1% をとっている。
+   */
+  courantTolerance?: number;
+}
+
+export interface SuggestReachesResult {
+  /** 各管路の計算区間数（入力と同じ順） */
+  reaches: number[];
+  /** 共通タイムステップ Δt [s] */
+  dt: number;
+  /** 全管路で最大の Courant 誤差 |Δx − a·Δt| / (a·Δt) */
+  courantError: number;
+  /** 実際に採用した差分距離の下限 [m] */
+  dxMin: number;
+  /** 実務目安を外れた場合などの説明 */
+  warnings: string[];
+}
+
+/** 指定した Δx 下限のもとで最良の分割数の組を探す */
+function searchReaches(
+  pipes: ReachCandidatePipe[], dxMin: number, dxMax: number, dxTarget: number, tolerance: number,
+): { reaches: number[]; dt: number; courantError: number } | null {
+  const first = pipes[0]!;
+  const nMax = Math.max(1, Math.ceil(first.length / dxMin));
+  let best: { reaches: number[]; dt: number; err: number; rank: [number, number] } | null = null;
+
+  for (let n0 = 1; n0 <= nMax; n0++) {
+    const dtSeed = first.length / (first.waveSpeed * n0);
+    const reaches = pipes.map((p) => Math.max(1, Math.round(p.length / (p.waveSpeed * dtSeed))));
+    // 実際に runMoc（harmonizeTimeStep）が採用する Δt は各管路の素の Δt の最小値。
+    // 誤差評価もそれに合わせないと提案値とソルバーの挙動がずれる。
+    const dt = Math.min(...pipes.map((p, i) => p.length / (p.waveSpeed * reaches[i]!)));
+    let err = 0;
+    let dxPenalty = 0;
+    let ok = true;
+    for (let i = 0; i < pipes.length; i++) {
+      const dx = pipes[i]!.length / reaches[i]!;
+      if (dx > dxMax || dx < dxMin) { ok = false; break; }
+      err = Math.max(err, Math.abs(dx - pipes[i]!.waveSpeed * dt) / (pipes[i]!.waveSpeed * dt));
+      dxPenalty = Math.max(dxPenalty, Math.abs(dx - dxTarget));
+    }
+    if (!ok) continue;
+    // 許容内の誤差は実用上等価とみなし、Δx が目標に近い（＝計算量が妥当な）組を優先する
+    const rank: [number, number] = err <= tolerance ? [0, dxPenalty] : [1, err];
+    if (best === null || rank[0] < best.rank[0] || (rank[0] === best.rank[0] && rank[1] < best.rank[1])) {
+      best = { reaches, dt, err, rank };
+    }
+  }
+  return best === null ? null : { reaches: best.reaches, dt: best.dt, courantError: best.err };
+}
+
+/**
+ * 全管路で共通の Δt が成立する計算区間数の組を提案する（技術書 §8.4.2(2)）
+ *
+ * MOC は全管路で共通の Δt を使うため、Δx = a·Δt が全管路で同時に成り立つ分割数を
+ * 選ぶ必要がある。実務データでは管路長と波速の比が整数分割で揃わず、
+ * 実務目安 Δx = 50〜200 m と Courant 誤差の許容が両立しないことがある。
+ *
+ * 本関数はまず実務目安の範囲で探し、そこで許容誤差に収まらなければ Δx の下限を
+ * 段階的に下げる。どこまで下げたかと理由は `warnings` で返すので、
+ * 「なぜ目安より細かい格子が必要なのか」を利用者に説明できる。
+ *
+ * @example
+ * const g = suggestReaches([
+ *   { length: 900, waveSpeed: 1135 },
+ *   { length: 600, waveSpeed: 1194 },
+ *   { length: 400, waveSpeed: 1228 },
+ * ]);
+ * // g.reaches → [22, 14, 9], g.courantError ≈ 0.0083
+ */
+export function suggestReaches(
+  pipes: ReachCandidatePipe[],
+  options: SuggestReachesOptions = {},
+): SuggestReachesResult {
+  if (pipes.length === 0) throw new Error("管路が 0 本です");
+  for (const p of pipes) {
+    if (!(p.length > 0) || !(p.waveSpeed > 0)) {
+      throw new Error("管路延長と波速は正の値で指定してください。");
+    }
+  }
+
+  const dxMax = options.dxMax ?? MOC_GRID_SPACING_MAX;
+  const dxTarget = options.dxTarget ?? (MOC_GRID_SPACING_RECOMMENDED_MIN + MOC_GRID_SPACING_MAX) / 2;
+  const tolerance = options.courantTolerance ?? 0.01;
+  const recommendedMin = MOC_GRID_SPACING_RECOMMENDED_MIN;
+
+  // 下限の候補: 実務目安から段階的に下げる（明示指定があればそれだけ）
+  const floors = options.dxMin !== undefined
+    ? [options.dxMin]
+    : [recommendedMin, recommendedMin * 0.7, recommendedMin * 0.4, recommendedMin * 0.2, recommendedMin * 0.1];
+
+  let fallback: { reaches: number[]; dt: number; courantError: number; dxMin: number } | null = null;
+
+  for (const dxMin of floors) {
+    if (dxMin > dxMax) continue;
+    const found = searchReaches(pipes, dxMin, dxMax, dxTarget, tolerance);
+    if (found === null) continue;
+    if (fallback === null || found.courantError < fallback.courantError) {
+      fallback = { ...found, dxMin };
+    }
+    if (found.courantError <= tolerance) {
+      const warnings: string[] = [];
+      if (dxMin < recommendedMin) {
+        warnings.push(
+          `Δx を実務目安の下限 ${recommendedMin} m 以上にすると Courant 誤差が許容値 `
+          + `${(tolerance * 100).toFixed(1)}% に収まらないため、下限を ${dxMin.toFixed(0)} m まで下げました。`
+          + `管路長と波速の比が整数分割で揃わないことによるもので、計算精度上の問題はありません`
+          + `（技術書 §8.4.2(2)）。`,
+        );
+      }
+      return { reaches: found.reaches, dt: found.dt, courantError: found.courantError, dxMin, warnings };
+    }
+  }
+
+  if (fallback === null) {
+    throw new Error(
+      `Δx を ${dxMax} m 以下に収める計算区間数の組が見つかりません。`
+      + `管路延長・波速を確認してください。`,
+    );
+  }
+  return {
+    reaches: fallback.reaches,
+    dt: fallback.dt,
+    courantError: fallback.courantError,
+    dxMin: fallback.dxMin,
+    warnings: [
+      `どの分割数でも Courant 誤差が許容値 ${(tolerance * 100).toFixed(1)}% に収まりません`
+      + `（最小 ${(fallback.courantError * 100).toFixed(2)}%）。`
+      + `管路延長または波速の組み合わせを見直してください（技術書 §8.4.2(2)）。`,
+    ],
+  };
+}
+
 function validateGridSpacing(segs: MocPipeSegment[]): string[] {
   const warnings: string[] = [];
   for (const seg of segs) {
@@ -331,7 +509,22 @@ function localDarcyF(V: number, D: number, C: number): number {
   const Rh = D / 4;
   // Hazen-Williams 式（技術書 式7.2.2）: V = 0.849·C·R^0.63·I^0.54
   const S = Math.pow(absV / (0.849 * C * Math.pow(Rh, 0.63)), 1 / 0.54);
-  return Math.max(0.005, Math.min((2 * GRAVITY * D * S) / (absV * absV), 0.15));
+  // 上限 0.15 は乱流域の妥当範囲として残す。下限は設けない（issue #51）:
+  // 粗度係数 C を大きくとった検証条件で無摩擦を表現できるようにするため。
+  // 極低流速は上の早期リターンで処理済みで、f は常に乗数としてしか使わないので
+  // 0 に近づいても 0 除算は起きない。
+  return Math.min((2 * GRAVITY * D * S) / (absV * absV), 0.15);
+}
+
+/**
+ * 格子点 i の管中心高 [m]（上下流端の直線補間、未指定なら 0）
+ *
+ * issue #50: 水柱分離は動水頭（水頭 − 管中心高）で判定するため必要。
+ */
+function pipeElevationAt(seg: MocPipeSegment, i: number): number {
+  const up = seg.upstreamElevation ?? 0;
+  const dn = seg.downstreamElevation ?? up;
+  return up + (dn - up) * (i / seg.nReaches);
 }
 
 /** 管路断面積 [m²] */
@@ -366,16 +559,25 @@ function solveReservoir(
   return { H, Q };
 }
 
-/** バルブ BC（下流端専用）: H_P = CP - B·τᵥ·√H_P の 2 次方程式 */
+/**
+ * バルブ BC（下流端専用）: H_P = CP - B·τᵥ·√H_P の 2 次方程式
+ *
+ * issue #50: 全閉時・流出不能時は水頭を 0 m で打ち切らず、C+ の値をそのまま返す。
+ * 下降側の水撃圧を過小評価（危険側）しないため。負圧の妥当性は runMoc 側で
+ * 水蒸気圧水頭と照合して警告する。
+ */
 function solveValve(
   CP: number, B: number, tau: number, Q0: number, H0v: number,
 ): { H: number; Q: number } {
-  if (tau < 1e-10) return { H: Math.max(CP, 0), Q: 0 };
+  // 全閉 → 行き止まりと同じ（水頭は C+ そのもの、負値も許容）
+  if (tau < 1e-10) return { H: CP, Q: 0 };
+  // C+ が基準面以下だと弁は流出できない（√H が定義できない）。行き止まり扱い。
+  if (CP <= 0) return { H: CP, Q: 0 };
   const H0safe = Math.max(H0v, 0.01);
   const tauV = (tau * Q0) / Math.sqrt(H0safe);
-  const disc = B * B * tauV * tauV + 4 * Math.max(CP, 0);
+  const disc = B * B * tauV * tauV + 4 * CP;
   const y = (-B * tauV + Math.sqrt(disc)) / 2;
-  return { H: Math.max(y * y, 0), Q: tauV * y };
+  return { H: y * y, Q: tauV * y };
 }
 
 /**
@@ -427,9 +629,10 @@ function solvePump(
   const Bq = (Hs - bc.H0) / (bc.Q0 * bc.Q0);
 
   // ── ポンプ停止時 ─────────────────────────────────────────────────────────
+  // issue #50: 停止後は逆止め弁で閉じた行き止まりと同じ。水頭は C- そのもので、
+  // 0 m で打ち切らない（ポンプ直後の負圧を過小評価しないため）。
   if (alpha < 1e-6) {
-    if (checkValve) return { H: Math.max(CM, 0), Q: 0 };
-    return { H: Math.max(CM, 0), Q: 0 };
+    return { H: CM, Q: 0 };
   }
 
   // ── H-Q 交点の解 ─────────────────────────────────────────────────────────
@@ -447,10 +650,10 @@ function solvePump(
   }
 
   if (checkValve && Q < 0) {
-    H = Math.max(CM, 0);
+    // 逆止め弁が閉じる → 行き止まり。水頭は C- そのもの（issue #50）
+    H = CM;
     Q = 0;
   }
-  H = Math.max(H, 0);
   Q = Math.max(Q, 0);
 
   // ── GD² による回転速度更新（技術書式 8.4.10-11）───────────────────────────
@@ -478,78 +681,95 @@ function solvePump(
 }
 
 /**
- * エアチャンバ BC
- * H_a · V_a^m = const（ポリトロープ気体則）
- * 陽的 predictor-corrector で安定更新
+ * 装置節点（エアチャンバ・サージタンク・吸気弁）の求解
+ *
+ * issue #47: これらの防護工は実務では管路の**途中**に設置する。従来は
+ * 「流入管 1 本の末端」としてしか解いておらず、流出管の流量が 0 のまま残って
+ * 装置が完全閉そくとして働いていた。
+ *
+ * ここでは装置を「節点から流量 Q_dev を出し入れする枝」として扱い、
+ * 分岐点の連続条件と連立させる。
+ *
+ *   流入管 k: Q_in,k  = (CP_k − H) / B_k
+ *   流出管 k: Q_out,k = (H − CM_k) / B_k
+ *   連続条件: Σ Q_in − Σ Q_out − Q_dev(H) = 0
+ *
+ * S = Σ_in CP_k/B_k + Σ_out CM_k/B_k、T = Σ_all 1/B_k と置くと
+ * Σ Q_in − Σ Q_out = S − H·T なので、解くべきは
+ *
+ *   f(H) = S − H·T − Q_dev(H) = 0
+ *
+ * 流出管が 0 本（管路末端）の場合はこの一般形の特殊ケースとして落ちるため、
+ * 従来の末端配置の挙動はそのまま保たれる。
  */
-function solveAirChamber(
-  CP: number, B: number, dt: number, bc: AirChamberBC,
-  state: { V_air: number },
-): { H: number; Q: number } {
+function solveDeviceNode(
+  inPipes: { CP: number; B: number }[],
+  outPipes: { CM: number; B: number }[],
+  bc: AirChamberBC | SurgeTankBC | AirReleaseValveBC,
+  dt: number,
+  state: { V_air?: number; z?: number },
+): { H: number; Qin: number[]; Qout: number[] } {
+  const S = inPipes.reduce((acc, p) => acc + p.CP / p.B, 0)
+    + outPipes.reduce((acc, p) => acc + p.CM / p.B, 0);
+  const T = inPipes.reduce((acc, p) => acc + 1 / p.B, 0)
+    + outPipes.reduce((acc, p) => acc + 1 / p.B, 0);
+
+  const finish = (H: number) => ({
+    H,
+    Qin: inPipes.map((p) => (p.CP - H) / p.B),
+    Qout: outPipes.map((p) => (H - p.CM) / p.B),
+  });
+
+  if (T <= 0) return finish(0);
+
+  if (bc.type === "surge_tank") {
+    // Q_dev = (H − datum − z)·A_s/Δt は H について線形 → 閉形式で解ける
+    //   H = (S + (z + datum)·A_s/Δt) / (T + A_s/Δt)
+    const datum = bc.datum ?? 0;
+    const k = bc.tankArea / dt;
+    const H = (S + (state.z! + datum) * k) / (T + k);
+    const Q_dev = (H - datum - state.z!) * k;
+    state.z! += Q_dev * dt / bc.tankArea;
+    return finish(H);
+  }
+
+  if (bc.type === "air_release_valve") {
+    // まず装置なし（Q_dev = 0）で解き、大気圧水頭を下回るときだけ開放する
+    const H_atm = bc.atmosphericHead ?? 10.33;
+    const H_free = S / T;
+    return finish(H_free < H_atm ? H_atm : H_free);
+  }
+
+  // ── エアチャンバ: ポリトロープ気体則 H·V^m = H_a0·V_a0^m ──────────────────
+  //   V_new(H) = V_a0·(H_a0/H)^(1/m)、Q_dev(H) = (V_state − V_new(H)) / Δt
+  //   f(H) = S − H·T − Q_dev(H) は H について単調減少なので二分法で確実に解ける。
   const m = bc.polytropicIndex ?? 1.2;
   const V_min = bc.V_air0 * 0.02; // 最小空気容積（チャンバ容量の 2%）
+  const V_state = state.V_air!;
+  const volumeAt = (H: number) => bc.V_air0 * Math.pow(bc.H_air0 / H, 1 / m);
+  const f = (H: number) => S - H * T - (V_state - volumeAt(H)) / dt;
 
-  // 現在の気体圧水頭
-  const H_cur = bc.H_air0 * Math.pow(bc.V_air0 / state.V_air, m);
-
-  // Predictor: 現水頭から Q を推算
-  const Q_pred = (CP - H_cur) / B;
-  const V_pred = Math.max(state.V_air - Q_pred * dt, V_min);
-  const H_pred = bc.H_air0 * Math.pow(bc.V_air0 / V_pred, m);
-
-  // Corrector: 修正水頭から Q を再計算
-  const Q_corr = (CP - H_pred) / B;
-  const Q_avg = (Q_pred + Q_corr) / 2;
-
-  // 最終更新
-  state.V_air = Math.max(state.V_air - Q_avg * dt, V_min);
-  const H_new = bc.H_air0 * Math.pow(bc.V_air0 / state.V_air, m);
-
-  return { H: H_new, Q: Q_avg };
-}
-
-/**
- * サージタンク BC（技術書 §8.5 主対象）
- * A_s·dz/dt = Q_in を陰的離散化で無条件安定に解く
- *
- * 陰的解:
- *   H_new = (z_old + datum + CP·γ) / (1 + γ)  ここで γ = dt / (B·A_s)
- */
-function solveSurgeTank(
-  CP: number, B: number, dt: number, bc: SurgeTankBC,
-  state: { z: number },
-): { H: number; Q: number } {
-  const datum = bc.datum ?? 0;
-  const gamma = dt / (B * bc.tankArea);
-  const H_new = (state.z + datum + CP * gamma) / (1 + gamma);
-  const Q_new = (CP - H_new) / B;
-  state.z += Q_new * dt / bc.tankArea;
-  return { H: H_new, Q: Q_new };
-}
-
-/**
- * 吸気弁 BC（負圧防止）
- * H < H_atm のとき開放: H = H_atm
- * H ≥ H_atm のとき全閉: Q = 0（行き止まり）
- */
-function solveAirReleaseValve(
-  CP: number, B: number, bc: AirReleaseValveBC,
-): { H: number; Q: number } {
-  const H_atm = bc.atmosphericHead ?? 10.33;
-  // 行き止まりとして試算
-  const H_dead = Math.max(CP, 0);
-  if (H_dead < H_atm) {
-    // 負圧 → 吸気弁開放、大気圧維持
-    const Q = (CP - H_atm) / B; // 大気に向かう流れ（通常正）
-    return { H: H_atm, Q };
+  // 空気容積の下限に対応する水頭の上限（これ以上は圧縮できない）
+  const H_ceiling = bc.H_air0 * Math.pow(bc.V_air0 / V_min, m);
+  let lo = 1e-9;
+  let hi = Math.max(H_ceiling, Math.abs(S / T) * 2 + 1);
+  if (f(hi) > 0) {
+    // 上限でもまだ f > 0 → 圧縮限界。V_min に張り付く
+    state.V_air = V_min;
+    return finish(H_ceiling);
   }
-  // 弁閉（行き止まり）
-  return { H: H_dead, Q: 0 };
+  for (let it = 0; it < 80; it++) {
+    const mid = (lo + hi) / 2;
+    if (f(mid) > 0) lo = mid; else hi = mid;
+  }
+  const H = (lo + hi) / 2;
+  state.V_air = Math.min(Math.max(volumeAt(H), V_min), bc.V_air0 / 0.02);
+  return finish(H);
 }
 
 /**
- * 減圧バルブ BC（設定圧維持）
- * 下流側を H_set に固定、上流から C+ を使ってQ を決定
+ * 減圧バルブ BC（設定圧維持）— 管路末端
+ * 下流側を H_set に固定、上流から C+ を使って Q を決定
  */
 function solvePRV(
   CP: number, B: number, bc: PressureReducingValveBC,
@@ -559,9 +779,48 @@ function solvePRV(
   return { H, Q };
 }
 
-/** 行き止まり BC: Q=0, H=CP */
+/**
+ * 減圧バルブ BC — 管路の途中（流入管 1 本・流出管 1 本）
+ *
+ * issue #47: 減圧弁は流量を出し入れする装置ではなく、節点の上流側と下流側で
+ * **異なる水頭**を持つ要素なので、他の防護工とは別扱いにする。
+ *
+ *   下流側: H_dn = H_set（設定圧を維持）→ Q = (H_set − CM) / B_dn
+ *   上流側: H_up = CP − B_up·Q
+ *
+ * 動作モード:
+ *   - 通常制御: 上式のとおり
+ *   - 全開: 上流水頭が設定圧まで届かない場合は減圧できないので、
+ *           単なる接合点（連続条件のみ）に退化する
+ *   - 遮断: 逆流になる場合は Q = 0（逆止機能）
+ */
+function solvePRVInline(
+  inPipe: { CP: number; B: number },
+  outPipe: { CM: number; B: number },
+  bc: PressureReducingValveBC,
+): { H: number; Hout: number; Qin: number; Qout: number } {
+  const Q = (bc.setHead - outPipe.CM) / outPipe.B;
+  if (Q <= 0) {
+    // 逆流 → 遮断。両側とも行き止まりとして解く
+    return { H: inPipe.CP, Hout: outPipe.CM, Qin: 0, Qout: 0 };
+  }
+  const H_up = inPipe.CP - inPipe.B * Q;
+  if (H_up <= bc.setHead) {
+    // 上流水頭が設定圧以下 → 減圧不要。全開＝単なる接合点
+    const H = (inPipe.CP / inPipe.B + outPipe.CM / outPipe.B) / (1 / inPipe.B + 1 / outPipe.B);
+    return { H, Hout: H, Qin: (inPipe.CP - H) / inPipe.B, Qout: (H - outPipe.CM) / outPipe.B };
+  }
+  return { H: H_up, Hout: bc.setHead, Qin: Q, Qout: Q };
+}
+
+/**
+ * 行き止まり BC: Q=0, H=CP
+ *
+ * issue #50: 水頭を 0 m で打ち切らない。負圧の妥当性は runMoc 側で
+ * 水蒸気圧水頭と照合して警告する。
+ */
 function solveDeadEnd(CP: number): { H: number; Q: number } {
-  return { H: Math.max(CP, 0), Q: 0 };
+  return { H: CP, Q: 0 };
 }
 
 /**
@@ -702,6 +961,10 @@ export function runMoc(network: MocNetwork, options: MocOptions = {}): MocResult
       );
     }
   }
+  const vaporHead = options.vaporPressureHead ?? MOC_VAPOR_PRESSURE_HEAD;
+  /** 最初に水蒸気圧水頭を下回った位置・時刻（issue #50） */
+  let cavitation: { pipeId: string; index: number; t: number; H: number; gauge: number } | null = null;
+
   const T0_max = Math.max(...physics.map((p) => p.T0));
   const tMax = options.tMax ?? 3 * T0_max;
   const nSteps = Math.ceil(tMax / dt_global);
@@ -872,6 +1135,8 @@ export function runMoc(network: MocNetwork, options: MocOptions = {}): MocResult
 
     // ── 3. 全ノードを一括処理 ───────────────────────────────────────────────
     const nodeHnew: Record<string, number> = {};
+    /** 上流側と下流側で水頭が異なる節点（減圧弁）の下流側水頭 */
+    const nodeHnewOut: Record<string, number> = {};
     // nodeQin[nodeId][k]  = nodeFlowIn[nodeId][k] の管路端での Q
     // nodeQout[nodeId][k] = nodeFlowOut[nodeId][k] の管路端での Q
     const nodeQin: Record<string, number[]> = {};
@@ -883,6 +1148,8 @@ export function runMoc(network: MocNetwork, options: MocOptions = {}): MocResult
       const outPipes = nodeFlowOut[nodeId] ?? [];  // この node から流出する管路
 
       let H_node: number;
+      /** 減圧弁のように上流側と下流側で水頭が異なる節点用（未設定なら H_node と同じ） */
+      let H_node_out: number | undefined;
       let Q_ins: number[] = new Array(inPipes.length).fill(0);
       let Q_outs: number[] = new Array(outPipes.length).fill(0);
 
@@ -920,40 +1187,52 @@ export function runMoc(network: MocNetwork, options: MocOptions = {}): MocResult
           Q_outs = [r.Q];
         }
 
-      } else if (bc.type === "air_chamber") {
-        // エアチャンバは単一流入管の末端（T字接合の場合は junction で処理）
-        const pi = inPipes[0];
-        if (pi === undefined) { H_node = 0; } else {
-          const st = airChamberState[nodeId]!;
-          const r = solveAirChamber(CP_arr[pi]!, physics[pi]!.B, dt_global, bc, st);
-          H_node = r.H;
-          Q_ins = [r.Q];
-        }
-
-      } else if (bc.type === "surge_tank") {
-        const pi = inPipes[0];
-        if (pi === undefined) { H_node = 0; } else {
-          const st = surgeTankState[nodeId]!;
-          const r = solveSurgeTank(CP_arr[pi]!, physics[pi]!.B, dt_global, bc, st);
-          H_node = r.H;
-          Q_ins = [r.Q];
-        }
-
-      } else if (bc.type === "air_release_valve") {
-        const pi = inPipes[0];
-        if (pi === undefined) { H_node = 0; } else {
-          const r = solveAirReleaseValve(CP_arr[pi]!, physics[pi]!.B, bc);
-          H_node = r.H;
-          Q_ins = [r.Q];
-        }
+      } else if (
+        bc.type === "air_chamber" || bc.type === "surge_tank" || bc.type === "air_release_valve"
+      ) {
+        // ── 防護工（issue #47）────────────────────────────────────────────
+        // 装置を「節点から流量 Q_dev を出し入れする枝」として扱い、
+        // 分岐点の連続条件と連立させる。管路末端・管路途中のどちらでも解ける。
+        const inData  = inPipes.map((pi) => ({ CP: CP_arr[pi]!, B: physics[pi]!.B }));
+        const outData = outPipes.map((pi) => ({ CM: CM_arr[pi]!, B: physics[pi]!.B }));
+        const st: { V_air?: number; z?: number } = bc.type === "air_chamber"
+          ? airChamberState[nodeId]!
+          : bc.type === "surge_tank"
+            ? surgeTankState[nodeId]!
+            : {};
+        const r = solveDeviceNode(inData, outData, bc, dt_global, st);
+        H_node = r.H;
+        Q_ins = r.Qin;
+        Q_outs = r.Qout;
 
       } else if (bc.type === "pressure_reducing_valve") {
-        // PRV は単一流入管
-        const pi = inPipes[0];
-        if (pi === undefined) { H_node = 0; } else {
+        // ── 減圧バルブ（issue #47）─────────────────────────────────────────
+        // 上流側と下流側で水頭が異なるため、装置枝ではなく専用の扱いにする。
+        if (inPipes.length === 1 && outPipes.length === 1) {
+          const pin = inPipes[0]!, pout = outPipes[0]!;
+          const r = solvePRVInline(
+            { CP: CP_arr[pin]!, B: physics[pin]!.B },
+            { CM: CM_arr[pout]!, B: physics[pout]!.B },
+            bc,
+          );
+          H_node = r.H;
+          H_node_out = r.Hout;
+          Q_ins = [r.Qin];
+          Q_outs = [r.Qout];
+        } else if (outPipes.length === 0 && inPipes.length >= 1) {
+          // 管路末端の減圧弁（従来どおり）
+          const pi = inPipes[0]!;
           const r = solvePRV(CP_arr[pi]!, physics[pi]!.B, bc);
           H_node = r.H;
           Q_ins = [r.Q];
+        } else {
+          // 未対応構成（流入・流出が複数）。接合点として解き、警告は初期化時に出す
+          const inData  = inPipes.map((pi) => ({ CP: CP_arr[pi]!, B: physics[pi]!.B }));
+          const outData = outPipes.map((pi) => ({ CM: CM_arr[pi]!, B: physics[pi]!.B }));
+          const r = solveJunction(inData, outData);
+          H_node = r.H;
+          Q_ins = r.Qin;
+          Q_outs = r.Qout;
         }
 
       } else {
@@ -967,6 +1246,7 @@ export function runMoc(network: MocNetwork, options: MocOptions = {}): MocResult
       }
 
       nodeHnew[nodeId] = H_node;
+      if (H_node_out !== undefined) nodeHnewOut[nodeId] = H_node_out;
       nodeQin[nodeId] = Q_ins;
       nodeQout[nodeId] = Q_outs;
       nodeSeriesH[nodeId]!.push({ t, H: H_node });
@@ -985,9 +1265,10 @@ export function runMoc(network: MocNetwork, options: MocOptions = {}): MocResult
         Hnews[pi]![segs[pi]!.nReaches] = H_node;
         Qnews[pi]![segs[pi]!.nReaches] = Q_ins[k] ?? 0;
       }
+      const H_out = nodeHnewOut[nodeId] ?? H_node;
       for (let k = 0; k < outPipes.length; k++) {
         const pi = outPipes[k]!;
-        Hnews[pi]![0] = H_node;
+        Hnews[pi]![0] = H_out;
         Qnews[pi]![0] = Q_outs[k] ?? 0;
       }
     }
@@ -1015,11 +1296,37 @@ export function runMoc(network: MocNetwork, options: MocOptions = {}): MocResult
         Qs[pi]![i] = q;
         if (h > Hmaxes[pi]![i]!) Hmaxes[pi]![i] = h;
         if (h < Hmines[pi]![i]!) Hmines[pi]![i] = h;
+        // 水柱分離の判定（issue #50）: 動水頭が最初に水蒸気圧水頭を下回った位置・時刻
+        if (cavitation === null) {
+          const gauge = h - pipeElevationAt(segs[pi]!, i);
+          if (gauge < vaporHead) {
+            cavitation = { pipeId: segs[pi]!.id, index: i, t, H: h, gauge };
+          }
+        }
       }
       if (step % saveEvery === 0) {
         snapshotsArr[pi]!.push({ t, H: [...Hs[pi]!], Q: [...Qs[pi]!] });
       }
     }
+  }
+
+  // ── 水柱分離の警告（issue #50）─────────────────────────────────────────────
+  if (cavitation !== null) {
+    const pi = segs.findIndex((s2) => s2.id === cavitation!.pipeId);
+    const dist = pi >= 0 ? cavitation.index * physics[pi]!.dx : 0;
+    const seg = pi >= 0 ? segs[pi]! : undefined;
+    const hasElevation = seg !== undefined
+      && (seg.upstreamElevation !== undefined || seg.downstreamElevation !== undefined);
+    warnings.push(
+      `${cavitation.pipeId}: 上流端から ${dist.toFixed(0)} m の地点（格子点 ${cavitation.index}）で `
+      + `t=${cavitation.t.toFixed(2)} s に動水頭が ${cavitation.gauge.toFixed(2)} m`
+      + `（動水位 ${cavitation.H.toFixed(2)} m）となり、`
+      + `水蒸気圧水頭 ${vaporHead.toFixed(2)} m を下回りました。この位置で水柱分離（キャビテーション）が`
+      + `発生する可能性がありますが、本ソルバーは分離・再結合の挙動を追跡しません。`
+      + `これ以降の計算結果は参考値として扱い、技術書 §8.3 の防護工検討に進んでください。`
+      + (hasElevation ? "" : "（管中心高が未指定のため基準面 0 m で判定しています。"
+        + "標高差のある管路では upstreamElevation / downstreamElevation を指定してください。）"),
+    );
   }
 
   // ── 結果整形 ──────────────────────────────────────────────────────────────

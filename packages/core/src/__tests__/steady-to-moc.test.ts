@@ -134,6 +134,59 @@ describe("buildMocFromSteady — 管径変化でセグメント分割", () => {
   });
 });
 
+describe("buildMocFromSteady — 管中心高の引き継ぎ（issue #50）", () => {
+  // 水柱分離は動水頭（水頭 − 管中心高）で判定するので、測点の管中心高 FH が
+  // MOC セグメントまで届いていないと、標高差のある管路では判定を誤る。
+  const hyResult = calcLongitudinalHydraulic({
+    points: POINTS_MULTI_D,
+    staticWaterLevel: 115,
+    caseName: "管中心高テスト",
+  });
+  const mocOutput = buildMocFromSteady({
+    hydraulicResult: hyResult,
+    points: POINTS_MULTI_D,
+    material: { pipeType: "ductile_iron" },
+  });
+
+  test("各セグメントの上下流端に、区間の端の測点の管中心高が入る", () => {
+    // 区間長の数え方（pipeLength = 前測点からこの測点まで）に合わせると、
+    // seg_0 = A(98.5) → B(95.5)、seg_1 = B(95.5) → D(88.5)
+    assert.equal(mocOutput.network.pipes[0]!.upstreamElevation, 98.5);
+    assert.equal(mocOutput.network.pipes[0]!.downstreamElevation, 95.5);
+    assert.equal(mocOutput.network.pipes[1]!.upstreamElevation, 95.5);
+    assert.equal(mocOutput.network.pipes[1]!.downstreamElevation, 88.5);
+  });
+
+  test("区間の境目で管中心高が連続する（区間長の数え方と一致する）", () => {
+    assert.equal(
+      mocOutput.network.pipes[0]!.downstreamElevation,
+      mocOutput.network.pipes[1]!.upstreamElevation,
+    );
+  });
+
+  test("水柱分離の警告に「管中心高が未指定」の但し書きが付かない", () => {
+    // 静水位を管中心高より十分低くとり、閉鎖で確実に負圧側へ振らせる
+    const lowResult = calcLongitudinalHydraulic({
+      points: POINTS_MULTI_D,
+      staticWaterLevel: 99,
+      caseName: "負圧テスト",
+    });
+    const low = buildMocFromSteady({
+      hydraulicResult: lowResult,
+      points: POINTS_MULTI_D,
+      material: { pipeType: "ductile_iron" },
+      valveCloseTime: 0.5,
+    });
+    const result = runMoc(low.network, low.options);
+    const cav = (result.warnings ?? []).filter((w) => w.includes("水柱分離"));
+    // 警告そのものが出ていないと、この検証は空回りしてしまう
+    assert.ok(cav.length > 0, "この条件では水柱分離の警告が出るはず");
+    for (const w of cav) {
+      assert.ok(!w.includes("管中心高が未指定"), w);
+    }
+  });
+});
+
 describe("buildMocFromSteady — カスタムBC", () => {
   const input: LongitudinalHydraulicInput = {
     points: POINTS_3,

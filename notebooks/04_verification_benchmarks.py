@@ -135,8 +135,8 @@ def _(mo):
 
         以下は `packages/core-py/open_waterhammer/moc.py` の単一管路
         （上流=定水頭貯水槽／下流=バルブ）部分を、そのままの式で書き下したもの。
-        WASM 上で動かすために必要最小限に絞っているが、**摩擦の扱い・境界条件・
-        水頭のクランプは実装と同一**にしてある（クランプは適用限界の節で効いてくる）。
+        WASM 上で動かすために必要最小限に絞っているが、**摩擦の扱いと境界条件は
+        実装と同一**にしてある（自動テストで数値一致を確認している）。
 
         - 特性方程式: \(C^+: H_P = C_P - B Q_P\), \(C^-: H_P = C_M + B Q_P\)
         - 特性インピーダンス \(B = a/(gA)\)
@@ -150,23 +150,31 @@ def _(mo):
 @app.cell
 def _(GRAVITY, math):
     def local_darcy_f(V, D, C_hw):
-        """H-W → D-W 等価摩擦係数（moc.py の _local_darcy_f と同一）。"""
+        """H-W → D-W 等価摩擦係数（moc.py の _local_darcy_f と同一）。
+
+        上限 0.15 は乱流域の妥当範囲。下限は設けない（issue #51）。
+        """
         absV = abs(V)
         if absV < 1e-4:
             return 0.02
         Rh = D / 4
         S = (absV / (0.849 * C_hw * Rh**0.63)) ** (1 / 0.54)
-        return max(0.005, min(2 * GRAVITY * D * S / (absV * absV), 0.15))
+        return min(2 * GRAVITY * D * S / (absV * absV), 0.15)
 
     def solve_valve(CP, B, tau, Q0, H0v):
-        """バルブ BC: H_P = CP − B·τ_v·√H_P（moc.py の _solve_valve と同一）。"""
+        """バルブ BC: H_P = CP − B·τ_v·√H_P（moc.py の _solve_valve と同一）。
+
+        全閉時・流出不能時は水頭を 0 m で打ち切らない（issue #50）。
+        """
         if tau < 1e-10:
-            return max(CP, 0.0), 0.0
+            return CP, 0.0
+        if CP <= 0:
+            return CP, 0.0
         H0safe = max(H0v, 0.01)
         tauV = tau * Q0 / math.sqrt(H0safe)
-        disc = B * B * tauV * tauV + 4 * max(CP, 0.0)
+        disc = B * B * tauV * tauV + 4 * CP
         y = (-B * tauV + math.sqrt(disc)) / 2
-        return max(y * y, 0.0), tauV * y
+        return y * y, tauV * y
 
     def run_moc(D, L, C_hw, a, V0, H0v, close_time, N=40, t_max=None, operation="close"):
         """貯水槽 → 単一管路 → バルブ の MOC。
@@ -345,10 +353,12 @@ def _(joukowsky_err, mo):
     mo.md(
         f"""
         **結果**: バルブ端の最大水頭上昇はジューコフスキー値に対し
-        **{joukowsky_err * 100:+.2f}%**。矩形波の周期 \\(4L/a\\)・位相も一致する。
+        **{joukowsky_err * 100:+.2f}%**。矩形波の周期 \\(4L/a\\)・位相も一致し、
+        下降側も理論値 \\(H_0 - aV_0/g = -2.04\\) m を正確に再現する。
 
-        右図で下降側（Hmin）が \\(H_0 - aV_0/g = -2.04\\) m まで届かず
-        **0 m 付近で頭打ち**になっている点は後述の「適用限界」を参照。
+        ここが理論どおりになるのは issue #50・#51 の修正後である。以前は
+        境界条件が水頭を 0 m で打ち切り（負圧が出ない）、摩擦係数にも下限 0.005 が
+        あったため、下降側が過小評価され、上昇側にも 0.6% の系統誤差が残っていた。
         """
     )
     return
@@ -502,10 +512,14 @@ def _(BENCH, C_SMOOTH, GRAVITY, T_PERIOD, mo, run_moc):
 def _(mo):
     mo.md(
         r"""
-        ## ③ 適用限界 — 解析解と一致しない領域
+        ## ③ 適用限界 — どこまで信用してよいか
 
         検証で分かるのは「合っている範囲」だけではない。
         **どこから外れるか**こそ設計判断に必要な情報である。
+
+        以前この節には「負圧が 0 m で打ち切られる」「摩擦係数に下限がある」という
+        2 つの実装上の制約を挙げていたが、いずれも issue #50 / #51 で解消し、
+        上の検証はすべて誤差 0.00% になった。残るのは**物理モデルそのものの限界**である。
         """
     )
     return
@@ -515,15 +529,17 @@ def _(mo):
 def _(mo):
     mo.md(
         r"""
-        ### (1) 負圧は境界節点で 0 m に打ち切られる
+        ### (1) 水柱分離（キャビテーション）は計算しない
 
-        本ソルバーは**水柱分離（キャビテーション）モデルを持たない**。
-        さらに境界条件ソルバー（バルブ・行き止まり・ポンプ）が水頭を
-        \(\max(\cdot, 0)\) で丸めるため、下降側の水撃圧が**過小評価（危険側）**になる。
+        負圧そのものは理論どおり計算される（下図: 初期水頭 \(H_0\) を変えても
+        下降幅 \(H_0 - H_{\min}\) は常に \(aV_0/g\) に一致する）。
+        しかし**動水頭が水蒸気圧水頭を下回ったあと**、水柱が分離して
+        再び衝突するまでの挙動は本ソルバーの対象外である。
 
-        下図は初期水頭 \(H_0\) を変えて瞬時閉そくしたときの、
-        バルブ端の下降幅 \(H_0 - H_{\min}\) を理論値 \(aV_0/g\) と比べたもの。
-        \(H_0\) が \(aV_0/g\) を下回るとクランプが効き、理論値から離れていく。
+        そのため実装は、動水頭が水蒸気圧水頭（既定 −10.33 m）を下回った位置と時刻を
+        warning で通知し、それ以降の結果は参考値として扱うよう促す。
+        判定は**動水頭**（水頭 − 管中心高）で行うので、標高差のある管路では
+        管路区間に管中心高を与える必要がある。
         """
     )
     return
@@ -545,10 +561,10 @@ def _(BENCH, C_SMOOTH, GRAVITY, T_PERIOD, plt, run_moc):
     ax4.plot(_h0s, _drops, "o-", c="steelblue", label="MOC の下降幅 H₀ − Hmin")
     ax4.axhline(_dh_theory, ls="--", c="crimson", label=f"理論 aV₀/g = {_dh_theory:.1f} m")
     ax4.axvline(_dh_theory, ls=":", c="gray", lw=1.0)
-    ax4.text(_dh_theory, min(_drops), " H₀ = aV₀/g\n（これ以下でクランプ）", fontsize=8, va="bottom")
+    ax4.text(_dh_theory, min(_drops), " H₀ = aV₀/g\n（これ以下では H が負になる）", fontsize=8, va="bottom")
     ax4.set_xlabel("バルブ端初期水頭 H₀ [m]")
-    ax4.set_ylabel("下降幅 [m]")
-    ax4.set_title("負圧クランプの影響範囲")
+    ax4.set_ylabel("下降幅 H₀ − Hmin [m]")
+    ax4.set_title("下降側は初期水頭によらず理論値と一致する")
     ax4.legend(fontsize=8)
     ax4.grid(alpha=0.25)
     fig3.tight_layout()
@@ -560,10 +576,11 @@ def _(BENCH, C_SMOOTH, GRAVITY, T_PERIOD, plt, run_moc):
 def _(mo):
     mo.md(
         r"""
-        **読み方**: \(H_0 > aV_0/g\) の範囲では下降幅が理論値と一致する（残差は摩擦下限による）。
-        \(H_0\) がそれ以下になると下降幅が頭打ちになり、**実際より小さい負圧しか出ない**。
-        負圧が想定される系では、この結果をそのまま使わず技術書 §8.3 の
-        防護工（エアチャンバ・吸気弁・サージタンク）の検討へ進む必要がある。
+        **読み方**: 下降幅はどの初期水頭でも理論値 \(aV_0/g\) に一致する。
+        つまり負圧の大きさそのものは信用してよい。信用できないのは
+        **水蒸気圧水頭を下回ったあとの時間発展**である。
+        その場合は技術書 §8.3 の防護工（エアチャンバ・吸気弁・サージタンク）の
+        検討へ進むこと。防護工は管路の途中にも設置でき、効果を計算できる（issue #47）。
         """
     )
     return
@@ -573,12 +590,12 @@ def _(mo):
 def _(mo):
     mo.md(
         r"""
-        ### (2) 摩擦係数には下限がある
+        ### (2) 摩擦による減衰
 
-        実装の摩擦係数は \(f = \mathrm{clamp}(2gD\,S/V^2,\ 0.005,\ 0.15)\) で挟まれ、
-        \(|V| < 10^{-4}\) では \(f = 0.02\) を返す。このため**粗度係数 C をどれだけ
-        大きくしても摩擦は完全には消えない**。解析解（無摩擦）と比較するときは
-        1〜2% 程度の系統誤差として見込む必要がある。
+        摩擦は圧力振動を減衰させる。実装の摩擦係数は上限 0.15 のみを持ち、
+        下限は設けていない（issue #51 で撤廃）ので、粗度係数 C を大きくすれば
+        無摩擦条件を正しく表現できる。下図で C = 1e6 の振幅がほぼ減衰しないのは
+        **数値散逸が無い**ことの確認でもある。
         """
     )
     return
@@ -617,7 +634,7 @@ def _(mo):
     mo.md(
         r"""
         振幅は**単調に減少**する（増幅しない＝数値的に安定）。
-        C = 1e6 でも 10 周期で 1 割ほど減るのが摩擦下限の効果である。
+        C = 1e6 では 10 周期後もほぼ 100% 残り、数値散逸が無いことが確認できる。
 
         ### (3) 簡易式（技術書 式8.3.7）は MOC より大きく安全側に出る
 
@@ -682,21 +699,25 @@ def _(mo):
 
         | 検証項目 | 参照解 | 結果 |
         |---|---|---|
-        | 定常 摩擦損失 | H-W 閉形式 | 誤差 < 0.1% |
+        | 定常 摩擦損失 | H-W 閉形式 | 誤差 < 0.1%（指数の丸めのみ） |
         | 定常 局部損失・エネルギー収支・連続条件 | 閉形式 | 丸め誤差以内で一致 |
-        | 非定常 急閉そく | ジューコフスキー | 誤差 < 1% |
-        | 非定常 緩閉そく | アリエビ連鎖式（厳密解） | 誤差 < 0.5% |
+        | 非定常 急閉そく | ジューコフスキー | **誤差 0.00%** |
+        | 非定常 緩閉そく | アリエビ連鎖式（厳密解） | **誤差 0.00%** |
+        | 非定常 下降側の負圧 | \(H_0 - aV_0/g\) | **誤差 0.00%** |
         | 非定常 波の周期・位相 | 4L/a | 一致 |
-        | 非定常 格子収束性 | — | N を 16 倍で変化 < 0.1% |
+        | 非定常 格子収束性 | — | N を 16 倍で変化 0.00% |
         | 非定常 分岐点の連続条件 | ΣQ_in = ΣQ_out | 1e-12 以内 |
         | 非定常 断面変化点の透過係数 | 2B₁/(B₁+B₂) | 誤差 < 2% |
+        | 非定常 防護工の節点連続条件 | ΣQ_in − ΣQ_out = Q_dev | 1e-9 以内 |
 
-        ### 確認された適用限界
+        ### 残る適用限界
 
-        - **負圧**: 境界節点で 0 m に打ち切られ、下降側の水撃圧が過小評価になる（水柱分離モデルなし）
-        - **摩擦下限**: \(f \ge 0.005\)（静止時 0.02）のため完全な無摩擦は表現できない
-        - **定常網の自前実装**: 樹枝状・単一貯水槽・`demand` ノードのみが前提。
-          ループ網・複数貯水槽・`junction` ノードへの需要付与は**警告なしに誤った答え**を返す
+        - **水柱分離**: 動水頭が水蒸気圧水頭を下回ったあとの挙動は計算しない。
+          下回った位置・時刻は warning で通知する（判定には管中心高の指定が必要）
+        - **ポンプの4象限特性**: H-Q 放物線＋相似則トルクの簡易モデル。
+          逆流・逆転を含む長時間過渡は精度が劣化する
+        - **定常網の自前実装**: 樹枝状・単一貯水槽が前提。
+          ループ網・複数貯水槽は計算から除外される管路を warning で通知する
           → 該当する系では EPANET（`epanet-js`）経路を使うこと
 
         ### 対応する自動テスト
@@ -704,6 +725,8 @@ def _(mo):
         - [`packages/core/src/__tests__/verification-benchmarks.test.ts`](https://github.com/russENG/open-waterhammer/blob/master/packages/core/src/__tests__/verification-benchmarks.test.ts)
         - [`packages/core-py/tests/test_verification_benchmarks.py`](https://github.com/russENG/open-waterhammer/blob/master/packages/core-py/tests/test_verification_benchmarks.py)
         - [`packages/epanet-adapter/src/__tests__/steady-verification.test.ts`](https://github.com/russENG/open-waterhammer/blob/master/packages/epanet-adapter/src/__tests__/steady-verification.test.ts)
+        - [`packages/core/src/__tests__/protection-devices.test.ts`](https://github.com/russENG/open-waterhammer/blob/master/packages/core/src/__tests__/protection-devices.test.ts) — 防護工の設置位置
+        - [`packages/core/src/__tests__/suggest-reaches.test.ts`](https://github.com/russENG/open-waterhammer/blob/master/packages/core/src/__tests__/suggest-reaches.test.ts) — 計算区間数の自動提案
 
         ### 実装の本体
 

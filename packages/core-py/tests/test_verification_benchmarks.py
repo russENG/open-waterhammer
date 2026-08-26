@@ -15,7 +15,7 @@ TS ↔ Python の実装一致（parity）も担保される。
     S2  直列管路のエネルギー収支 H_R − H_end = Σ損失
     S3  樹枝状網の連続条件
     S4  局部損失 Σf·v²/2g の閉形式一致
-    S5  【適用限界】樹枝状・単一貯水槽・demand ノード前提を外れた入力の挙動
+    S5  【適用限界】樹枝状・単一貯水槽の前提を外れた入力の検出
 
 ── 非定常計算（MOC）─────────────────────────────────────────────────────────
     T1  ジューコフスキーの式（瞬時閉・摩擦なし）ΔH = a·V₀/g
@@ -27,16 +27,18 @@ TS ↔ Python の実装一致（parity）も担保される。
     T7  アリエビ連鎖式（摩擦なし緩閉そくの厳密解）との一致
     T8  摩擦による減衰が単調であること
     T9  CFL 条件 Δt = Δx/a
-    T10 【適用限界】境界節点の負圧が 0 m で打ち切られる
+    T10 負圧が理論どおり再現され、水柱分離の可能性は警告で通知される
 """
 
 import math
+import re
 from dataclasses import replace
 
 import pytest
 
 from open_waterhammer import GRAVITY, Pipe, joukowsky
 from open_waterhammer.moc import (
+    MOC_VAPOR_PRESSURE_HEAD,
     MocNetwork,
     MocOptions,
     MocPipeSegment,
@@ -338,8 +340,8 @@ class TestS5OutOfScopeTopology:
         assert [w for w in r.warnings if "閉路" in w] == []
         assert len([w for w in r.warnings if "到達できません" in w]) == 2
 
-    def test_junction_demand_is_still_ignored(self):
-        """【未対応】type="junction" ノードの demand は依然として黙って無視される."""
+    def test_junction_demand_is_aggregated(self):
+        """type="junction" ノードの demand も集計される（issue #48）."""
         r = calc_steady_network(
             SteadyNetworkInput(
                 pipes=[
@@ -353,15 +355,28 @@ class TestS5OutOfScopeTopology:
                 ],
             )
         )
-        # 上流管の流量は 0.10 であるべきだが 0.05 になる
-        assert next(p for p in r.pipe_results if p.pipe_id == "p1").flow == pytest.approx(0.05, abs=1e-12), (
-            "junction の demand が集計された = 実装が改善された"
-        )
-        # 結果として節点水頭が危険側（高め）に出る（EPANET 厳密解は 96.79 m）
+        # 上流管には junction の需要と末端の需要の合計が流れる
+        assert next(p for p in r.pipe_results if p.pipe_id == "p1").flow == pytest.approx(0.10, abs=1e-12)
+        assert next(p for p in r.pipe_results if p.pipe_id == "p2").flow == pytest.approx(0.05, abs=1e-12)
+        # 節点水頭が EPANET 厳密解 96.79 m と一致する
         h_j = next(n for n in r.node_results if n.node_id == "J").head
-        assert h_j == pytest.approx(99.11, abs=0.05), f"H_J={h_j:.2f} m（EPANET 厳密解は 96.79 m）"
-        # トポロジは樹枝状なので閉路検出には掛からず、警告なしのまま誤答する
-        assert r.warnings == [], "junction の demand に警告が実装された = 実装が改善された"
+        assert h_j == pytest.approx(96.79, abs=0.05), f"H_J={h_j:.2f} m（EPANET 厳密解は 96.79 m）"
+        assert r.warnings == []
+
+    def test_reservoir_demand_is_ignored(self):
+        """reservoir ノードの demand は無視される（無限水源）."""
+        r = calc_steady_network(
+            SteadyNetworkInput(
+                pipes=[
+                    NetworkPipeDef(id="p1", upstream_node_id="R", downstream_node_id="D", inner_diameter=0.30, length=500, roughness_c=130),
+                ],
+                nodes=[
+                    NetworkNodeDef(id="R", elevation=0, type="reservoir", head=100, demand=0.99),
+                    NetworkNodeDef(id="D", elevation=0, type="demand", demand=0.05),
+                ],
+            )
+        )
+        assert r.pipe_results[0].flow == pytest.approx(0.05, abs=1e-12)
 
     def test_second_reservoir_is_ignored_with_warning(self):
         r = calc_steady_network(
@@ -447,7 +462,7 @@ class TestT1Joukowsky:
     def test_valve_head_rise_matches_joukowsky(self, result):
         dh = result.pipes["pipe_0"].Hmax[self.N] - H0
         err = abs(rel_err_pct(dh, joukowsky(A_WAVE, -V0)))
-        assert err < 1.0, f"MOC ΔH={dh:.2f} m, 理論={joukowsky(A_WAVE, -V0):.2f} m, 誤差={err:.2f}%"
+        assert err < 0.05, f"MOC ΔH={dh:.2f} m, 理論={joukowsky(A_WAVE, -V0):.2f} m, 誤差={err:.2f}%"
 
     def test_reservoir_head_is_fixed(self, result):
         p = result.pipes["pipe_0"]
@@ -469,14 +484,14 @@ class TestT2GridConvergence:
     def peaks(cls):
         return {n: frictionless_valve_close(0, n, 4 * T_PERIOD).pipes["pipe_0"].Hmax[n] - H0 for n in (10, 20, 40, 80)}
 
-    def test_all_within_1pct(self, peaks):
+    def test_all_within_tolerance(self, peaks):
         for n, dh in peaks.items():
             err = abs(rel_err_pct(dh, joukowsky(A_WAVE, -V0)))
-            assert err < 1.0, f"N={n}: ΔH={dh:.3f}, 誤差={err:.3f}%"
+            assert err < 0.05, f"N={n}: ΔH={dh:.3f}, 誤差={err:.3f}%"
 
     def test_converged(self, peaks):
         err = abs(rel_err_pct(peaks[80], peaks[10]))
-        assert err < 0.1, f"N=10 → N=80 の変化={err:.4f}%"
+        assert err < 0.01, f"N=10 → N=80 の変化={err:.4f}%"
 
 
 class TestT3WavePeriod:
@@ -673,7 +688,7 @@ class TestT7AllieviChain:
         h_moc = result.pipes["pipe_0"].Hmax[self.N] / H0
         ref = max(h_theory)
         err = abs(rel_err_pct(h_moc, ref))
-        assert err < 0.5, f"MOC h_max={h_moc:.4f}, アリエビ連鎖式={ref:.4f}, 誤差={err:.3f}%"
+        assert err < 0.05, f"MOC h_max={h_moc:.4f}, アリエビ連鎖式={ref:.4f}, 誤差={err:.3f}%"
 
     @pytest.mark.parametrize("n_t", [2, 4, 6, 10])
     def test_each_interval_matches_exact_solution(self, n_t):
@@ -683,14 +698,14 @@ class TestT7AllieviChain:
         for i in range(1, len(h_theory)):
             h_moc = head_at(series, i * T_ROUND) / H0
             err = abs(rel_err_pct(h_moc, h_theory[i]))
-            assert err < 1.0, f"i={i} (t={i * T_ROUND:.1f}s): MOC={h_moc:.4f}, 厳密解={h_theory[i]:.4f}, 誤差={err:.3f}%"
+            assert err < 0.1, f"i={i} (t={i * T_ROUND:.1f}s): MOC={h_moc:.4f}, 厳密解={h_theory[i]:.4f}, 誤差={err:.3f}%"
 
     def test_rapid_closure_boundary_equals_joukowsky(self):
         """tν = 2L/a（急閉そくの境界）ではジューコフスキー値に一致する."""
         result = frictionless_valve_close(T_ROUND, self.N, 4 * T_PERIOD)
         dh = result.pipes["pipe_0"].Hmax[self.N] - H0
         err = abs(rel_err_pct(dh, joukowsky(A_WAVE, -V0)))
-        assert err < 2.0, f"ΔH={dh:.2f} m, ジューコフスキー={joukowsky(A_WAVE, -V0):.2f} m, 誤差={err:.2f}%"
+        assert err < 0.5, f"ΔH={dh:.2f} m, ジューコフスキー={joukowsky(A_WAVE, -V0):.2f} m, 誤差={err:.2f}%"
 
     def test_longer_closure_monotonically_reduces_peak(self):
         peaks = [
@@ -748,15 +763,15 @@ class TestT8FrictionDamping:
     def test_smoother_pipe_decays_less(self, rough, smooth):
         assert smooth[-1] / smooth[0] > rough[-1] / rough[0]
 
-    def test_friction_floor_leaves_residual_damping(self, smooth):
-        """【実装特性】_local_darcy_f は等価ダルシー係数を max(0.005, min(…, 0.15)) で
-        挟み込み、|V| < 1e-4 では 0.02 を返す。このため粗度係数 C をどれだけ
-        大きくしても摩擦は完全には消えず、残留減衰が残る（解析解と比較する際は
-        1〜2% 程度の系統誤差として見込む必要がある）。
+    def test_smooth_pipe_does_not_damp(self, smooth):
+        """C→∞ では全く減衰しない（数値散逸がない）.
+
+        issue #51（摩擦係数の下限撤廃）と issue #50（負圧の 0 m クランプ撤廃）により、
+        C→∞ では数値減衰が完全に消えた。解析解との系統誤差も無くなり、
+        T1・T7・T10 の許容差を 0.05% まで締められた。
         """
         ratio = smooth[-1] / smooth[0]
-        assert ratio < 1.0, f"C=1e6 で全く減衰しない = 実装が変わった（残存率={ratio:.4f}）"
-        assert ratio > 0.85, f"C=1e6 の 10 周期後残存率={ratio:.4f}（現状 ≈0.905）"
+        assert ratio > 0.999, f"C=1e6 の 10 周期後残存率={ratio:.6f}（現状 ≈1.000000）"
 
 
 class TestT9CflCondition:
@@ -788,16 +803,13 @@ class TestT9CflCondition:
         assert result.dt <= 800 / (800 * 10) + 1e-12
 
 
-class TestT10NegativeHeadClamp:
-    """T10 非定常【適用限界】境界節点の負圧が 0 m で打ち切られる.
+class TestT10NegativePressure:
+    """T10 非定常: 負圧と水柱分離の扱い.
 
     摩擦なし・瞬時閉では理論上 Hmin = H₀ − a·V₀/g = 100 − 102.04 = −2.04 m。
-    本ソルバーは水柱分離（キャビテーション）モデルを持たず、さらに境界条件
-    ソルバー（バルブ・行き止まり・ポンプ等）が max(…, 0) で水頭を 0 m 以上に
-    丸めるため、下降側の水撃圧が**過小評価（危険側）**になる。
-    内部格子点にはクランプがないため負値自体は現れるが、境界の打ち切りが
-    特性線を通じて内部にも伝わり、理論値までは下がらない。
-    → 負圧が想定される系では §8.3 の防護工検討が別途必要。
+    issue #50 で境界条件ソルバーの 0 m クランプを撤廃したため、この負圧が
+    理論どおり再現される。水柱分離（キャビテーション）モデルは持たないので、
+    水蒸気圧水頭を下回った場合は警告で利用者に知らせる。
     """
 
     N = 40
@@ -811,19 +823,133 @@ class TestT10NegativeHeadClamp:
     def test_theoretical_minimum_is_negative(self):
         assert self.H_THEORY_MIN < 0
 
-    def test_valve_node_clamped_at_zero(self, result):
+    def test_valve_node_matches_theory(self, result):
+        """バルブ節点の Hmin が理論値と 0.05% 以内で一致する（0 m で打ち切られない）."""
         hmin = result.pipes["pipe_0"].Hmin[self.N]
-        assert hmin == pytest.approx(0.0, abs=1e-9), f"Hmin[valve]={hmin:.6f} m — 0 でない = 実装が変わった"
+        assert hmin < 0, f"Hmin[valve]={hmin:.6f} m — 負圧が出ていない"
+        err = abs(rel_err_pct(H0 - hmin, joukowsky(A_WAVE, -V0)))
+        assert err < 0.05, f"Hmin[valve]={hmin:.6f} m, 理論={self.H_THEORY_MIN:.6f} m, 誤差={err:.4f}%"
 
-    def test_interior_goes_negative_but_truncated(self, result):
+    def test_interior_matches_theory(self, result):
+        """内部格子点の Hmin も理論値と 0.05% 以内で一致する."""
         interior_min = min(result.pipes["pipe_0"].Hmin[1 : self.N])
-        assert interior_min < 0, f"内部 Hmin={interior_min:.4f} m（負値が出ない = 実装が変わった）"
-        assert interior_min > self.H_THEORY_MIN / 2, (
-            f"内部 Hmin={interior_min:.4f} m（理論={self.H_THEORY_MIN:.2f} m。現状 ≈-0.40 m まで打ち切られる）"
-        )
+        err = abs(rel_err_pct(H0 - interior_min, joukowsky(A_WAVE, -V0)))
+        assert err < 0.05, f"内部 Hmin={interior_min:.6f} m, 理論={self.H_THEORY_MIN:.6f} m, 誤差={err:.4f}%"
 
-    def test_no_clamp_when_head_is_high(self):
-        """初期水頭が十分高くクランプが働かない場合は、下降側も理論値と 2% 以内で一致する."""
+    def test_no_cavitation_warning_above_vapor_head(self, result):
+        """水蒸気圧水頭を下回らなければ水柱分離の警告は出ない."""
+        assert self.H_THEORY_MIN > MOC_VAPOR_PRESSURE_HEAD
+        cav = [w for w in result.warnings if "水蒸気圧水頭" in w]
+        assert cav == [], cav
+
+    def test_cavitation_warning_below_vapor_head(self):
+        """水蒸気圧水頭を下回ると、位置・時刻・水頭を含む警告が出る."""
+        # 静水頭 5 m で瞬時閉 → 理論 Hmin ≈ −97 m で水蒸気圧水頭を大きく下回る
+        low = run_moc_single_pipe(
+            SinglePipeMocInput(
+                pipe=replace(BENCH_PIPE, roughness_coeff=FRICTIONLESS_C),
+                wave_speed=A_WAVE,
+                initial_velocity=V0,
+                initial_downstream_head=5,
+                close_time=0,
+                n_reaches=self.N,
+                t_max=2 * T_PERIOD,
+            )
+        )
+        assert min(low.pipes["pipe_0"].Hmin) < MOC_VAPOR_PRESSURE_HEAD
+        cav = [w for w in low.warnings if "水蒸気圧水頭" in w]
+        assert len(cav) == 1, low.warnings
+        assert re.search(r"上流端から \d+ m の地点", cav[0])
+        assert re.search(r"t=\d+\.\d+ s", cav[0])
+        assert "水柱分離（キャビテーション）" in cav[0]
+        assert "§8.3 の防護工検討" in cav[0]
+
+    def test_gauge_head_is_used_with_elevation(self):
+        """管中心高を指定すると動水頭（H − 管中心高）で判定される."""
+        q0 = V0 * math.pi * 0.25 * 0.25
+
+        def build(up_el=None, dn_el=None):
+            return run_moc(
+                MocNetwork(
+                    pipes=[
+                        MocPipeSegment(
+                            id="p",
+                            pipe=replace(BENCH_PIPE, roughness_coeff=FRICTIONLESS_C),
+                            wave_speed=A_WAVE,
+                            n_reaches=self.N,
+                            upstream_node_id="R",
+                            downstream_node_id="V",
+                            initial_flow=q0,
+                            upstream_elevation=up_el,
+                            downstream_elevation=dn_el,
+                        )
+                    ],
+                    nodes={"R": ReservoirBC(head=H0), "V": ValveBC(Q0=q0, H0v=H0, close_time=0)},
+                ),
+                MocOptions(t_max=2 * T_PERIOD),
+            )
+
+        flat = [w for w in build().warnings if "水蒸気圧水頭" in w]
+        assert flat == [], flat
+
+        raised = [w for w in build(50, 50).warnings if "水蒸気圧水頭" in w]
+        assert len(raised) == 1, raised
+        # 動水頭 −52.04 m / 動水位 −2.04 m の両方が示される
+        assert re.search(r"動水頭が -52\.\d+ m", raised[0])
+        assert re.search(r"動水位 -2\.\d+ m", raised[0])
+
+    def test_missing_elevation_is_noted(self):
+        """管中心高が未指定の場合はその旨を警告文に添える."""
+        q0 = V0 * math.pi * 0.25 * 0.25
+        low = run_moc(
+            MocNetwork(
+                pipes=[
+                    MocPipeSegment(
+                        id="p",
+                        pipe=replace(BENCH_PIPE, roughness_coeff=FRICTIONLESS_C),
+                        wave_speed=A_WAVE,
+                        n_reaches=self.N,
+                        upstream_node_id="R",
+                        downstream_node_id="V",
+                        initial_flow=q0,
+                    )
+                ],
+                nodes={"R": ReservoirBC(head=5), "V": ValveBC(Q0=q0, H0v=5, close_time=0)},
+            ),
+            MocOptions(t_max=2 * T_PERIOD),
+        )
+        cav = [w for w in low.warnings if "水蒸気圧水頭" in w]
+        assert len(cav) == 1
+        assert "管中心高が未指定" in cav[0]
+        assert "upstream_elevation / downstream_elevation" in cav[0]
+
+    def test_vapor_head_is_configurable(self):
+        """水蒸気圧水頭は MocOptions で上書きできる."""
+        q0 = V0 * math.pi * 0.25 * 0.25
+        strict = run_moc(
+            MocNetwork(
+                pipes=[
+                    MocPipeSegment(
+                        id="p",
+                        pipe=replace(BENCH_PIPE, roughness_coeff=FRICTIONLESS_C),
+                        wave_speed=A_WAVE,
+                        n_reaches=self.N,
+                        upstream_node_id="R",
+                        downstream_node_id="V",
+                        initial_flow=q0,
+                    )
+                ],
+                nodes={"R": ReservoirBC(head=H0), "V": ValveBC(Q0=q0, H0v=H0, close_time=0)},
+            ),
+            # 高標高を想定して水蒸気圧水頭を −1 m まで引き上げると、−2.04 m で警告が出る
+            MocOptions(t_max=2 * T_PERIOD, vapor_pressure_head=-1.0),
+        )
+        cav = [w for w in strict.warnings if "水蒸気圧水頭" in w]
+        assert len(cav) == 1, strict.warnings
+        assert "水蒸気圧水頭 -1.00 m" in cav[0]
+
+    def test_high_head_down_surge_matches_theory(self):
+        """初期水頭が高い場合も下降側が理論値と 0.05% 以内で一致する."""
         result = run_moc_single_pipe(
             SinglePipeMocInput(
                 pipe=replace(BENCH_PIPE, roughness_coeff=FRICTIONLESS_C),
@@ -837,5 +963,4 @@ class TestT10NegativeHeadClamp:
         )
         dh_down = 300 - result.pipes["pipe_0"].Hmin[self.N]
         err = abs(rel_err_pct(dh_down, joukowsky(A_WAVE, -V0)))
-        # 残差 1.2% は T8 の「摩擦係数の下限」による系統誤差
-        assert err < 2.0, f"ΔH_下降={dh_down:.2f} m, 理論={joukowsky(A_WAVE, -V0):.2f} m, 誤差={err:.2f}%"
+        assert err < 0.05, f"ΔH_下降={dh_down:.2f} m, 理論={joukowsky(A_WAVE, -V0):.2f} m, 誤差={err:.4f}%"
