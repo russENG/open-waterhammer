@@ -42,7 +42,7 @@ function leafKey(path: string): string {
   return path.replace(/\[\d+\]$/, '').split('.').at(-1) ?? path
 }
 
-/** `pipes.pipe_0.Hmax[3]` → `pipes.pipe_0.Hmax` のように添字を落とす。 */
+/** `pipes.P-01.Hmax[3]` → `pipes.P-01.Hmax` のように添字を落とす。 */
 function seriesPath(path: string): string | null {
   const match = path.match(/^(.*)\[\d+\]$/)
   if (!match) return null
@@ -52,7 +52,7 @@ function seriesPath(path: string): string | null {
 /** JSONパスを読める見出しにする。既知のキーは辞書引きし、残りはそのまま繋ぐ。 */
 export function describeResultPath(path: string): string {
   const segments = path.replace(/\[(\d+)\]/g, '.$1').split('.').filter(Boolean)
-  // 中間の識別子（pipe_0 など）は辞書に無いのでそのまま残り、末尾のキーだけ日本語になる。
+  // 中間の識別子（管路ID・節点ID）は辞書に無いのでそのまま残り、末尾のキーだけ日本語になる。
   return segments.map((segment) => engineeringKeyLabel(segment)).join(' · ')
 }
 
