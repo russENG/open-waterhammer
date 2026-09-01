@@ -25,10 +25,10 @@
     "katex": "^0.18.4",
     "ol": "^10.10.0",
     "proj4": "^2.21.0",
-    "pyodide": "314.0.5",
+    "pyodide": "314.0.6",
     "react": "^19.2.8",
     "react-dom": "^19.2.8",
-    "react-router-dom": "^7.18.2"
+    "react-router-dom": "^7.18.3"
   },
   "devDependencies": {
     "@axe-core/playwright": "^4.13.0",
@@ -37,7 +37,7 @@
     "@testing-library/jest-dom": "^7.0.1",
     "@testing-library/react": "^16.3.2",
     "@testing-library/user-event": "^14.6.6",
-    "@types/node": "^26.2.0",
+    "@types/node": "^26.4.0",
     "@types/react": "^19.2.18",
     "@types/react-dom": "^19.2.4",
     "@vitejs/plugin-react": "^6.1.0",
